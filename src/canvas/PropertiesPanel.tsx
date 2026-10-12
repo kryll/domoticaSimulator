@@ -23,12 +23,22 @@ import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
 import { PROTOCOL_COLORS, formatState } from './style';
 
 /** Input de texto que confirma el cambio al perder el foco o pulsar Intro. */
-function CommitTextField({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
+function CommitTextField({
+  label,
+  value,
+  onCommit,
+  allowEmpty = false,
+}: {
+  label: string;
+  value: string;
+  onCommit: (v: string) => void;
+  allowEmpty?: boolean;
+}) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const commit = () => {
     const v = draft.trim();
-    if (v && v !== value) onCommit(v);
+    if ((v || allowEmpty) && v !== value) onCommit(v);
     else setDraft(value);
   };
   return (
@@ -94,6 +104,28 @@ function DeviceProperties({ device }: { device: Device }) {
           options={(def?.integrations ?? [device.integration]).map((i) => ({ value: i, label: INTEGRATION_LABELS[i] }))}
           onChange={(e) => updateDevice(device.id, { integration: e.target.value as Device['integration'] })}
         />
+        {def && def.power !== 'battery' && (
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={device.ups === true}
+              onChange={(e) => updateDevice(device.id, { ups: e.target.checked ? true : undefined })}
+              className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            />
+            Conectado a SAI
+          </label>
+        )}
+        {def && (def.category === 'plug' || def.category === 'switch') && (
+          <CommitTextField
+            label="Carga conectada (W)"
+            value={device.loadWatts === undefined ? '' : String(device.loadWatts)}
+            allowEmpty
+            onCommit={(v) => {
+              const n = Number(v.replace(',', '.'));
+              updateDevice(device.id, { loadWatts: v === '' || !Number.isFinite(n) || n < 0 ? undefined : n });
+            }}
+          />
+        )}
       </section>
 
       {def && iotClass && (

@@ -21,7 +21,7 @@ export function NightMode({ containerId }: { containerId: string }) {
     <>
       <div aria-hidden="true" className={`ha-night-veil${night ? ' is-on' : ''}`} />
       {night && (
-        <Panel position="top-center">
+        <Panel position="top-right">
         <p
           className="pointer-events-none rounded-full bg-indigo-950/80 px-2 py-0.5 text-[11px] font-medium text-indigo-50 shadow"
           role="status"

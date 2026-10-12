@@ -116,7 +116,7 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
   setSpeed: (speed) => set((s) => ({ speed, sim: { ...s.sim, speed } })),
   advance: (realMs) => {
     // tick multiplica por sim.speed, que se mantiene sincronizado con `speed`.
-    set((s) => ({ sim: tick(s.sim, project(), realMs) }));
+    set((s) => ({ sim: tick(s.sim, project(), realMs, { defs: catalog }) }));
   },
   setEntity: (entityId, next) => set((s) => ({ sim: setEntityState(s.sim, project(), entityId, next) })),
   pressButton: (entityId, action) => set((s) => ({ sim: pressButton(s.sim, project(), entityId, action) })),
