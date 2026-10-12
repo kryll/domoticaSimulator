@@ -9,7 +9,7 @@ const ShareDialog = lazy(() => import('../share/ShareDialog').then((m) => ({ def
 const SharedLinkPrompt = lazy(() => import('../share/SharedLinkPrompt').then((m) => ({ default: m.SharedLinkPrompt })));
 
 /** Ofrece abrir el proyecto del enlace (#p=...) solo si la URL lo trae. */
-function hasSharedHash(): boolean {
+export function hasSharedHash(): boolean {
   // Con «modo=presentacion» el enlace se abre directamente en el visor (ver App).
   return typeof window !== 'undefined' && window.location.hash.startsWith('#p=') && !hasSharedPresentation();
 }

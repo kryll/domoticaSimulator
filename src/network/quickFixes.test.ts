@@ -179,3 +179,88 @@ describe('arreglos rápidos del validador', () => {
     }
   });
 });
+
+describe('arreglos rápidos (revisión final)', () => {
+  const twoFloors = (devices: Device[]): Project => {
+    const p = project([dev('srv', 'ha-green', { x: 0, y: 0 }), dev('ap', 'tplink-deco-x50', { x: 200, y: 0 }), ...devices], {
+      floors: [
+        { id: 'f0', name: 'Planta baja', level: 0, pixelsPerMeter: 50 },
+        { id: 'f1', name: 'Primera', level: 1, pixelsPerMeter: 50 },
+      ],
+      rooms: [{ ...ROOM, id: 'r2', floorId: 'f1', name: 'Dormitorio' }],
+    });
+    return { ...p, connections: suggestConnections(p, catalog) };
+  };
+
+  it('fuera-de-cobertura: añade un repetidor del protocolo cerca y le da cobertura', () => {
+    const p = connected([dev('zc', 'sonoff-zbdongle-p', { x: 0, y: 200 }), dev('s', 'sonoff-snzb-03p', { x: 2000, y: 200 })]);
+    const issue = issueOf(p, 'fuera-de-cobertura');
+    const f = quickFixesFor(issue, p, catalog).find((x) => x.id.endsWith('#add-repeater'));
+    expect(f?.label).toMatch(/^Añadir (un repetidor|\d+ repetidores) Zigbee cerca/);
+    const next = fix(p, 'fuera-de-cobertura', '#add-repeater');
+    expect(next.devices.filter((d) => d.definitionId === 'sonoff-s26r2zb').length).toBeGreaterThan(0);
+    expect(validateProject(next, catalog).filter((i) => i.severity === 'error')).toEqual([]);
+  });
+
+  it('fuera-de-cobertura: «Conectar a…» por cable con el router', () => {
+    const base = connected([]);
+    const cam = { ...dev('cam', 'reolink-rlc-810a', { x: 600, y: 300 }), roomId: 'r1' };
+    const p: Project = { ...base, devices: [...base.devices, cam] };
+    const issue = validateProject(p, catalog).find((i) => i.code === 'fuera-de-cobertura' && i.deviceIds.includes('cam'));
+    if (!issue) throw new Error('sin incidencia');
+    const f = quickFixesFor(issue, p, catalog).find((x) => x.id.includes('#connect-'));
+    expect(f?.label).toMatch(/^Conectar (al router|al servidor|a) «/);
+    const next = f!.apply(p);
+    expect(validateProject(next, catalog).some((i) => i.id === issue.id)).toBe(false);
+  });
+
+  it('infraestructura-sin-conexion: «Conectar al router/servidor»', () => {
+    const base = connected([]);
+    const p: Project = { ...base, devices: [...base.devices, { ...dev('hub', 'hue-bridge-v2', { x: 300, y: 300 }), roomId: 'r1' }] };
+    const issue = issueOf(p, 'infraestructura-sin-conexion');
+    const labels = quickFixesFor(issue, p, catalog).map((x) => x.label);
+    expect(labels.some((l) => /^Conectar (al router|al servidor) «/.test(l))).toBe(true);
+    const id = quickFixesFor(issue, p, catalog).find((x) => x.label.startsWith('Conectar al'))!.id.split('#')[1]!;
+    fix(p, 'infraestructura-sin-conexion', `#${id}`);
+  });
+
+  it('añadir el hub de Hue o el controlador Z-Wave lo deja conectado y en una sala aunque el servidor no esté en ninguna', () => {
+    const p = twoFloors([dev('l', 'hue-white-e27', { x: 400, y: 200 }, { floorId: 'f1' }), dev('z', 'aeotec-multisensor-7', { x: 400, y: 300 }, { floorId: 'f1' })].map((d) => ({ ...d, roomId: 'r2' })));
+    const before = new Set(validateProject(p, catalog).map((i) => i.id));
+    for (const [code, suffix, defId] of [
+      ['falta-hub-propietario', '#add-hue-bridge-v2', 'hue-bridge-v2'],
+      ['zwave-sin-controlador', '#add-ha-connect-zwa-2', 'ha-connect-zwa-2'],
+    ] as const) {
+      const next = fix(p, code, suffix);
+      const added = next.devices.find((d) => d.definitionId === defId);
+      expect(added?.roomId).toBeDefined();
+      expect(next.connections.some((c) => c.sourceId === added?.id || c.targetId === added?.id)).toBe(true);
+      const fresh = validateProject(next, catalog).filter((i) => !before.has(i.id));
+      expect(fresh).toEqual([]);
+    }
+  });
+
+  it('aplicar todos los arreglos sobre los casos típicos no deja errores', () => {
+    const cases: Project[] = [
+      connected([], {}, false),
+      connected([dev('s', 'sonoff-snzb-03p', { x: 400, y: 200 })]),
+      connected([dev('t', 'aqara-door-p2', { x: 400, y: 200 })]),
+      connected([dev('i', 'ikea-tradfri-e27-ws', { x: 400, y: 200 })]),
+      connected([dev('l', 'hue-white-e27', { x: 400, y: 200 })]),
+      connected([dev('z', 'aeotec-multisensor-7', { x: 400, y: 200 })]),
+      connected([dev('zc', 'sonoff-zbdongle-p', { x: 0, y: 200 }), dev('s', 'sonoff-snzb-03p', { x: 2000, y: 200 })]),
+      twoFloors([dev('l', 'hue-white-e27', { x: 400, y: 200 }, { floorId: 'f1' })].map((d) => ({ ...d, roomId: 'r2' }))),
+    ];
+    for (const start of cases) {
+      let p = start;
+      // Se aplica el primer arreglo de cada error hasta que no queden (como mucho 10 rondas).
+      for (let round = 0; round < 10; round++) {
+        const errors = validateProject(p, catalog).filter((i) => i.severity === 'error');
+        const issue = errors.find((i) => quickFixesFor(i, p, catalog).length > 0);
+        if (!issue) break;
+        p = quickFixesFor(issue, p, catalog)[0]!.apply(p);
+      }
+      expect(validateProject(p, catalog).filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([]);
+    }
+  });
+});

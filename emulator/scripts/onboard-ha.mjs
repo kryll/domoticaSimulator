@@ -5,10 +5,11 @@
 //   3. crea un token de larga duración y lo guarda en SECRETS_DIR/ha-token (emulator/.secrets/),
 //   4. ajusta idioma, país, moneda y zona horaria,
 //   5. crea la entrada MQTT (POST /api/config/config_entries/flow) contra el Mosquitto del lab.
-// Variables: HA_URL, HA_USERNAME, HA_PASSWORD, MQTT_HA_PASSWORD, MQTT_HOST, MQTT_PORT, SECRETS_DIR, TZ.
+// Variables: HA_URL, HA_USERNAME, HA_PASSWORD, MQTT_HA_PASSWORD, MQTT_HOST, MQTT_PORT, SECRETS_DIR, TZ,
+// HOST_UID y HOST_GID (setup.sh: los secretos quedan a nombre del usuario del PC, modo 0600).
 // Credenciales por defecto (cámbialas en emulator/.env): hasim / hasim-cambiame.
 // Z-Wave JS y Matter se añaden en E2.
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, chown, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -166,6 +167,28 @@ async function ensureMqtt(token) {
   throw new Error('No se pudo completar el flujo de MQTT');
 }
 
+/**
+ * El onboarding corre como root dentro del contenedor del orquestador: el token quedaría a nombre
+ * de root y el usuario del PC (o el del runner de CI) no podría leerlo. Con HOST_UID/HOST_GID se
+ * deja a su nombre (carpeta 0700, archivo 0600). El orquestador, como root, lo sigue leyendo.
+ */
+async function fixOwnership() {
+  const uid = Number(env.HOST_UID);
+  const gid = Number(env.HOST_GID);
+  if (!Number.isInteger(uid) || !Number.isInteger(gid) || env.HOST_UID === undefined || env.HOST_GID === undefined) return;
+  for (const [path, mode] of [
+    [SECRETS, 0o700],
+    [TOKEN_FILE, 0o600],
+  ]) {
+    try {
+      await chown(path, uid, gid);
+      await chmod(path, mode);
+    } catch (err) {
+      if (err.code !== 'ENOENT') log(`Aviso: no se pudo ajustar el propietario de ${path} (${err.message})`);
+    }
+  }
+}
+
 async function main() {
   log(`Esperando a Home Assistant en ${HA}`);
   const steps = await waitForHa();
@@ -196,6 +219,7 @@ async function main() {
     await writeFile(TOKEN_FILE, `${token}\n`, { mode: 0o600 });
     log(`Token de larga duración guardado en ${TOKEN_FILE}`);
   }
+  await fixOwnership();
   await wsCall(token, { type: 'config/core/update', country: 'ES', language: 'es', currency: 'EUR', unit_system: 'metric', time_zone: env.TZ ?? 'Europe/Madrid' }).catch((e) =>
     log(`Aviso: no se pudo ajustar la configuración regional (${e.message})`),
   );

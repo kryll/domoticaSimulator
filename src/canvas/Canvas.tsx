@@ -17,7 +17,6 @@ import {
   type EdgeMouseHandler,
 } from '@xyflow/react';
 import type { Device, DeviceDefinition, IssueSeverity, Project, SimulationState } from '../types';
-import { devicePowerWatts, loadWatts } from '../simulation/energy';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore, type CanvasMode, type SelectionKind } from '../store/uiStore';
@@ -78,21 +77,6 @@ function lastLogByEntity(log: SimulationState['log']): Map<string, string> {
 }
 
 /** Potencia con carga activa y nivel de batería para el nodo (no dependen del reloj). */
-function powerBadges(device: Device, def: DeviceDefinition, sim: SimulationState): { watts?: number; batteryPct?: number } {
-  if (def.power === 'battery') {
-    const refs = entitiesOfDevice(device);
-    const battery = refs.find((r) => r.definition.deviceClass === 'battery');
-    const raw = battery
-      ? sim.entities[battery.entityId]?.state
-      : refs.map((r) => sim.entities[r.entityId]?.attributes?.battery_level).find((v) => v !== undefined);
-    const level = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
-    return Number.isFinite(level) ? { batteryPct: Math.round(level) } : {};
-  }
-  if (loadWatts(device, def, sim.entities) <= 0) return {};
-  const watts = devicePowerWatts(device, def, sim);
-  return watts > 0 ? { watts: Math.round(watts) } : {};
-}
-
 interface BuildOptions {
   selection: SelectionView;
   highlighted: string[];
@@ -197,7 +181,6 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
     for (const issue of issues) {
       if (!severity || severityRank[issue.severity] > severityRank[severity]) severity = issue.severity;
     }
-    const power = definition ? powerBadges(device, definition, sim) : {};
     const node: DeviceNode = {
       id: device.id,
       type: 'device',
@@ -219,7 +202,6 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
         highlighted: highlightSet.has(device.id),
         connectMode,
         crossFloorLinks: crossLinks.get(device.id) ?? [],
-        ...power,
       },
       selected: isSelected(selection, 'device', device.id),
       ariaLabel: `${device.name}: ${view?.unavailable ? 'no disponible' : [view?.summary, view?.secondary].filter(Boolean).join(', ')}`,

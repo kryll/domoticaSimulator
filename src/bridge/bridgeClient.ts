@@ -111,8 +111,8 @@ export class BridgeClient {
   }
 }
 
-/** Prueba de conexión: abre, espera el hello del orquestador y cierra. */
-export function testConnection(url: string, timeoutMs = 4000, factory?: SocketFactory): Promise<{ ok: boolean; message: string }> {
+/** Prueba de conexión: abre, se presenta con el token, espera el hello del orquestador y cierra. */
+export function testConnection(url: string, token: string, timeoutMs = 4000, factory?: SocketFactory): Promise<{ ok: boolean; message: string }> {
   return new Promise((resolve) => {
     let socket: SocketLike;
     try {
@@ -129,9 +129,11 @@ export function testConnection(url: string, timeoutMs = 4000, factory?: SocketFa
       resolve({ ok, message });
     };
     const timer = setTimeout(() => finish(false, 'El orquestador no responde. ¿Está arrancado el laboratorio?'), timeoutMs);
+    socket.onopen = () => socket.send(encode({ type: 'hello', role: 'app', client: 'ha-simulator-test', token }));
     socket.onmessage = (ev) => {
       const msg = typeof ev.data === 'string' ? parseServerMessage(ev.data) : null;
-      if (msg?.type === 'hello') finish(true, `Conectado con hasim-orchestrator ${msg.version} (protocolo ${msg.protocol})`);
+      if (msg?.type === 'hello') finish(true, `Conectado con hasim-orchestrator ${msg.version} (protocolo ${msg.protocol})${msg.readOnly ? '. Otra app controla el laboratorio: esta quedaría en solo lectura' : ''}`);
+      else if (msg?.type === 'error' && msg.code === 'auth') finish(false, msg.message);
     };
     socket.onclose = () => finish(false, 'No se pudo conectar con el orquestador');
   });

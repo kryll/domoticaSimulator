@@ -1,6 +1,6 @@
 // Sincronización con el HA del lab: escribe las automatizaciones, escenas, scripts y grupos del
 // proyecto como packages (con el exportador de la app) y recarga la configuración por WebSocket.
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
@@ -88,10 +88,6 @@ export function reloadAll(haUrl: string, token: string): Promise<unknown> {
   return haWsCall(haUrl, token, { type: 'call_service', domain: 'homeassistant', service: 'reload_all' });
 }
 
-export function restartHa(haUrl: string, token: string): Promise<unknown> {
-  return haWsCall(haUrl, token, { type: 'call_service', domain: 'homeassistant', service: 'restart' }, 10_000);
-}
-
 export interface SyncOptions {
   haConfigDir: string;
   haUrl: string;
@@ -105,4 +101,26 @@ export async function syncAutomations(project: Project, defs: DeviceDefinition[]
   if (!token) return { files, reloaded: false };
   await reloadAll(opts.haUrl, token);
   return { files, reloaded: true };
+}
+
+/**
+ * Retira las automatizaciones del lab de HA: borra ha-config/packages/hasim y recarga. Devuelve
+ * false si no había nada que borrar (no recarga).
+ */
+export async function removePackages(opts: SyncOptions): Promise<{ removed: boolean; reloaded: boolean }> {
+  const dir = join(opts.haConfigDir, PACKAGES_SUBDIR);
+  let files: string[];
+  try {
+    files = await readdir(dir);
+  } catch {
+    return { removed: false, reloaded: false };
+  }
+  await rm(dir, { recursive: true, force: true });
+  // Se deja la carpeta vacía (la crea setup.sh y HA la incluye con !include_dir_named).
+  await mkdir(dir, { recursive: true });
+  if (files.length === 0) return { removed: false, reloaded: false };
+  const token = await readToken(opts.secretsDir);
+  if (!token) return { removed: true, reloaded: false };
+  await reloadAll(opts.haUrl, token);
+  return { removed: true, reloaded: true };
 }

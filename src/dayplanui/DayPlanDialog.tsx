@@ -52,13 +52,14 @@ export function DayPlanDialog() {
   const plan = useMemo(() => generateDayPlan(project, knownDefinitions(), { people, profile, seed }), [project, people, profile, seed]);
   const counts = useMemo(() => eventsPerHour(plan), [plan]);
   const active = useSimulationStore((s) => pendingPlanEvents(s.sim.pending) > 0);
-  // E1: con el laboratorio en vivo los eventos los produce el entorno real: no hay día típico.
+  // E1: con el laboratorio en vivo el reloj va a 1x con la hora real: los eventos ocurren a su hora.
   const live = useBridgeLive();
 
   const apply = () => {
     if (!applyPlanNow(plan)) return;
     const ui = useUiStore.getState();
-    ui.notify(`Día típico aplicado: ${countLabel(plan.events.length, 'evento', 'eventos')} al día durante ${DAY_PLAN_DAYS} días. Pulsa «Simular» (mejor a 600x).`, 'success', {
+    const how = live ? 'Con el laboratorio en vivo, cada evento ocurre a su hora real.' : 'Pulsa «Simular» (mejor a 600x).';
+    ui.notify(`Día típico aplicado: ${countLabel(plan.events.length, 'evento', 'eventos')} al día durante ${DAY_PLAN_DAYS} días. ${how}`, 'success', {
       action: { label: 'Quitar', run: removePlanNow },
     });
     close();
@@ -84,7 +85,7 @@ export function DayPlanDialog() {
             </Button>
           )}
           <Button onClick={close}>Cerrar</Button>
-          <Button variant="primary" onClick={apply} disabled={plan.events.length === 0 || live}>
+          <Button variant="primary" onClick={apply} disabled={plan.events.length === 0}>
             Aplicar
           </Button>
         </>
@@ -111,8 +112,9 @@ export function DayPlanDialog() {
           </div>
         </div>
         {live && (
-          <p role="alert" className="rounded-md bg-amber-50 px-2 py-1 text-sm text-amber-900">
-            El laboratorio está en vivo: el día típico no se puede aplicar mientras tanto.
+          <p role="note" className="rounded-md bg-sky-50 px-2 py-1 text-sm text-sky-950">
+            El laboratorio está en vivo: el reloj va en tiempo real (1x) y cada evento del día típico se aplica a su hora real, desde ahora. Es lo
+            que da vida a la casa del laboratorio.
           </p>
         )}
         {active && (

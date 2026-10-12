@@ -1,9 +1,9 @@
 // Parser YAML mínimo (bloques, escalares, comillas, flujo simple) y conversión a Automation.
 import type { Action, Automation, ChooseOption, Condition, EntityStateValue, RepeatAction, ServiceAction, ServiceTargets, SunEvent, Trigger, Weekday } from '../types';
 import { findRoomByArea } from '../devices/areas';
-import { collectYamlWarnings, type YamlWarning } from './yaml-warnings';
+import { collectYamlWarnings, DROPPED_TRIGGERS, type YamlWarning } from './yaml-warnings';
 import { isYamlMap, type YamlContext, type YamlMap, type YamlValue } from '../export/yaml';
-import { resolvePersonRef, resolveZoneRef } from '../export/yamlLogic';
+import { resolvePersonRef, resolveZoneRef } from '../devices/refs';
 import { findScene, findScript } from '../simulation/engine';
 import { parseHHMM } from '../simulation/clock';
 import { NOTIFY_PERSISTENT } from '../simulation/notify';
@@ -37,14 +37,91 @@ function stripComment(s: string): string {
   return s.trimEnd();
 }
 
+/** Cabecera de un escalar de bloque al final de la línea: "clave: |", "- >-", "clave: |+"... */
+const BLOCK_HEADER = /^(.*?)\s*([|>])([+-]?)([1-9]?)([+-]?)$/;
+
+/**
+ * Contenido de un escalar de bloque (`|` literal o `>` plegado) con su indicador de recorte:
+ * `-` quita los saltos de línea finales, `+` los conserva todos y, sin indicador, deja uno.
+ */
+export function blockScalar(rawLines: readonly string[], style: '|' | '>', chomp: '' | '-' | '+', explicitIndent?: number): string {
+  const lines = rawLines.map((l) => l.replace(/\s+$/, (m) => (l.trim() === '' ? '' : m)));
+  const firstContent = lines.find((l) => l.trim() !== '');
+  const indent = explicitIndent ?? (firstContent === undefined ? 0 : firstContent.length - firstContent.trimStart().length);
+  const body = lines.map((l) => (l.trim() === '' ? '' : l.slice(indent)));
+  let end = body.length;
+  while (end > 0 && body[end - 1] === '') end--;
+  const content = body.slice(0, end);
+  const trailing = body.length - end;
+  let text: string;
+  if (style === '|') {
+    text = content.join('\n');
+  } else {
+    // Plegado: las líneas seguidas se unen con un espacio; una línea vacía es un salto de línea.
+    // Las líneas más sangradas (y las vecinas) se conservan tal cual.
+    text = '';
+    for (let i = 0; i < content.length; i++) {
+      const line = content[i] ?? '';
+      if (i === 0) {
+        text = line;
+        continue;
+      }
+      const prev = content[i - 1] ?? '';
+      const moreIndented = (s: string) => s.startsWith(' ') || s.startsWith('\t');
+      if (line === '') text += '\n';
+      else if (prev === '' || moreIndented(line) || moreIndented(prev)) text += (prev === '' ? '' : '\n') + line;
+      else text += ` ${line}`;
+    }
+  }
+  if (content.length === 0) return chomp === '+' ? '\n'.repeat(trailing) : '';
+  if (chomp === '-') return text;
+  if (chomp === '+') return `${text}\n${'\n'.repeat(trailing)}`;
+  return `${text}\n`;
+}
+
 function tokenize(text: string): Line[] {
   const lines: Line[] = [];
-  text.split(/\r?\n/).forEach((raw, i) => {
+  const raws = text.split(/\r?\n/);
+  for (let i = 0; i < raws.length; i++) {
+    const raw = raws[i] ?? '';
     if (raw.includes('\t') && /^\s*\t/.test(raw)) throw err(i + 1, 'no se admiten tabuladores para sangrar');
     const content = stripComment(raw);
-    if (content.trim() === '' || content.trim() === '---') return;
-    lines.push({ indent: content.length - content.trimStart().length, text: content.trim(), no: i + 1 });
-  });
+    if (content.trim() === '' || content.trim() === '---') continue;
+    const indent = content.length - content.trimStart().length;
+    const trimmed = content.trim();
+    const header = BLOCK_HEADER.exec(trimmed);
+    const prefix = header?.[1] ?? '';
+    if (header && (prefix === '' || prefix === '-' || prefix.endsWith(':') || prefix.endsWith(' -'))) {
+      // Escalar de bloque: las líneas siguientes más sangradas que su clave (o vacías) son su
+      // contenido, sin quitar comentarios. Se sustituye por la cadena equivalente entre comillas.
+      const style = header[2] === '>' ? '>' : '|';
+      const chompRaw = header[3] || header[5] || '';
+      const chomp = chompRaw === '-' || chompRaw === '+' ? chompRaw : '';
+      // Sangría de la clave: en "- clave: |" la clave va tras el guion.
+      let parentIndent = indent;
+      if (prefix.endsWith(':')) {
+        const dashes = /^(-\s+)*/.exec(trimmed)?.[0] ?? '';
+        parentIndent = indent + dashes.length;
+      }
+      const block: string[] = [];
+      let j = i + 1;
+      for (; j < raws.length; j++) {
+        const next = raws[j] ?? '';
+        if (next.trim() === '') {
+          block.push('');
+          continue;
+        }
+        if (next.length - next.trimStart().length <= parentIndent) break;
+        block.push(next);
+      }
+      const explicit = header[4] ? parentIndent + Number(header[4]) : undefined;
+      const value = blockScalar(block, style, chomp, explicit);
+      lines.push({ indent, text: `${prefix}${prefix === '' ? '' : ' '}${JSON.stringify(value)}`, no: i + 1 });
+      i = j - 1;
+      continue;
+    }
+    lines.push({ indent, text: content.trim(), no: i + 1 });
+  }
   return lines;
 }
 
@@ -287,6 +364,34 @@ function sunEvent(v: YamlValue, where: string): SunEvent {
 }
 
 /** Acepta la sintaxis actual (`trigger: state`) y la antigua (`platform: state`). */
+function triggerPlatform(v: YamlValue): string | undefined {
+  if (!isYamlMap(v)) return undefined;
+  const p = v.platform ?? v.trigger;
+  return typeof p === 'string' ? p : undefined;
+}
+
+/**
+ * Disparadores de un nodo YAML. Un `state` o `numeric_state` con varias `entity_id` se convierte
+ * en un disparador por entidad, todos con el mismo `id` (así `condition: trigger` sigue igual).
+ * Los disparadores de plataformas no admitidas (mqtt, webhook...) se descartan: los avisa
+ * collectYamlWarnings.
+ */
+export function parseTriggers(v: YamlValue, i = 0, ctx?: Ctx): Trigger[] {
+  const platform = triggerPlatform(v);
+  if (platform !== undefined && DROPPED_TRIGGERS.has(platform)) return [];
+  if (isYamlMap(v) && (platform === 'state' || platform === 'numeric_state')) {
+    const raw = v.target !== undefined && isYamlMap(v.target) ? v.target.entity_id : v.entity_id;
+    if (Array.isArray(raw) && raw.length > 1) {
+      return raw.map((e) => {
+        const single: YamlMap = { ...v, entity_id: e };
+        delete single.target;
+        return parseTrigger(single, i, ctx);
+      });
+    }
+  }
+  return [parseTrigger(v, i, ctx)];
+}
+
 export function parseTrigger(v: YamlValue, i = 0, ctx?: Ctx): Trigger {
   const where = `el disparador ${i + 1}`;
   const m = asMap(v, where);
@@ -545,9 +650,15 @@ function objectToAutomation(m: YamlMap, ctx: Ctx | undefined, fallbackId: string
   const mode = m.mode === undefined || m.mode === null ? 'single' : str(m.mode, 'mode');
   const validMode = MODES.find((x) => x === mode);
   if (!validMode) throw new Error(`Modo no válido: "${mode}" (single, restart, queued o parallel)`);
-  const triggers = list(m.triggers ?? m.trigger).map((t, i) => parseTrigger(t, i, ctx));
-  if (triggers.length === 0) throw new Error('La automatización necesita al menos un disparador ("trigger")');
-  return {
+  if (m.use_blueprint !== undefined) throw new Error('Usa un blueprint («use_blueprint»): el simulador no los admite; conviértela antes en una automatización normal');
+  const rawTriggers = list(m.triggers ?? m.trigger);
+  const triggers = rawTriggers.flatMap((t, i) => parseTriggers(t, i, ctx));
+  if (triggers.length === 0) {
+    const dropped = rawTriggers.map(triggerPlatform).find((p) => p !== undefined && DROPPED_TRIGGERS.has(p));
+    if (dropped !== undefined) throw new Error(`Tipo de disparador no soportado: "${dropped}"; la automatización no tiene ningún otro disparador admitido`);
+    throw new Error('La automatización necesita al menos un disparador ("trigger")');
+  }
+  const automation: Automation = {
     id: m.id === undefined || m.id === null ? fallbackId : str(m.id, 'id'),
     name: m.alias === undefined || m.alias === null ? 'Automatización sin nombre' : str(m.alias, 'alias'),
     enabled: m.initial_state !== false,
@@ -556,6 +667,11 @@ function objectToAutomation(m: YamlMap, ctx: Ctx | undefined, fallbackId: string
     conditions: list(m.conditions ?? m.condition).map((c, i) => parseCondition(c, i, ctx)),
     actions: list(m.actions ?? m.action).map((a, i) => parseAction(a, i, ctx)),
   };
+  if (m.description !== undefined && m.description !== null) {
+    const description = str(m.description, 'description').trimEnd();
+    if (description !== '') automation.description = description;
+  }
+  return automation;
 }
 
 function parseRoot(text: string): YamlValue {
@@ -592,16 +708,43 @@ export function parseAutomationYamlDetailed(text: string, ctx?: Ctx): { automati
 }
 
 /** Como parseAutomationsYaml, con los avisos de todas (rutas con el índice: "[2].triggers[0].attribute"). */
-export function parseAutomationsYamlDetailed(text: string, ctx?: Ctx): { automations: Automation[]; warnings: YamlWarning[] } {
+export interface SkippedAutomation {
+  /** Posición en la lista (desde 0). */
+  index: number;
+  /** alias, si se pudo leer. */
+  name?: string;
+  error: string;
+}
+
+/**
+ * Como parseAutomationsYaml, con los avisos de todas (rutas con el índice: "[2].triggers[0].attribute").
+ * Cada automatización se lee por separado: una que no se puede importar no tumba el fichero, se
+ * salta y se informa en `skipped` (y como aviso). Lanza Error si el YAML no se puede leer o si no
+ * se ha podido importar ninguna.
+ */
+export function parseAutomationsYamlDetailed(text: string, ctx?: Ctx): { automations: Automation[]; warnings: YamlWarning[]; skipped: SkippedAutomation[] } {
   const root = parseRoot(text);
   const automations: Automation[] = [];
   const warnings: YamlWarning[] = [];
-  list(root).forEach((item, i) => {
-    const m = asMap(item, `la automatización ${i + 1}`);
-    automations.push(objectToAutomation(m, ctx, crypto.randomUUID()));
-    warnings.push(...collectYamlWarnings(m, `[${i}]`, ctx));
+  const skipped: SkippedAutomation[] = [];
+  const items = list(root);
+  items.forEach((item, i) => {
+    const name = isYamlMap(item) && typeof item.alias === 'string' ? item.alias : undefined;
+    try {
+      const m = asMap(item, `la automatización ${i + 1}`);
+      automations.push(objectToAutomation(m, ctx, crypto.randomUUID()));
+      warnings.push(...collectYamlWarnings(m, `[${i}]`, ctx));
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      skipped.push(name === undefined ? { index: i, error } : { index: i, name, error });
+      warnings.push({ path: `[${i}]`, message: `No se importa la automatización ${i + 1}${name === undefined ? '' : ` («${name}»)`}: ${error}` });
+    }
   });
-  return { automations, warnings };
+  if (automations.length === 0 && skipped.length > 0) {
+    const first = skipped[0];
+    throw new Error(items.length === 1 && first ? first.error : `No se ha podido importar ninguna automatización. ${first ? `La ${first.index + 1}: ${first.error}` : ''}`.trim());
+  }
+  return { automations, warnings, skipped };
 }
 
 // ---------- Fase 3: zone, device, choose, if, wait_for_trigger, repeat, notify, variables ----------
@@ -651,7 +794,7 @@ function parseFase3Action(m: YamlMap, where: string, ctx: Ctx | undefined): Acti
     return a;
   }
   if (m.wait_for_trigger !== undefined) {
-    const a: Action = { type: 'wait_for_trigger', triggers: list(m.wait_for_trigger).map((t, i) => parseTrigger(t, i, ctx)) };
+    const a: Action = { type: 'wait_for_trigger', triggers: list(m.wait_for_trigger).flatMap((t, i) => parseTriggers(t, i, ctx)) };
     if (m.timeout !== undefined && m.timeout !== null) a.timeoutSeconds = delaySeconds(m.timeout, `${where} (timeout)`);
     if (m.continue_on_timeout === false) a.continueOnTimeout = false;
     return a;

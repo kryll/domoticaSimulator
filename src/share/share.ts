@@ -2,6 +2,7 @@
 // y codificado en base64url. Si el navegador no tiene CompressionStream se usa JSON sin comprimir.
 import type { Project } from '../types';
 import { parseProject } from '../store/projectSchema';
+import { withoutLocalLabFields } from '../bridge/schema';
 
 /** Prefijos de formato: v1 = deflate, v0 = sin comprimir. */
 const DEFLATE_PREFIX = 'v1.';
@@ -79,7 +80,8 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 
 /** Proyecto preparado para compartir (sin imágenes ni variantes, según las opciones). */
 export function shareableProject(project: Project, opts: ShareOptions = {}): Project {
-  const next: Project = { ...project };
+  // Nunca viajan los ajustes locales del laboratorio (activado, URL del orquestador, token).
+  const next: Project = { ...withoutLocalLabFields(project) };
   if (opts.omitVariants ?? true) delete next.variants;
   if (opts.omitImages ?? true) {
     next.floors = project.floors.map((f) => {

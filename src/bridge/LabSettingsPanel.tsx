@@ -2,11 +2,45 @@ import { useEffect, useState } from 'react';
 import { useBridgeStore } from './bridgeStore';
 import { testConnection } from './bridgeClient';
 import { updateBridgeSettings, useBridgeSettings } from './useBridge';
-import { CONNECTION_LABELS, HA_LABELS, SERVICE_LABELS } from './labels';
+import { CONNECTION_LABELS, HA_LABELS, OTHER_TAB_MESSAGE, SERVICE_LABELS } from './labels';
+import { LAB_TOKEN_RE, ORCHESTRATOR_URL_RE, useLocalLab } from './localLab';
+import { topicError } from './schema';
 import { TRANSPORT_LABELS } from './via';
 import { Button } from '../ui/Button';
 import { inputClass } from '../ui/Field';
-import type { AutomationsRunIn, DeviceTransport } from '../types';
+import type { AutomationsRunIn, DeviceTransport, HaBridgeSettings } from '../types';
+
+type TopicKey = 'discoveryPrefix' | 'baseTopic' | 'z2mBaseTopic';
+const TOPIC_LABELS: Record<TopicKey, string> = { discoveryPrefix: 'Prefijo de discovery', baseTopic: 'Topic base', z2mBaseTopic: 'Topic base Z2M' };
+
+/** Campo de topic MQTT con la misma validación que el proyecto (parseHaBridge) y el error visible. */
+function TopicInput({ name, settings }: { name: TopicKey; settings: HaBridgeSettings }) {
+  const current = settings[name];
+  const [value, setValue] = useState(current);
+  useEffect(() => setValue(current), [current]);
+  const error = topicError(value.trim());
+  return (
+    <label className="flex flex-col gap-1 text-slate-600">
+      {TOPIC_LABELS[name]}
+      <input
+        className={inputClass}
+        value={value}
+        spellCheck={false}
+        aria-invalid={error !== undefined}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => {
+          const v = value.trim();
+          if (topicError(v) === undefined && v !== settings[name]) updateBridgeSettings({ [name]: v });
+        }}
+      />
+      {error !== undefined && (
+        <span role="alert" className="text-red-700">
+          No se guarda: {error}
+        </span>
+      )}
+    </label>
+  );
+}
 
 export const HA_URL = 'http://localhost:8123';
 
@@ -32,22 +66,29 @@ function Row({ label, value }: { label: string; value: string }) {
  */
 export function LabSettingsPanel() {
   const settings = useBridgeSettings();
+  const local = useLocalLab();
   const connection = useBridgeStore((s) => s.connection);
   const status = useBridgeStore((s) => s.status);
   const lastError = useBridgeStore((s) => s.lastError);
-  const [url, setUrl] = useState(settings.orchestratorUrl);
+  const [url, setUrl] = useState(local.orchestratorUrl);
+  const [token, setToken] = useState(local.token);
   const [test, setTest] = useState<{ ok: boolean; message: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const [advanced, setAdvanced] = useState(false);
-  useEffect(() => setUrl(settings.orchestratorUrl), [settings.orchestratorUrl]);
-  const urlValid = /^wss?:\/\/\S+$/.test(url.trim());
+  useEffect(() => setUrl(local.orchestratorUrl), [local.orchestratorUrl]);
+  useEffect(() => setToken(local.token), [local.token]);
+  const urlValid = ORCHESTRATOR_URL_RE.test(url.trim());
+  const tokenValid = LAB_TOKEN_RE.test(token.trim());
   const commitUrl = () => {
-    if (urlValid && url.trim() !== settings.orchestratorUrl) updateBridgeSettings({ orchestratorUrl: url.trim() });
+    if (urlValid && url.trim() !== local.orchestratorUrl) local.update({ orchestratorUrl: url.trim() });
+  };
+  const commitToken = () => {
+    if (tokenValid && token.trim() !== local.token) local.update({ token: token.trim() });
   };
   const same = sameOriginUrl();
   const runTest = async () => {
     setTesting(true);
-    setTest(await testConnection(url.trim()));
+    setTest(await testConnection(url.trim(), token.trim()));
     setTesting(false);
   };
   const transports = Object.entries(status?.transports ?? {}) as Array<[DeviceTransport, { devices: number; status: 'active' | 'pending' }]>;
@@ -58,12 +99,20 @@ export function LabSettingsPanel() {
         El laboratorio es un entorno de pruebas en tu PC (Docker, software libre y sin conexión a Internet) con un Home Assistant real: los dispositivos del proyecto aparecen en él y el simulador
         hace de mundo físico. Nunca es una instalación real.
       </p>
-      <label className="flex items-center gap-2 text-slate-700">
-        <input type="checkbox" checked={settings.enabled} onChange={(e) => updateBridgeSettings({ enabled: e.target.checked })} />
-        Conectar con el laboratorio
-      </label>
       <fieldset className="flex flex-col gap-2 rounded-md border border-slate-200 p-2">
-        <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Orquestador</legend>
+        <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Esta máquina</legend>
+        <p className="text-xs text-slate-500">
+          Estos ajustes se guardan solo en este navegador (no van en el proyecto, ni en la exportación, ni en los enlaces compartidos).
+        </p>
+        <label className="flex items-center gap-2 text-slate-700">
+          <input type="checkbox" checked={local.enabled} onChange={(e) => local.update({ enabled: e.target.checked })} />
+          Conectar con el laboratorio
+        </label>
+        {connection === 'other_tab' && (
+          <p role="status" className="text-xs font-medium text-amber-900">
+            {OTHER_TAB_MESSAGE}.
+          </p>
+        )}
         <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
           URL del orquestador (WebSocket)
           <input
@@ -76,12 +125,27 @@ export function LabSettingsPanel() {
           />
           {!urlValid && <span className="text-red-700">Debe empezar por ws:// o wss://</span>}
         </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+          Token del laboratorio (LAB_TOKEN de emulator/.env)
+          <input
+            className={inputClass}
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            onBlur={commitToken}
+            aria-invalid={token !== '' && !tokenValid}
+            spellCheck={false}
+          />
+          {token !== '' && !tokenValid && <span className="text-red-700">El token tiene al menos 16 caracteres: letras, números, «-» o «_».</span>}
+          {token === '' && <span className="text-slate-500">Lo genera emulator/scripts/setup.sh y lo muestra al terminar. Sin él, el orquestador rechaza la conexión.</span>}
+        </label>
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={() => void runTest()} disabled={!urlValid || testing}>
+          <Button size="sm" onClick={() => void runTest()} disabled={!urlValid || !tokenValid || testing}>
             {testing ? 'Probando…' : 'Probar conexión'}
           </Button>
           {same && same !== url && (
-            <Button size="sm" variant="ghost" onClick={() => updateBridgeSettings({ orchestratorUrl: same })}>
+            <Button size="sm" variant="ghost" onClick={() => local.update({ orchestratorUrl: same })}>
               Usar este origen ({same})
             </Button>
           )}
@@ -91,6 +155,9 @@ export function LabSettingsPanel() {
             </span>
           )}
         </div>
+      </fieldset>
+      <fieldset className="flex flex-col gap-2 rounded-md border border-slate-200 p-2">
+        <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Proyecto</legend>
         <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
           Automatizaciones, escenas y scripts
           <select
@@ -108,18 +175,7 @@ export function LabSettingsPanel() {
         {advanced && (
           <div className="grid grid-cols-3 gap-2 text-xs">
             {(['discoveryPrefix', 'baseTopic', 'z2mBaseTopic'] as const).map((key) => (
-              <label key={key} className="flex flex-col gap-1 text-slate-600">
-                {key === 'discoveryPrefix' ? 'Prefijo de discovery' : key === 'baseTopic' ? 'Topic base' : 'Topic base Z2M'}
-                <input
-                  className={inputClass}
-                  defaultValue={settings[key]}
-                  spellCheck={false}
-                  onBlur={(e) => {
-                    const v = e.target.value.trim();
-                    if (v && !/[#+\s]/.test(v) && v !== settings[key]) updateBridgeSettings({ [key]: v });
-                  }}
-                />
-              </label>
+              <TopicInput key={key} name={key} settings={settings} />
             ))}
             <p className="col-span-3 text-slate-500">Si los cambias, ajusta también la ACL de Mosquitto (emulator/mosquitto/acl).</p>
           </div>
@@ -156,7 +212,7 @@ export function LabSettingsPanel() {
           <li>
             Abre la app en <code>http://localhost:8080</code> y Home Assistant en <code>http://localhost:8123</code> (usuario y contraseña en <code>emulator/.env</code>).
           </li>
-          <li>Activa «Conectar con el laboratorio» aquí. Para parar: <code>emulator/scripts/stop.sh</code>.</li>
+          <li>Activa «Conectar con el laboratorio» aquí y pega el token que muestra setup.sh (LAB_TOKEN de <code>emulator/.env</code>). Para parar: <code>emulator/scripts/stop.sh</code>.</li>
         </ol>
         <p className="mt-1 text-slate-500">Necesita unos 2 GB de RAM libres y unos 5 GB de disco. Una vez descargadas las imágenes funciona sin Internet.</p>
       </details>

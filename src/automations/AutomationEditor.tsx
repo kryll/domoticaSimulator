@@ -3,7 +3,7 @@ import { knownDefinitions } from '../canvas/analysis';
 import type { Automation, Condition, Trigger } from '../types';
 import { Tabs } from '../ui/Tabs';
 import { tabPanelId } from '../ui/ids';
-import { SelectField, TextField } from '../ui/Field';
+import { SelectField, TextAreaField, TextField } from '../ui/Field';
 import { ListEditor } from './ListEditor';
 import { TriggerEditor } from './TriggerEditor';
 import { ConditionEditor } from './ConditionEditor';
@@ -110,6 +110,16 @@ export function AutomationEditor({ automation, onChange: emit }: AutomationEdito
               Activada
             </label>
           </div>
+          <TextAreaField
+            label="Descripción (opcional)"
+            rows={2}
+            value={automation.description ?? ''}
+            onChange={(e) => {
+              const next: Automation = { ...automation, description: e.target.value };
+              if (e.target.value === '') delete next.description;
+              onChange(next);
+            }}
+          />
           <ListEditor<Trigger>
             title="Disparadores"
             items={automation.triggers}

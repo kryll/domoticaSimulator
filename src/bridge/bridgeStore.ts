@@ -2,7 +2,11 @@
 import { create } from 'zustand';
 import { pushRing, type LabAction, type SnapshotInfo, type StatusMessage, type TrafficEntry } from './protocol';
 
-export type Connection = 'off' | 'connecting' | 'connected' | 'disconnected';
+/**
+ * off: lab desactivado en esta máquina. other_tab: otra pestaña controla el lab. readonly: otra
+ * app (otro navegador) lo controla; esta solo mira. unauthorized: falta el token o no es válido.
+ */
+export type Connection = 'off' | 'other_tab' | 'connecting' | 'connected' | 'readonly' | 'unauthorized' | 'disconnected';
 
 export interface LabResult {
   action: LabAction;
@@ -30,7 +34,10 @@ export interface BridgeStoreState {
   /** Panel del laboratorio abierto (nodos, tráfico, snapshots). */
   panelOpen: boolean;
   panelTab: 'nodes' | 'traffic' | 'snapshots';
+  /** Panel plegado: solo la cabecera. */
+  panelCollapsed: boolean;
   lastError?: string;
+  setPanelCollapsed: (collapsed: boolean) => void;
   setPanel: (open: boolean, tab?: BridgeStoreState['panelTab']) => void;
   setTrafficPaused: (paused: boolean) => void;
   clearTraffic: () => void;
@@ -46,7 +53,9 @@ export const useBridgeStore = create<BridgeStoreState>()((set) => ({
   trafficPaused: false,
   panelOpen: false,
   panelTab: 'nodes',
-  setPanel: (open, tab) => set((s) => ({ panelOpen: open, panelTab: tab ?? s.panelTab })),
+  panelCollapsed: false,
+  setPanelCollapsed: (collapsed) => set({ panelCollapsed: collapsed }),
+  setPanel: (open, tab) => set((s) => ({ panelOpen: open, panelTab: tab ?? s.panelTab, ...(open ? { panelCollapsed: false } : {}) })),
   setTrafficPaused: (paused) => set({ trafficPaused: paused }),
   clearTraffic: () => set({ traffic: [] }),
   addTraffic: (entries) =>

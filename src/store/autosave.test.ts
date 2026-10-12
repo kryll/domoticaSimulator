@@ -158,3 +158,38 @@ describe('guardado automático fiable', () => {
     expect(t.deps.autoVersion).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('respaldo síncrono al cerrar', () => {
+  let stop: () => void = () => undefined;
+  beforeEach(() => {
+    localStorage.clear();
+    store().loadProject(makeProject({ revision: 3 }));
+  });
+  afterEach(() => stop());
+
+  it('en pagehide escribe el respaldo en localStorage y lo borra al terminar de guardar', async () => {
+    const { readBackup } = await import('./unloadBackup');
+    const t = setup();
+    stop = t.stop;
+    store().addDevice(makeDevice('hue-white-e27', 'd1'));
+    window.dispatchEvent(new Event('pagehide'));
+    const backup = readBackup(localStorage, 'p1');
+    expect(backup).toMatchObject({ projectId: 'p1', revision: 3 });
+    expect(JSON.parse(backup?.json ?? '{}').devices).toHaveLength(1);
+    await vi.waitFor(() => expect(store().dirty).toBe(false));
+    expect(readBackup(localStorage, 'p1')).toBeUndefined();
+  });
+
+  it('beforeunload pide confirmación solo con cambios sin guardar', async () => {
+    const t = setup();
+    stop = t.stop;
+    const clean = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(clean);
+    expect(clean.defaultPrevented).toBe(false);
+    store().addDevice(makeDevice('hue-white-e27', 'd1'));
+    const dirty = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(dirty);
+    expect(dirty.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(store().dirty).toBe(false));
+  });
+});

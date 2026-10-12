@@ -49,7 +49,8 @@ export function Tabs<K extends string>({ tabs, active, onChange, label, classNam
             role="tab"
             id={`${prefix}-tab-${tab.key}`}
             aria-selected={selected}
-            aria-controls={tabPanelId(prefix, tab.key)}
+            // Solo la pestaña activa apunta a su panel: los inactivos no se montan.
+            aria-controls={selected ? tabPanelId(prefix, tab.key) : undefined}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.key)}
             onKeyDown={(e) => onKeyDown(e, i)}

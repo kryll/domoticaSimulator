@@ -13,7 +13,7 @@ import { startAutosave } from './store/autosave';
 import { startInteractAutoplay, startSimulationSync, stopSimulationLoop } from './store/simulationStore';
 import { useUiStore } from './store/uiStore';
 import { loadInitialProject } from './store/bootstrap';
-import { ExtraDialogs } from './ui/ExtraDialogs';
+import { ExtraDialogs, hasSharedHash } from './ui/ExtraDialogs';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { SaveConflictDialog, SaveErrorBanner } from './ui/SaveIndicator';
 import { useAutomationsWorkspaceOpen, useViewStore, welcomeDone } from './store/viewStore';
@@ -27,6 +27,8 @@ import { useLayoutStore } from './store/layoutStore';
 import { MobileDrawers } from './ui/MobileDrawers';
 import { UpdatePrompt } from './pwa/UpdatePrompt';
 import { Tanda3Dialogs } from './ui/Tanda3Dialogs';
+import { RecoverProjectDialog } from './ui/RecoverProjectDialog';
+import { useRecoveryStore } from './store/recoveryStore';
 
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -132,16 +134,20 @@ export function App({ autoLoad = true }: AppProps) {
     );
     let stopAutosave: (() => void) | undefined;
     let cancelled = false;
-    const boot = autoLoad ? loadInitialProject() : Promise.resolve({ firstRun: false });
-    void boot.then(async ({ firstRun }) => {
+    const boot: ReturnType<typeof loadInitialProject> = autoLoad ? loadInitialProject() : Promise.resolve({ firstRun: false });
+    void boot.then(async ({ firstRun, unreadable, restoredBackup }) => {
       if (cancelled) return;
+      if (unreadable) useRecoveryStore.getState().setUnreadable(unreadable);
+      if (restoredBackup) useUiStore.getState().notify('Se han recuperado los últimos cambios que no llegaron a guardarse al cerrar', 'info');
       useUiStore.getState().setActiveFloor(useProjectStore.getState().project.floors[0]?.id ?? null);
       stopAutosave = startAutosave();
       if (autoLoad && hasSharedPresentation()) {
         await openSharedPresentation();
         return;
       }
-      if (autoLoad && firstRun && !welcomeDone()) useViewStore.getState().setWelcomeOpen(true);
+      // Con un enlace compartido (#p=...) manda «Proyecto compartido»: ni bienvenida ni visita
+      // guiada encima (se ofrecerán en la próxima visita normal).
+      if (autoLoad && firstRun && !unreadable && !welcomeDone() && !hasSharedHash()) useViewStore.getState().setWelcomeOpen(true);
     });
     return () => {
       cancelled = true;
@@ -198,6 +204,7 @@ export function App({ autoLoad = true }: AppProps) {
         <SaveConflictDialog />
         <WelcomeDialog />
         <Tour />
+        <RecoverProjectDialog />
         <UpdatePrompt />
         <Tanda3Dialogs />
       </div>

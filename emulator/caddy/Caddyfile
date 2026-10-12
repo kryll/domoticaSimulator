@@ -1,11 +1,13 @@
 # Caddy sirve la app compilada y publica el orquestador y MQTT por WebSocket en el mismo
 # origen (http://localhost:8080), sin contenido mixto. Sin HTTPS automático ni Internet.
+# Escucha solo en 127.0.0.1 (LAB_BIND en emulator/.env; 0.0.0.0 para abrirlo a la LAN).
 {
 	auto_https off
 	admin off
 }
 
 :8080 {
+	bind {$LAB_BIND:127.0.0.1}
 	handle /orchestrator* {
 		reverse_proxy 127.0.0.1:8081
 	}

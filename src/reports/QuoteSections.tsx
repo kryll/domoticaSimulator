@@ -109,6 +109,7 @@ function QuoteNumberField({ name, label, placeholder, max, min = 0 }: { name: Nu
 /** Sección «Datos de la propuesta»: edita settings.quote. */
 export function ProposalDataSection() {
   const hidePrices = useProjectStore((s) => s.project.settings?.quote?.hidePrices === true);
+  const showMargin = useProjectStore((s) => s.project.settings?.quote?.showMargin === true);
   return (
     <section aria-labelledby="proposal-data-title" className="rounded-md border border-slate-200 p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -136,6 +137,15 @@ export function ProposalDataSection() {
           className="h-4 w-4 rounded border-slate-400 text-sky-700 focus:ring-sky-600"
         />
         Ocultar los precios en la propuesta y en el modo presentación
+      </label>
+      <label className="mt-1 flex items-center gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={showMargin}
+          onChange={(e) => setQuote({ showMargin: e.target.checked ? true : undefined })}
+          className="h-4 w-4 rounded border-slate-400 text-sky-700 focus:ring-sky-600"
+        />
+        Mostrar el margen al cliente como línea aparte (si no, va repartido en los precios)
       </label>
     </section>
   );
@@ -177,7 +187,7 @@ export function QuoteBreakdown() {
   const totals: Array<[string, number, boolean?]> = [
     ['Subtotal materiales e infraestructura', quote.subtotalMaterials],
     ['Subtotal mano de obra', quote.subtotalLabor],
-    ...(quote.marginPct > 0 ? ([[`Margen (${formatDecimal(quote.marginPct)} %)`, quote.margin]] as Array<[string, number]>) : []),
+    ...(quote.showMargin && quote.marginPct > 0 ? ([[`Margen (${formatDecimal(quote.marginPct)} %)`, quote.margin]] as Array<[string, number]>) : []),
     ...(quote.discountPct > 0 ? ([[`Descuento (${formatDecimal(quote.discountPct)} %)`, -quote.discount]] as Array<[string, number]>) : []),
     ['Base imponible', quote.taxableBase],
     [`IVA (${formatDecimal(quote.vatPct)} %)`, quote.vat],

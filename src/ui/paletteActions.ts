@@ -7,12 +7,12 @@ import { useExtrasStore } from '../store/extrasStore';
 import { useViewStore } from '../store/viewStore';
 import { useLayoutStore } from '../store/layoutStore';
 import { exportProjectJson } from '../store/persistence';
-import { automationsToYaml } from '../export/yaml';
-import { devicesToCsv } from '../export/csv';
 import { knownDefinitions } from '../canvas/analysis';
 import { enterPresentation } from '../presentation/presentationMode';
 import { downloadText, safeFilename } from './download';
 import { isBridgeLive } from '../bridge/useBridge';
+import { pauseSimulation } from '../bridge/liveControls';
+import { runLabPaletteAction } from '../bridge/labPalette';
 
 /** Lleva el plano a un dispositivo: su planta, seleccionado y centrado. */
 export function revealDevice(deviceId: string): void {
@@ -45,11 +45,12 @@ export function runAppAction(id: AppActionId): void {
     case 'export-packages':
       useExtrasStore.getState().openDialog('packages');
       return;
+    // Los exportadores se cargan bajo demanda (no van en la carga inicial).
     case 'export-yaml':
-      downloadText(automationsToYaml(project), 'automations.yaml', 'text/yaml');
+      void import('../export/yaml').then((m) => downloadText(m.automationsToYaml(project), 'automations.yaml', 'text/yaml')).catch((err: unknown) => ui.notify(String(err), 'error'));
       return;
     case 'export-csv':
-      downloadText(devicesToCsv(project, knownDefinitions()), `${base}-dispositivos.csv`, 'text/csv');
+      void import('../export/csv').then((m) => downloadText(m.devicesToCsv(project, knownDefinitions()), `${base}-dispositivos.csv`, 'text/csv')).catch((err: unknown) => ui.notify(String(err), 'error'));
       return;
     case 'export-png':
       void import('../export/png').then((m) => m.exportCanvasPng(`${base}-plano.png`)).catch((err: unknown) => ui.notify(String(err), 'error'));
@@ -67,7 +68,8 @@ export function runAppAction(id: AppActionId): void {
       useSimulationStore.getState().start();
       return;
     case 'simulation-pause':
-      useSimulationStore.getState().pause();
+      // E1: en vivo con el laboratorio, pausar pregunta antes (src/bridge/liveControls.ts).
+      void pauseSimulation();
       return;
     case 'new-automation': {
       const a = useProjectStore.getState().addAutomation();
@@ -103,6 +105,16 @@ export function runAppAction(id: AppActionId): void {
       return;
     case 'settings':
       ui.setSettingsOpen(true);
+      return;
+    // E1: acciones del laboratorio (src/bridge/labPalette.ts).
+    case 'lab-panel':
+    case 'lab-settings':
+    case 'lab-couple':
+    case 'lab-start-all':
+    case 'lab-stop-all':
+    case 'lab-snapshots':
+    case 'lab-traffic':
+      runLabPaletteAction(id);
       return;
   }
 }

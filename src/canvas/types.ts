@@ -25,10 +25,6 @@ export type DeviceNodeData = {
   unreachable: boolean;
   highlighted: boolean;
   connectMode: boolean;
-  /** Potencia que consume ahora (W), solo si tiene carga activa. */
-  watts?: number;
-  /** Nivel de batería (%) de los dispositivos a pilas. */
-  batteryPct?: number;
   /** Conexiones con dispositivos de otras plantas. */
   crossFloorLinks: Array<{ deviceName: string; floorName: string }>;
 };

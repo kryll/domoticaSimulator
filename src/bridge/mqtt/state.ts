@@ -1,6 +1,6 @@
 // Estado de las entidades del simulador → mensajes MQTT (perfil genérico y Z2M). Funciones puras.
 import type { EntityState, EntityStateValue } from '../../types';
-import type { BridgeDevice, BridgeEntity, BridgeModel, MqttMessage } from './model';
+import type { BridgeDevice, BridgeEntity } from './model';
 import { kelvinToMired, parseRgbText, rgbToXy } from './color';
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
@@ -198,7 +198,7 @@ export function linkQuality(ieee: string): number {
 }
 
 /** JSON completo del dispositivo Z2M (todas sus entidades + linkquality), o undefined. */
-export function z2mDevicePayload(bdev: BridgeDevice, entities: Record<string, EntityState>): string | undefined {
+export function z2mDevicePayload(bdev: BridgeDevice, entities: Readonly<Record<string, EntityState>>): string | undefined {
   const doc: Fields = {};
   let any = false;
   for (const e of bdev.entities) {
@@ -210,21 +210,4 @@ export function z2mDevicePayload(bdev: BridgeDevice, entities: Record<string, En
   if (!any) return undefined;
   doc.linkquality = linkQuality(bdev.ieee);
   return stableJson(doc);
-}
-
-/** Mensajes de estado de todo el modelo (sin retener; el orquestador deduplica por hash). */
-export function stateMessages(model: BridgeModel, entities: Record<string, EntityState>): MqttMessage[] {
-  const out: MqttMessage[] = [];
-  for (const bdev of model.devices) {
-    if (bdev.profile === 'z2m') {
-      const payload = z2mDevicePayload(bdev, entities);
-      if (payload !== undefined) out.push({ topic: `${model.settings.z2mBaseTopic}/${bdev.friendlyName}`, payload, retain: false });
-      continue;
-    }
-    for (const e of bdev.entities) {
-      const payload = entityStateToPayload(e, entities[e.entityId]);
-      if (payload !== undefined) out.push({ topic: e.stateTopic, payload, retain: false });
-    }
-  }
-  return out;
 }

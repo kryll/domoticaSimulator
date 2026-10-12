@@ -5,7 +5,7 @@ import { pwaServiceWorker } from './scripts/vite-pwa';
 
 /** Módulos de lógica pura que van en su propio trozo (no importan React ni los stores). */
 const LOGIC_MODULES =
-  /[\\/]src[\\/](simulation[\\/][^\\/]+\.ts|network[\\/].+\.ts|devices[\\/].+\.ts|export[\\/][^\\/]+\.ts|automations[\\/](walk|yaml-parse|yaml-warnings|autoName)\.ts|ui[\\/]plural\.ts|canvas[\\/](placement|geometry)\.ts|types\.ts)$/;
+  /[\\/]src[\\/](simulation[\\/][^\\/]+\.ts|network[\\/].+\.ts|devices[\\/].+\.ts|automations[\\/](walk|autoName)\.ts|ui[\\/]plural\.ts|canvas[\\/](placement|geometry)\.ts|types\.ts)$/;
 
 export default defineConfig({
   plugins: [react(), pwaServiceWorker()],

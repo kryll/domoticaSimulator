@@ -3,19 +3,28 @@
 // un cliente WebSocket hace de app, manda el proyecto demo y su estado, y se comprueba por la
 // API de HA que aparecen las entidades, que un light.turn_on llega como comando y que el estado
 // vuelve a HA. También para y arranca un nodo. La usa .github/workflows/emulator-e2e.yml.
-// Variables: ORCHESTRATOR_WS, HA_URL, SECRETS_DIR, E2E_TIMEOUT_S.
+// Variables: ORCHESTRATOR_WS, HA_URL, SECRETS_DIR, E2E_TIMEOUT_S, LAB_TOKEN (si no, se lee de emulator/.env).
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { tsImport } from 'tsx/esm/api';
+import { labToken } from './labEnv.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
 const ORCH = env.ORCHESTRATOR_WS ?? 'ws://127.0.0.1:8081/orchestrator';
 const HA = (env.HA_URL ?? 'http://127.0.0.1:8123').replace(/\/$/, '');
 const TIMEOUT = Number(env.E2E_TIMEOUT_S ?? 180) * 1000;
-const token = (await readFile(join(env.SECRETS_DIR ?? join(here, '..', '.secrets'), 'ha-token'), 'utf8')).trim();
+const TOKEN_FILE = join(env.SECRETS_DIR ?? join(here, '..', '.secrets'), 'ha-token');
+let token;
+try {
+  token = (await readFile(TOKEN_FILE, 'utf8')).trim();
+} catch (err) {
+  console.error(`[e2e] No se puede leer ${TOKEN_FILE} (${err.code ?? err.message}). setup.sh lo deja a nombre de tu usuario; si es de una instalación anterior: sudo chown "$(id -u):$(id -g)" ${TOKEN_FILE}`);
+  process.exit(1);
+}
+const LAB_TOKEN = await labToken();
 
 const imp = (p) => tsImport(p, import.meta.url);
 const { createDemoProject } = await imp('../../src/store/demoProject.ts');
@@ -64,16 +73,25 @@ function haCall(domain, service, data) {
 
 // ---------- App falsa ----------
 const project = { ...createDemoProject(), id: 'e2e' };
-const settings = { enabled: true, orchestratorUrl: ORCH, discoveryPrefix: 'homeassistant', baseTopic: 'hasim', z2mBaseTopic: 'hasim-z2m', automationsRunIn: 'simulator' };
+// Ajustes del proyecto (sin enabled ni URL: son locales de la máquina, no del proyecto).
+const settings = { discoveryPrefix: 'homeassistant', baseTopic: 'hasim', z2mBaseTopic: 'hasim-z2m', automationsRunIn: 'simulator' };
 project.haBridge = settings;
 const definitions = catalog.filter((d) => project.devices.some((x) => x.definitionId === d.id));
 let sim = createSimulationState(project, catalog, Date.now());
 const commands = [];
 const ws = new WebSocket(ORCH);
 const send = (msg) => ws.send(JSON.stringify({ v: 1, ...msg }));
+let resolveHello;
+let rejectHello;
+const hello = new Promise((resolve, reject) => {
+  resolveHello = resolve;
+  rejectHello = reject;
+});
 ws.on('message', (raw) => {
   const msg = JSON.parse(String(raw));
-  if (msg.type === 'command') {
+  if (msg.type === 'hello') resolveHello(msg);
+  else if (msg.type === 'error' && msg.code === 'auth') rejectHello(new Error(msg.message));
+  else if (msg.type === 'command') {
     commands.push(msg);
     sim = callService(sim, project, msg.entityId, msg.service, msg.data);
     send({ type: 'command_result', id: msg.id, ok: true });
@@ -85,7 +103,16 @@ await new Promise((resolve, reject) => {
   ws.once('error', reject);
 });
 log('Conectado con el orquestador');
-send({ type: 'hello', role: 'app', client: 'e2e' });
+send({ type: 'hello', role: 'app', client: 'e2e', token: LAB_TOKEN });
+const welcome = await Promise.race([hello, sleep(10_000).then(() => Promise.reject(new Error('El orquestador no responde al hello')))]).catch((err) => {
+  console.error(`[e2e] FALLO: ${err.message}`);
+  process.exit(1);
+});
+if (welcome.readOnly) {
+  console.error('[e2e] FALLO: otra app controla el laboratorio (cierra la app del navegador)');
+  process.exit(1);
+}
+log('Token aceptado: esta prueba controla el laboratorio');
 send({ type: 'project', mode: 'full', project, definitions, settings });
 send({ type: 'state', full: true, entities: sim.entities, availability: { live: true, unavailable: [] } });
 

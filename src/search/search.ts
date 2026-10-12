@@ -44,7 +44,15 @@ export type AppActionId =
   | 'day-plan'
   | 'presentation'
   | 'dashboard'
-  | 'settings';
+  | 'settings'
+  // E1: laboratorio (src/bridge/labPalette.ts).
+  | 'lab-panel'
+  | 'lab-settings'
+  | 'lab-couple'
+  | 'lab-start-all'
+  | 'lab-stop-all'
+  | 'lab-snapshots'
+  | 'lab-traffic';
 
 export interface AppAction {
   id: AppActionId;
@@ -72,6 +80,14 @@ export const APP_ACTIONS: AppAction[] = [
   { id: 'presentation', title: 'Modo presentación', keywords: 'cliente solo lectura mostrar' },
   { id: 'dashboard', title: 'Ver el dashboard', keywords: 'lovelace tarjetas panel' },
   { id: 'settings', title: 'Ajustes del proyecto', keywords: 'ubicacion precios configuracion' },
+  // E1: laboratorio con un Home Assistant real (src/bridge).
+  { id: 'lab-panel', title: 'Laboratorio: abrir el panel', keywords: 'lab home assistant real nodos emulacion orquestador' },
+  { id: 'lab-settings', title: 'Laboratorio: ajustes y token', keywords: 'lab conectar orquestador token url' },
+  { id: 'lab-couple', title: 'Laboratorio: volver a acoplar', keywords: 'lab en vivo acoplar reanudar' },
+  { id: 'lab-start-all', title: 'Laboratorio: arrancar todos los nodos', keywords: 'lab nodos arrancar encender' },
+  { id: 'lab-stop-all', title: 'Laboratorio: parar todos los nodos', keywords: 'lab nodos parar apagar' },
+  { id: 'lab-snapshots', title: 'Laboratorio: snapshots', keywords: 'lab copia restaurar guardar instantanea' },
+  { id: 'lab-traffic', title: 'Laboratorio: inspector de tráfico', keywords: 'lab mqtt mensajes trafico topics' },
 ];
 
 export interface SearchEntry {

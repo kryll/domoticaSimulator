@@ -1,8 +1,7 @@
 // Modelo del puente: qué se publica de cada dispositivo del proyecto y por qué topics.
-// Lógica pura (sin React ni MQTT): la usan la app y el orquestador (emulator/), así que solo
-// importa tipos y módulos ligeros (nada del catálogo ni de paquetes pesados).
+// Lógica pura (sin React ni MQTT): la usan la app y el orquestador (emulator/). Solo importa
+// tipos y módulos ligeros; del catálogo, solo allDefinitions (para los dispositivos personalizados).
 import {
-  defaultHaBridgeSettings,
   effectiveTransport,
   PENDING_TRANSPORTS,
   transportFor,
@@ -17,6 +16,9 @@ import {
   type Project,
 } from '../../types';
 import { entitiesForDevice } from '../../devices/entities';
+import { allDefinitions } from '../../devices/catalog';
+import { bridgeSettings } from '../schema';
+import { radioProfileFor } from '../radio';
 
 /** Perfil MQTT con el que se publica un dispositivo. */
 export type MqttProfile = 'z2m' | 'generic';
@@ -79,6 +81,8 @@ export interface BridgeModel {
   /** Disponibilidad global del perfil genérico (LWT del orquestador). */
   bridgeStateTopic: string;
   z2mBridgeStateTopic: string;
+  /** Canal Zigbee del perfil de radio del proyecto (lo publica el Z2M emulado en bridge/info). */
+  zigbeeChannel: number;
 }
 
 /** Valores por defecto de las capacidades (los mismos que src/devices/capabilities.ts). */
@@ -89,11 +93,6 @@ export function capsWithDefaults(domain: string, caps: EntityCapabilities = {}):
   if (domain === 'light') return { ...LIGHT_DEFAULTS, ...caps };
   if (domain === 'climate') return { ...CLIMATE_DEFAULTS, ...caps };
   return { ...caps };
-}
-
-/** Ajustes del puente con los valores por defecto rellenos. */
-export function bridgeSettings(project: Pick<Project, 'haBridge'>): HaBridgeSettings {
-  return { ...defaultHaBridgeSettings(), ...project.haBridge };
 }
 
 /** Solo [A-Za-z0-9_-] (node_id del discovery y partes de topics). */
@@ -264,7 +263,9 @@ function isZ2mCoordinator(device: Device, def: DeviceDefinition): boolean {
 }
 
 /** Construye el modelo del puente para el proyecto. */
-export function buildBridgeModel(project: Project, defs: DeviceDefinition[], settings: HaBridgeSettings = bridgeSettings(project)): BridgeModel {
+export function buildBridgeModel(project: Project, baseDefs: DeviceDefinition[], settings: HaBridgeSettings = bridgeSettings(project)): BridgeModel {
+  // Catálogo + definiciones personalizadas del proyecto: los personalizados también llegan al lab.
+  const defs = allDefinitions(project, baseDefs);
   const coordinatorDevice = project.devices.find((d) => {
     const def = defs.find((x) => x.id === d.definitionId);
     return def !== undefined && isZ2mCoordinator(d, def);
@@ -333,16 +334,7 @@ export function buildBridgeModel(project: Project, defs: DeviceDefinition[], set
     devices,
     coordinator,
     bridgeStateTopic: `${settings.baseTopic}/bridge/state`,
+    zigbeeChannel: radioProfileFor(project, 'zigbee').channel ?? 11,
     z2mBridgeStateTopic: `${settings.z2mBaseTopic}/bridge/state`,
   };
-}
-
-/** Dispositivo del modelo por id del dispositivo del proyecto. */
-export function bridgeDevice(model: BridgeModel, deviceId: Id): BridgeDevice | undefined {
-  return model.devices.find((d) => d.device.id === deviceId);
-}
-
-/** ¿Hay algún dispositivo publicado con el perfil Z2M? */
-export function hasZ2m(model: BridgeModel): boolean {
-  return model.devices.some((d) => d.profile === 'z2m');
 }

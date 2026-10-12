@@ -13,9 +13,9 @@ import type {
   Zone,
 } from '../types';
 import { entityDomain, slugify } from '../devices/entities';
-import { HOME_ZONE_ID, personRef, zoneRef } from '../export/yamlLogic';
+import { HOME_ZONE_ID, personRef, zoneRef } from '../devices/refs';
 
-export { HOME_ZONE_ID } from '../export/yamlLogic';
+export { HOME_ZONE_ID } from '../devices/refs';
 
 /** Estado de una persona fuera de todas las zonas. */
 export const NOT_HOME = 'not_home';

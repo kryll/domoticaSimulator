@@ -303,7 +303,9 @@ function actionBodyToYaml(a: Action, ctx: YamlContext): YamlMap {
 }
 
 export function automationToObject(a: Automation, ctx: YamlContext = {}): YamlMap {
-  const m: YamlMap = { id: a.id, alias: a.name, mode: a.mode };
+  const m: YamlMap = { id: a.id, alias: a.name };
+  if (a.description) m.description = a.description;
+  m.mode = a.mode;
   if (!a.enabled) m.initial_state = false;
   m.triggers = a.triggers.map((t) => triggerToYaml(t, ctx));
   m.conditions = a.conditions.map((c) => conditionToYaml(c, ctx));

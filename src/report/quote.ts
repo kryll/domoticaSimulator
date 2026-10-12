@@ -1,5 +1,6 @@
 // Presupuesto por partidas (Tanda 2): materiales, infraestructura, mano de obra, margen,
-// descuento e IVA. Todos los importes se calculan en céntimos enteros para no arrastrar
+// descuento e IVA. El margen, salvo que se pida mostrarlo (quote.showMargin), va repartido en
+// los precios unitarios. La mano de obra se factura por cuartos de hora: horas × tarifa = importe. Todos los importes se calculan en céntimos enteros para no arrastrar
 // errores de redondeo; los campos en euros salen de dividir esos céntimos entre 100.
 import type { DeviceCategory, DeviceDefinition, Id, Integration, Project, QuoteSettings } from '../types';
 import { billOfMaterials } from '../export/bom';
@@ -89,7 +90,10 @@ export interface Quote {
   currency: 'EUR';
   cents: QuoteTotalsCents;
   laborHours: number;
+  /** Tarifa por hora aplicada (con el margen incluido si no se muestra aparte). */
   laborRateEurH: number;
+  /** El margen sale como línea propia; si no, va repartido en los precios y `margin` es 0. */
+  showMargin: boolean;
   marginPct: number;
   discountPct: number;
   vatPct: number;
@@ -132,14 +136,26 @@ export function quoteSettings(project: Pick<Project, 'settings'>): Required<Pick
   };
 }
 
-function laborLine(key: string, description: string, minutes: number, rateCents: number, detail?: string): QuoteLine {
-  const hours = Math.round((minutes / 60) * 100) / 100;
-  return line(key, description, hours, 'h', rateCents, Math.round((minutes * rateCents) / 60), detail ? { detail } : {});
+/** Horas facturables: los minutos se redondean al cuarto de hora más cercano (0,25 h). */
+export function billableHours(minutes: number): number {
+  return Math.round((minutes / 60) * 4) / 4;
 }
+
+/** Línea de mano de obra: el importe es exactamente horas (redondeadas a 0,25 h) × tarifa. */
+function laborLine(key: string, description: string, minutes: number, rateCents: number, detail?: string): QuoteLine {
+  const hours = billableHours(minutes);
+  return line(key, description, hours, 'h', rateCents, Math.round(hours * rateCents), detail ? { detail } : {});
+}
+
+/** Precio unitario con el margen repartido (en céntimos enteros). */
+const withMargin = (cents: number, marginPct: number): number => Math.round((cents * (100 + marginPct)) / 100);
 
 /** Presupuesto por partidas del proyecto. */
 export function buildQuote(project: Project, defs: DeviceDefinition[]): Quote {
   const settings = quoteSettings(project);
+  // Por defecto el margen no se enseña al cliente: se reparte en los precios de cada línea.
+  const showMargin = settings.showMargin === true;
+  const lineMargin = showMargin ? 0 : settings.marginPct;
   const bom = billOfMaterials(project, defs);
   const defOf = (id: Id): DeviceDefinition | undefined => defs.find((d) => d.id === id);
 
@@ -147,7 +163,7 @@ export function buildQuote(project: Project, defs: DeviceDefinition[]): Quote {
   const infrastructureLines: QuoteLine[] = [];
   for (const l of bom.lines) {
     const def = defOf(l.definitionId);
-    const unitCents = toCents(l.unitPrice);
+    const unitCents = withMargin(toCents(l.unitPrice), lineMargin);
     const extra: Partial<QuoteLine> = { definitionId: l.definitionId, detail: `${l.brand} ${l.model}`.trim() };
     if (l.priceSource === 'none') extra.unpriced = true;
     if (l.rooms.length > 0) extra.detail = `${extra.detail ?? ''} · ${l.rooms.join(', ')}`;
@@ -155,12 +171,12 @@ export function buildQuote(project: Project, defs: DeviceDefinition[]): Quote {
     (def && isInfra(def) ? infrastructureLines : materialLines).push(ql);
   }
   for (const x of bom.requiredInfrastructure) {
-    const unitCents = toCents(x.unitPrice);
+    const unitCents = withMargin(toCents(x.unitPrice), lineMargin);
     infrastructureLines.push(line(`missing:${x.definitionId}`, x.name, 1, 'ud', unitCents, unitCents, { definitionId: x.definitionId, detail: `Necesario: ${x.reason}`, missing: true }));
   }
 
   // Mano de obra: instalación por categoría y configuración en Home Assistant.
-  const rateCents = toCents(settings.laborRateEurH);
+  const rateCents = withMargin(toCents(settings.laborRateEurH), lineMargin);
   const laborLines: QuoteLine[] = [];
   const byCategory = new Map<DeviceCategory, number>();
   const integrations = new Set<Integration>();
@@ -196,7 +212,7 @@ export function buildQuote(project: Project, defs: DeviceDefinition[]): Quote {
   const sum = (lines: QuoteLine[]): number => lines.reduce((s, l) => s + l.totalCents, 0);
   const subtotalMaterials = sum(materialLines) + sum(infrastructureLines);
   const subtotalLabor = sum(laborLines);
-  const margin = pct(subtotalMaterials + subtotalLabor, settings.marginPct);
+  const margin = showMargin ? pct(subtotalMaterials + subtotalLabor, settings.marginPct) : 0;
   const discount = pct(subtotalMaterials + subtotalLabor + margin, settings.discountPct);
   const taxableBase = subtotalMaterials + subtotalLabor + margin - discount;
   const vat = pct(taxableBase, settings.vatPct);
@@ -216,8 +232,9 @@ export function buildQuote(project: Project, defs: DeviceDefinition[]): Quote {
     total: toEur(total),
     currency: 'EUR',
     cents,
-    laborHours: Math.round((laborLines.reduce((s, l) => s + l.quantity, 0)) * 100) / 100,
-    laborRateEurH: settings.laborRateEurH,
+    laborHours: laborLines.reduce((s, l) => s + l.quantity, 0),
+    laborRateEurH: toEur(rateCents),
+    showMargin,
     marginPct: settings.marginPct,
     discountPct: settings.discountPct,
     vatPct: settings.vatPct,

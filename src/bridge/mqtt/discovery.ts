@@ -4,11 +4,7 @@
 // media_player y camera no existen como plataformas MQTT de HA: el reproductor se publica como
 // sensor (estado) + switch (encendido) + number (volumen) + select (fuente), y la cámara como un
 // sensor de estado. Sus entity_id en HA llevan un sufijo (_state, _power, _volume, _source).
-import type { DeviceDefinition, HaBridgeSettings, Project } from '../../types';
 import {
-  buildBridgeModel,
-  bridgeSettings,
-  hasZ2m,
   z2mBridgeIdentifier,
   z2mDeviceIdentifier,
   type BridgeDevice,
@@ -595,7 +591,7 @@ export function z2mBridgeMessages(model: BridgeModel): MqttMessage[] {
     version: SIMULATED_VERSION,
     commit: SIMULATED_VERSION,
     coordinator: { ieee_address: coordIeee, type: 'Simulado (HA Simulator)', meta: {} },
-    network: { channel: 11, pan_id: 6754, extended_pan_id: coordIeee },
+    network: { channel: model.zigbeeChannel, pan_id: 6754, extended_pan_id: coordIeee },
     log_level: 'info',
     permit_join: false,
     restart_required: false,
@@ -605,29 +601,4 @@ export function z2mBridgeMessages(model: BridgeModel): MqttMessage[] {
     { topic: `${base}/bridge/info`, payload: stableJson(info), retain: true },
     { topic: `${base}/bridge/devices`, payload: stableJson(devices), retain: true },
   ];
-}
-
-/** Todos los mensajes de discovery del modelo (retenidos), incluidos bridge/info y bridge/devices. */
-export function discoveryMessagesForModel(model: BridgeModel): MqttMessage[] {
-  const out: MqttMessage[] = [];
-  const z2m = hasZ2m(model);
-  if (z2m) {
-    out.push(...z2mBridgeMessages(model));
-    out.push(z2mBridgeDiscovery(model));
-  }
-  for (const bdev of model.devices) {
-    if (bdev.profile === 'z2m') out.push(...z2mDiscovery(model, bdev));
-    else out.push(genericDiscovery(model, bdev));
-  }
-  return out;
-}
-
-/** Discovery del proyecto: `(project, defs, settings)` → mensajes retenidos. */
-export function discoveryMessages(project: Project, defs: DeviceDefinition[], settings: HaBridgeSettings = bridgeSettings(project)): MqttMessage[] {
-  return discoveryMessagesForModel(buildBridgeModel(project, defs, settings));
-}
-
-/** ¿Es un topic de discovery (config)? */
-export function isDiscoveryTopic(topic: string, prefix: string): boolean {
-  return topic.startsWith(`${prefix}/`) && topic.endsWith('/config');
 }

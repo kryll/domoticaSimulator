@@ -11,8 +11,11 @@ export const NODE_STATE_LABELS: Record<NodeState, string> = {
 
 export const CONNECTION_LABELS: Record<Connection, string> = {
   off: 'Desactivado',
+  other_tab: 'Controlado desde otra pestaña',
   connecting: 'Conectando…',
   connected: 'Conectado',
+  readonly: 'Solo lectura (otra app lo controla)',
+  unauthorized: 'Token no válido o ausente',
   disconnected: 'Sin conexión',
 };
 
@@ -33,3 +36,6 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
 }
+
+/** Aviso de la segunda pestaña (candado entre pestañas). */
+export const OTHER_TAB_MESSAGE = 'El laboratorio está controlado desde otra pestaña';

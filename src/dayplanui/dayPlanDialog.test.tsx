@@ -57,12 +57,19 @@ describe('día típico', () => {
     expect(screen.getByRole('button', { name: 'Generar día típico' })).toBeInTheDocument();
   });
 
-  it('no se puede aplicar con el laboratorio en vivo', () => {
+  it('con el laboratorio en vivo se aplica en tiempo real: cada evento a su hora real', async () => {
     useBridgeStore.setState({ live: true });
     useLayoutStore.getState().setDayPlanOpen(true);
+    const now = useSimulationStore.getState().sim.now;
     render(<DayPlanDialog />);
-    expect(screen.getByRole('alert')).toHaveTextContent('laboratorio está en vivo');
-    expect(screen.getByRole('button', { name: 'Aplicar' })).toBeDisabled();
+    expect(screen.getByRole('note')).toHaveTextContent('tiempo real (1x)');
+    const apply = screen.getByRole('button', { name: 'Aplicar' });
+    expect(apply).toBeEnabled();
+    await userEvent.click(apply);
+    const pending = useSimulationStore.getState().sim.pending.filter((p) => p.key?.startsWith('dayplan'));
+    expect(pending.length).toBeGreaterThan(0);
+    // Ningún evento antes de ahora: se aplican cuando el reloj (la hora real) llega a su hora.
+    expect(pending.every((p) => p.dueAt >= now)).toBe(true);
     useBridgeStore.setState({ live: false });
   });
 });

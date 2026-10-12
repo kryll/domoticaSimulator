@@ -80,7 +80,8 @@ describe('YAML de HA', () => {
     expect(r.automations[1]?.conditions[0]).toMatchObject({ type: 'time', weekday: ['mon', 'tue', 'wed', 'thu', 'fri'] });
     expect(r.automations[2]?.triggers[0]).toMatchObject({ type: 'numeric_state', for: 300 });
     expect(r.warnings.find((w) => w.path === '[4]')?.message).toContain('geo_location');
-    expect(r.warnings.some((w) => w.path === '[0].description')).toBe(true);
+    expect(r.warnings.some((w) => w.path === '[0].description')).toBe(false);
+    expect(r.automations[0]?.description).toBeDefined();
     expect(r.unknownEntities).toContain('binary_sensor.puerta_garaje');
     expect(r.unknownEntities).toContain('scene.cine');
   });

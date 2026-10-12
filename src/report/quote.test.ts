@@ -21,14 +21,14 @@ describe('presupuesto por partidas', () => {
     expect(q.infrastructureLines.map((l) => l.definitionId).sort()).toEqual(['ha-green', 'tplink-deco-x50']);
     expect(q.subtotalMaterials).toBe(18 + 129 + 99);
     const install = q.laborLines.find((l) => l.key === 'install:plug');
-    expect(install).toMatchObject({ quantity: Math.round(((2 * INSTALL_MINUTES.plug) / 60) * 100) / 100, unitPrice: 45 });
+    expect(install).toMatchObject({ quantity: Math.round(((2 * INSTALL_MINUTES.plug) / 60) * 4) / 4, unitPrice: 45 });
     expect(q.laborLines.find((l) => l.key === 'config:server')?.detail).toBe('2 integraciones: TP-Link Smart Home, Tuya');
     expect(q.vatPct).toBe(21);
     expect(q.currency).toBe('EUR');
   });
 
   it('margen, descuento e IVA en céntimos enteros', () => {
-    const q = buildQuote(base({ marginPct: 12.5, discountPct: 7, vatPct: 21, laborRateEurH: 38.33, laborHours: 1.5 }), catalog);
+    const q = buildQuote(base({ marginPct: 12.5, showMargin: true, discountPct: 7, vatPct: 21, laborRateEurH: 38.33, laborHours: 1.5 }), catalog);
     const c = q.cents;
     for (const v of Object.values(c)) expect(Number.isInteger(v)).toBe(true);
     for (const l of [...q.materialLines, ...q.infrastructureLines, ...q.laborLines]) expect(Number.isInteger(l.totalCents)).toBe(true);
@@ -75,5 +75,35 @@ describe('presupuesto por partidas', () => {
     expect(q.laborLines.length).toBeGreaterThan(3);
     expect(q.total).toBeGreaterThan(q.taxableBase);
     expect(q.cents.total).toBe(q.cents.taxableBase + q.cents.vat);
+  });
+});
+
+describe('margen y mano de obra (revisión final)', () => {
+  it('por defecto el margen no sale como línea: va repartido en los precios', () => {
+    const plain = buildQuote(base(), catalog);
+    const q = buildQuote(base({ marginPct: 10 }), catalog);
+    expect(q.showMargin).toBe(false);
+    expect(q.margin).toBe(0);
+    expect(q.cents.margin).toBe(0);
+    expect(q.materialLines[0]?.unitPriceCents).toBe(Math.round(((plain.materialLines[0]?.unitPriceCents ?? 0) * 110) / 100));
+    expect(q.laborRateEurH).toBe(49.5);
+    expect(q.cents.taxableBase).toBe(q.cents.subtotalMaterials + q.cents.subtotalLabor - q.cents.discount);
+    // El total con el margen repartido es prácticamente el mismo que mostrándolo aparte.
+    const shown = buildQuote(base({ marginPct: 10, showMargin: true }), catalog);
+    expect(shown.showMargin).toBe(true);
+    expect(shown.margin).toBeGreaterThan(0);
+    expect(Math.abs(shown.cents.taxableBase - q.cents.taxableBase)).toBeLessThanOrEqual(10);
+  });
+
+  it('cada línea de mano de obra: horas (a 0,25 h) × tarifa = importe', () => {
+    const q = buildQuote(base({ laborRateEurH: 38.33, laborHours: 1.3, marginPct: 7 }), catalog);
+    expect(q.laborLines.length).toBeGreaterThan(2);
+    for (const l of q.laborLines) {
+      expect(Number.isInteger(l.quantity * 4)).toBe(true);
+      expect(l.totalCents).toBe(Math.round(l.quantity * l.unitPriceCents));
+    }
+    expect(q.laborLines.find((l) => l.key === 'labor:extra')?.quantity).toBe(1.25);
+    // 2 enchufes × 5 min = 10 min → 0,25 h.
+    expect(q.laborLines.find((l) => l.key === 'install:plug')?.quantity).toBe(0.25);
   });
 });

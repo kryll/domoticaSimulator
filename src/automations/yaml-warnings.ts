@@ -66,11 +66,23 @@ const TRIGGER_KEYS: Record<string, readonly string[]> = {
   device: ['entity_id', 'subtype', 'action'],
 };
 
+/** Plataformas de disparador que el simulador no admite: el parser las descarta con un aviso. */
+export const DROPPED_TRIGGERS: ReadonlySet<string> = new Set(['mqtt', 'webhook', 'template', 'tag', 'calendar', 'conversation', 'geo_location', 'persistent_notification']);
+
 function checkTrigger(out: Out, v: YamlValue, path: string): void {
   if (!isYamlMap(v)) return;
   const platform = String(v.trigger ?? v.platform ?? '');
+  if (DROPPED_TRIGGERS.has(platform)) {
+    const extra = platform === 'mqtt' ? ` (tema «${String(v.topic ?? '')}»): el simulador no recibe mensajes MQTT` : ': el simulador no lo admite';
+    out.push({ path, message: `Disparador «${platform}» ignorado${extra}` });
+    return;
+  }
   checkKeys(out, v, path, ['trigger', 'platform', 'id', ...(TRIGGER_KEYS[platform] ?? [])]);
-  checkSingleEntity(out, v, path);
+  const many = Array.isArray(v.entity_id) && v.entity_id.length > 1;
+  if (many && (platform === 'state' || platform === 'numeric_state')) {
+    const n = Array.isArray(v.entity_id) ? v.entity_id.length : 0;
+    out.push({ path: join(path, 'entity_id'), message: `Hay ${n} entidades: se crea un disparador por entidad${v.id === undefined ? '' : ' con el mismo id'}` });
+  } else checkSingleEntity(out, v, path);
   if (platform === 'state') {
     checkStateValue(out, v, path, 'to');
     checkStateValue(out, v, path, 'from');
@@ -185,7 +197,7 @@ function checkAction(out: Out, v0: YamlValue, path: string, ctx: YamlContext | u
   checkTarget(out, v, path, ctx);
 }
 
-const AUTOMATION_KEYS = ['id', 'alias', 'mode', 'initial_state', 'triggers', 'trigger', 'conditions', 'condition', 'actions', 'action'] as const;
+const AUTOMATION_KEYS = ['id', 'alias', 'description', 'mode', 'initial_state', 'triggers', 'trigger', 'conditions', 'condition', 'actions', 'action'] as const;
 
 /**
  * Avisos de una automatización en YAML (mapa ya leído). `base`: prefijo de la ruta ("" o "[2]").
@@ -200,5 +212,22 @@ export function collectYamlWarnings(m: YamlMap, base = '', ctx?: YamlContext): Y
   if (ck) checkConditions(out, m[ck], join(base, ck));
   const ak = listKey(m, 'actions', 'action');
   if (ak) checkActions(out, m[ak], join(base, ak), ctx);
+  checkBlueprintInputs(out, m, base);
   return out;
+}
+
+/** Avisa de las entradas de blueprint (`!input nombre`): su valor no se puede resolver aquí. */
+function checkBlueprintInputs(out: Out, v: YamlValue, path: string): void {
+  if (typeof v === 'string') {
+    if (/^!input(\s|$)/.test(v)) {
+      const name = v.slice('!input'.length).trim();
+      out.push({ path, message: `Entrada de blueprint «!input ${name}»: el simulador no resuelve blueprints, pon la entidad o el valor real` });
+    }
+    return;
+  }
+  if (Array.isArray(v)) {
+    v.forEach((x, i) => checkBlueprintInputs(out, x, at(path, i)));
+    return;
+  }
+  if (isYamlMap(v)) for (const [k, x] of Object.entries(v)) checkBlueprintInputs(out, x, join(path, k));
 }

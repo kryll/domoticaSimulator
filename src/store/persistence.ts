@@ -1,6 +1,7 @@
 // Persistencia de proyectos en IndexedDB (idb-keyval) e importación/exportación JSON.
 import { createStore, del, entries, get, set, type UseStore } from 'idb-keyval';
 import { defaultSettings, type Project } from '../types';
+import { withoutLocalLabFields } from '../bridge/schema';
 import { parseProject } from './projectSchema';
 
 export { createDemoProject } from './demoProject';
@@ -48,6 +49,11 @@ export async function loadProject(id: string): Promise<Project | undefined> {
   return raw === undefined ? undefined : parseProject(raw);
 }
 
+/** Lo guardado tal cual, sin validar (para recuperar un proyecto que no se puede leer). */
+export async function loadRawProject(id: string): Promise<unknown> {
+  return get(id, projectsStore());
+}
+
 /** Proyectos guardados, del más reciente al más antiguo. Ignora entradas corruptas. */
 export async function listProjects(): Promise<ProjectSummary[]> {
   const all = await entries<IDBValidKey, unknown>(projectsStore());
@@ -67,7 +73,8 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 export function exportProjectJson(p: Project): string {
-  return JSON.stringify(p, null, 2);
+  // E1: sin los ajustes locales del laboratorio que pudiera traer un proyecto antiguo (src/bridge/schema.ts).
+  return JSON.stringify(withoutLocalLabFields(p), null, 2);
 }
 
 /** Importa un proyecto desde JSON, validando su estructura. Errores en español. */

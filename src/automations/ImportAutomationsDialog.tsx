@@ -9,7 +9,7 @@ import { parseAutomationsYamlDetailed } from './yaml-parse';
 import { YamlWarningList } from './YamlWarningList';
 
 type Preview =
-  | { ok: true; count: number; names: string[]; warnings: ReturnType<typeof parseAutomationsYamlDetailed>['warnings'] }
+  | { ok: true; count: number; names: string[]; warnings: ReturnType<typeof parseAutomationsYamlDetailed>['warnings']; skipped: number }
   | { ok: false; error: string }
   | null;
 
@@ -22,8 +22,8 @@ export function ImportAutomationsDialog({ onClose }: { onClose: () => void }) {
   const preview = useMemo<Preview>(() => {
     if (text.trim() === '') return null;
     try {
-      const { automations, warnings } = parseAutomationsYamlDetailed(text, project);
-      return { ok: true, count: automations.length, names: automations.map((a) => a.name), warnings };
+      const { automations, warnings, skipped } = parseAutomationsYamlDetailed(text, project);
+      return { ok: true, count: automations.length, names: automations.map((a) => a.name), warnings, skipped: skipped.length };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
@@ -31,13 +31,15 @@ export function ImportAutomationsDialog({ onClose }: { onClose: () => void }) {
 
   const doImport = () => {
     const current = useProjectStore.getState().project;
-    const { automations } = parseAutomationsYamlDetailed(text, current);
+    const { automations, skipped } = parseAutomationsYamlDetailed(text, current);
     if (automations.length === 0) return;
     // Un único paso de deshacer para todas.
     useProjectStore.getState().update((p) => ({ ...p, automations: [...p.automations, ...automations] }));
     const ui = useUiStore.getState();
     ui.selectAutomation(automations[0]?.id ?? null);
-    ui.notify(automations.length === 1 ? 'Automatización importada' : `${automations.length} automatizaciones importadas`, 'success', {
+    const done = automations.length === 1 ? 'Automatización importada' : `${automations.length} automatizaciones importadas`;
+    const omitted = skipped.length === 0 ? '' : ` (${skipped.length} omitida${skipped.length === 1 ? '' : 's'} por errores)`;
+    ui.notify(`${done}${omitted}`, skipped.length === 0 ? 'success' : 'info', {
       action: { label: 'Deshacer', run: () => useProjectStore.getState().undo() },
     });
     onClose();
@@ -92,6 +94,11 @@ export function ImportAutomationsDialog({ onClose }: { onClose: () => void }) {
               {preview.count === 1 ? 'Se importará 1 automatización' : `Se importarán ${preview.count} automatizaciones`}
               {preview.names.length > 0 && `: ${preview.names.slice(0, 5).join(', ')}${preview.names.length > 5 ? '…' : ''}`}
             </p>
+            {preview.skipped > 0 && (
+              <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                {preview.skipped === 1 ? '1 automatización no se puede importar y se omitirá' : `${preview.skipped} automatizaciones no se pueden importar y se omitirán`} (detalles en los avisos).
+              </p>
+            )}
             <YamlWarningList warnings={preview.warnings} />
           </>
         )}

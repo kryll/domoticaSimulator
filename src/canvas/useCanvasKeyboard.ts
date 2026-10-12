@@ -3,6 +3,7 @@ import type { Id } from '../types';
 import { useSimulationStore } from '../store/simulationStore';
 import { primarySelection, selectedDeviceIds, useUiStore, type CanvasMode } from '../store/uiStore';
 import { useViewStore } from '../store/viewStore';
+import { pauseSimulation } from '../bridge/liveControls';
 import { copyPayloadText, copySelection, deleteSelection, duplicateSelection, pasteText, selectAllOnFloor } from './selectionActions';
 
 /** Dispositivo bajo el puntero (lo actualiza el lienzo). */
@@ -166,7 +167,8 @@ export function useCanvasKeyboard(): void {
         return;
       }
       if (!e.shiftKey && lower === 'p') {
-        if (sim.running) sim.pause();
+        // E1: en vivo con el laboratorio, pausar pregunta antes (src/bridge/liveControls.ts).
+        if (sim.running) void pauseSimulation();
         else sim.start();
         e.preventDefault();
         return;

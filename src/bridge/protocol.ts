@@ -31,6 +31,8 @@ export interface SnapshotInfo {
   /** Bytes copiados de ha-config. */
   bytes: number;
   projectName?: string;
+  /** false si se guardó con «Excluir credenciales» (sin .storage/auth*). */
+  credentials?: boolean;
 }
 
 export type LabAction = 'reset' | 'snapshot' | 'restore' | 'list_snapshots' | 'delete_snapshot';
@@ -46,12 +48,15 @@ export interface TransportStatus {
 // ---------- App → orquestador ----------
 
 export type ClientMessage =
-  | { v: number; type: 'hello'; role: 'app'; client: string; version?: string }
+  /** Primer mensaje obligatorio: sin un token válido el orquestador cierra la conexión. */
+  | { v: number; type: 'hello'; role: 'app'; client: string; token: string; version?: string }
   | { v: number; type: 'project'; mode: 'full'; project: Project; definitions: DeviceDefinition[]; settings: HaBridgeSettings }
   | { v: number; type: 'project'; mode: 'patch'; changes: Partial<Project>; definitions?: DeviceDefinition[]; settings?: HaBridgeSettings }
   | { v: number; type: 'state'; full?: boolean; entities: Record<string, EntityState>; removed?: string[]; availability?: BridgeAvailability }
   | { v: number; type: 'node'; action: 'start' | 'stop'; deviceIds: Id[] | 'all' }
-  | { v: number; type: 'lab'; action: LabAction; requestId: string; name?: string; id?: string }
+  | { v: number; type: 'lab'; action: LabAction; requestId: string; name?: string; id?: string; excludeCredentials?: boolean }
+  /** La app desactiva el lab: el orquestador retira las automatizaciones que exportó a HA. */
+  | { v: number; type: 'goodbye' }
   | { v: number; type: 'traffic'; subscribe: boolean }
   | { v: number; type: 'command_result'; id: string; ok: boolean; error?: string };
 
@@ -66,13 +71,18 @@ export interface StatusMessage {
   transports: Partial<Record<DeviceTransport, TransportStatus>>;
   nodes: Record<Id, NodeState>;
   snapshots?: SnapshotInfo[];
-  /** El orquestador tiene acceso a ha-config (snapshots) y a Docker (reinicio de HA). */
+  /** El orquestador tiene acceso a ha-config (snapshots) y a Docker (restaurar exige Docker). */
   capabilities?: { snapshots: boolean; docker: boolean; haToken: boolean };
   lastError?: string;
 }
 
 export type ServerMessage =
-  | { v: number; type: 'hello'; server: 'hasim-orchestrator'; version: string; protocol: number }
+  /**
+   * Respuesta al hello con token válido. readOnly: otra app controla el laboratorio; esta solo
+   * ve el estado y el tráfico. Si la que controla se va, el orquestador manda otro hello con
+   * readOnly: false a la siguiente.
+   */
+  | { v: number; type: 'hello'; server: 'hasim-orchestrator'; version: string; protocol: number; readOnly: boolean }
   | { v: number; type: 'command'; id: string; entityId: string; service: string; data: ServiceData; topic?: string }
   | StatusMessage
   | {
@@ -87,13 +97,14 @@ export type ServerMessage =
       project?: Project;
     }
   | { v: number; type: 'traffic'; entries: TrafficEntry[] }
-  | { v: number; type: 'error'; message: string };
+  /** code 'auth': token ausente o no válido (el orquestador cierra); 'readonly': acción de una app de solo lectura. */
+  | { v: number; type: 'error'; message: string; code?: 'auth' | 'readonly' | 'invalid' };
 
 type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-const CLIENT_TYPES = new Set(['hello', 'project', 'state', 'node', 'lab', 'traffic', 'command_result']);
+const CLIENT_TYPES = new Set(['hello', 'project', 'state', 'node', 'lab', 'traffic', 'command_result', 'goodbye']);
 const SERVER_TYPES = new Set(['hello', 'command', 'status', 'lab_result', 'traffic', 'error']);
 const LAB_ACTIONS = new Set<string>(['reset', 'snapshot', 'restore', 'list_snapshots', 'delete_snapshot']);
 
@@ -104,6 +115,9 @@ export function parseClientMessage(text: string): ClientMessage {
   if (raw.v !== PROTOCOL_VERSION) throw new Error(`Versión de protocolo no soportada: ${String(raw.v)} (se esperaba ${PROTOCOL_VERSION})`);
   if (typeof raw.type !== 'string' || !CLIENT_TYPES.has(raw.type)) throw new Error(`Tipo de mensaje desconocido: ${String(raw.type)}`);
   switch (raw.type) {
+    case 'hello':
+      if (typeof raw.token !== 'string') throw new Error('hello sin token del laboratorio');
+      break;
     case 'project':
       if (raw.mode === 'full' && (!isObj(raw.project) || !Array.isArray(raw.definitions) || !isObj(raw.settings))) throw new Error('project completo sin project, definitions o settings');
       if (raw.mode === 'patch' && !isObj(raw.changes)) throw new Error('project parcial sin changes');
@@ -119,6 +133,9 @@ export function parseClientMessage(text: string): ClientMessage {
     case 'lab':
       if (typeof raw.action !== 'string' || !LAB_ACTIONS.has(raw.action)) throw new Error(`lab: acción desconocida ${String(raw.action)}`);
       if (typeof raw.requestId !== 'string') throw new Error('lab sin requestId');
+      if (raw.id !== undefined && typeof raw.id !== 'string') throw new Error('lab: id no válido');
+      if (raw.name !== undefined && typeof raw.name !== 'string') throw new Error('lab: name no válido');
+      if (raw.excludeCredentials !== undefined && typeof raw.excludeCredentials !== 'boolean') throw new Error('lab: excludeCredentials no válido');
       break;
     case 'traffic':
       if (typeof raw.subscribe !== 'boolean') throw new Error('traffic sin subscribe');
@@ -138,6 +155,8 @@ export function parseServerMessage(text: string): ServerMessage | null {
     const raw: unknown = JSON.parse(text);
     if (!isObj(raw) || raw.v !== PROTOCOL_VERSION || typeof raw.type !== 'string' || !SERVER_TYPES.has(raw.type)) return null;
     if (raw.type === 'command' && (typeof raw.entityId !== 'string' || typeof raw.service !== 'string' || typeof raw.id !== 'string')) return null;
+    if (raw.type === 'hello' && typeof raw.readOnly !== 'boolean') return null;
+    if (raw.type === 'lab_result' && (typeof raw.requestId !== 'string' || typeof raw.action !== 'string' || typeof raw.ok !== 'boolean')) return null;
     return raw as unknown as ServerMessage;
   } catch {
     return null;

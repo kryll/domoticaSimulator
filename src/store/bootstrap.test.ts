@@ -42,3 +42,49 @@ describe('bootstrap', () => {
     expect(useProjectStore.getState().project.id).toBe('viejo');
   });
 });
+
+describe('arranque: proyecto ilegible y respaldo de cierre', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('un proyecto ilegible no se sobrescribe: se abre una demo provisional y se informa', async () => {
+    const { set, get } = await import('idb-keyval');
+    const { projectsStore } = await import('./persistence');
+    const broken = { ...JSON.parse(JSON.stringify(makeProject({ id: 'roto', name: 'Mi casa', updatedAt: '2099-01-01T00:00:00.000Z' }))), floors: 'no es una lista' };
+    await set('roto', broken, projectsStore());
+    rememberLastProjectId('roto');
+    const result = await loadInitialProject();
+    expect(result.unreadable).toMatchObject({ id: 'roto', name: 'Mi casa' });
+    expect(result.unreadable?.error).toMatch(/floors/);
+    expect(result.unreadable?.raw).toEqual(broken);
+    // Lo guardado sigue igual y se sigue recordando como el último proyecto.
+    expect(await get('roto', projectsStore())).toEqual(broken);
+    expect(lastProjectId()).toBe('roto');
+    expect(useProjectStore.getState().project.id).not.toBe('roto');
+  });
+
+  it('aplica el respaldo de cierre si es más reciente que lo guardado (y lo marca para guardar)', async () => {
+    const { writeBackup } = await import('./unloadBackup');
+    const stored = makeProject({ id: 'casa', name: 'Casa', revision: 4, updatedAt: '2026-01-01T10:00:00.000Z' });
+    await saveProject(stored);
+    rememberLastProjectId('casa');
+    const edited = { ...stored, name: 'Casa editada', updatedAt: '2026-01-01T10:00:05.000Z' };
+    writeBackup(localStorage, edited, 4, Date.parse('2026-01-01T10:00:06.000Z'));
+    const result = await loadInitialProject();
+    expect(result.restoredBackup).toBe(true);
+    expect(useProjectStore.getState().project.name).toBe('Casa editada');
+    expect(useProjectStore.getState().dirty).toBe(true);
+    expect(useProjectStore.getState().baseRevision).toBe(4);
+  });
+
+  it('descarta el respaldo si IndexedDB ya tiene una revisión posterior', async () => {
+    const { writeBackup, readBackup } = await import('./unloadBackup');
+    const stored = makeProject({ id: 'casa2', name: 'Guardada', revision: 5 });
+    await saveProject(stored);
+    rememberLastProjectId('casa2');
+    writeBackup(localStorage, { ...stored, name: 'Vieja' }, 4, Date.now());
+    const result = await loadInitialProject();
+    expect(result.restoredBackup).toBeUndefined();
+    expect(useProjectStore.getState().project.name).toBe('Guardada');
+    expect(readBackup(localStorage, 'casa2')).toBeUndefined();
+  });
+});

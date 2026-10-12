@@ -44,3 +44,25 @@ export function projectForLab(project: Project): Project {
   for (const f of copy.floors) delete f.backgroundImage;
   return copy;
 }
+
+/**
+ * Proyecto restaurado de un snapshot fusionado con el actual: conserva el id (la simulación no se
+ * reinicia y el proyecto guardado sigue siendo el mismo), las variantes y las imágenes del plano
+ * actuales (el lab no las guarda). Pura.
+ */
+export function mergeRestoredProject(current: Project, restored: Project): Project {
+  const images = new Map(current.floors.map((f) => [f.id, f.backgroundImage]));
+  const merged: Project = {
+    ...restored,
+    id: current.id,
+    floors: restored.floors.map((f) => {
+      const copy = { ...f };
+      delete copy.backgroundImage;
+      const img = images.get(f.id);
+      return img !== undefined ? { ...copy, backgroundImage: img } : copy;
+    }),
+  };
+  delete merged.variants;
+  if (current.variants !== undefined) merged.variants = current.variants;
+  return merged;
+}

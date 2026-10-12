@@ -3,7 +3,7 @@ import { Lab } from './lab';
 import { startServer } from './server';
 import { SnapshotStore } from './snapshots';
 import { dockerSocketControl } from './docker';
-import { readToken, restartHa, syncAutomations } from './haSync';
+import { readToken, removePackages, syncAutomations } from './haSync';
 
 const env = process.env;
 const haConfigDir = env.HA_CONFIG_DIR;
@@ -25,12 +25,13 @@ const lab = new Lab({
           const r = await syncAutomations(project, defs, { haConfigDir, haUrl, secretsDir });
           return `Packages escritos (${r.files.length})${r.reloaded ? ' y HA recargado' : '; sin token de HA, no se ha recargado'}`;
         },
+        unsync: async () => {
+          const r = await removePackages({ haConfigDir, haUrl, secretsDir });
+          if (!r.removed) return undefined;
+          return `Packages del lab borrados${r.reloaded ? ' y HA recargado' : '; sin token de HA, no se ha recargado'}`;
+        },
       }
     : {}),
-  restartHa: async () => {
-    const token = await readToken(secretsDir);
-    if (token) await restartHa(haUrl, token);
-  },
   haTokenAvailable: async () => (await readToken(secretsDir)) !== undefined,
   log,
 });
@@ -38,9 +39,11 @@ const lab = new Lab({
 const port = Number(env.PORT ?? 8081);
 const host = env.HOST ?? '127.0.0.1';
 const origins = (env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+const token = (env.LAB_TOKEN ?? '').trim();
 
 async function main(): Promise<void> {
-  const server = await startServer(lab, port, host, origins);
+  if (token.length < 16) throw new Error('Falta LAB_TOKEN (al menos 16 caracteres) en emulator/.env: ejecuta emulator/scripts/setup.sh, que lo genera');
+  const server = await startServer(lab, { port, host, origins, token });
   log(`escuchando en http://${host}:${server.port()} (WebSocket en / y /orchestrator)`);
   await lab.start();
   log('conectado a MQTT');

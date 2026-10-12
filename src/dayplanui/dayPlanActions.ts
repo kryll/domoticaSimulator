@@ -4,14 +4,17 @@ import { applyDayPlan, clearDayPlan, DAY_PLAN_KEY } from '../dayplan/dayplan';
 import { DAY_MS } from '../simulation/clock';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
-import { isBridgeLive } from '../bridge/useBridge';
 
 /** Días que se programan al aplicar (el plan se repite cada día). */
 export const DAY_PLAN_DAYS = 2;
 
-/** Programa el plan (no con el laboratorio en vivo). Devuelve si se aplicó. */
+/**
+ * Programa el plan desde la hora simulada actual. También con el laboratorio en vivo: ahí el reloj
+ * sigue la hora real a 1x, así que cada evento se aplica a su hora real y es lo que da vida a la
+ * casa del laboratorio. Devuelve si se aplicó (false si el plan está vacío).
+ */
 export function applyPlanNow(plan: DayPlan): boolean {
-  if (isBridgeLive()) return false;
+  if (plan.events.length === 0) return false;
   const project = useProjectStore.getState().project;
   useSimulationStore.setState((s) => ({ sim: applyDayPlan(s.sim, project, plan, s.sim.now, s.sim.now + DAY_PLAN_DAYS * DAY_MS) }));
   return true;

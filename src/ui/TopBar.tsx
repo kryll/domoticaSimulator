@@ -16,16 +16,12 @@ import { useMediaQuery } from './useMediaQuery';
 import { useSimulationStore } from '../store/simulationStore';
 import { hasFailures } from './failures';
 // Estático: yaml.ts ya va en el bundle principal (lo usa el motor a través de yamlLogic.ts).
-import { automationsToYaml, scenesToYaml, scriptsToYaml } from '../export/yaml';
 // También estáticos: los arreglos rápidos y el presupuesto ya los llevan al bundle principal.
-import { billOfMaterials, bomToCsv } from '../export/bom';
-import { devicesToCsv } from '../export/csv';
 import { confirmDialog } from './confirm';
 import { useViewStore } from '../store/viewStore';
 import { enterPresentation } from '../presentation/presentationMode';
 import { cx } from './cx';
 import { LabHost } from '../bridge/LabHost';
-import { useBridgeStore } from '../bridge/bridgeStore';
 import { TABLET_QUERY } from './breakpoints';
 import { useLayoutStore } from '../store/layoutStore';
 
@@ -235,21 +231,24 @@ export function TopBar() {
       <MenuItem onClick={() => safely(() => downloadText(exportProjectJson(project()), `${base()}.json`, 'application/json'))}>
         Proyecto (JSON)
       </MenuItem>
-      <MenuItem onClick={() => safely(() => downloadText(automationsToYaml(project()), 'automations.yaml', 'text/yaml'))}>
+      <MenuItem onClick={() => safely(async () => downloadText((await import('../export/yaml')).automationsToYaml(project()), 'automations.yaml', 'text/yaml'))}>
         automations.yaml
       </MenuItem>
-      <MenuItem onClick={() => safely(() => downloadText(scenesToYaml(project()), 'scenes.yaml', 'text/yaml'))}>
+      <MenuItem onClick={() => safely(async () => downloadText((await import('../export/yaml')).scenesToYaml(project()), 'scenes.yaml', 'text/yaml'))}>
         scenes.yaml
       </MenuItem>
-      <MenuItem onClick={() => safely(() => downloadText(scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
+      <MenuItem onClick={() => safely(async () => downloadText((await import('../export/yaml')).scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
         scripts.yaml
       </MenuItem>
-      <MenuItem onClick={() => safely(() => downloadText(devicesToCsv(project(), knownDefinitions()), `${base()}-dispositivos.csv`, 'text/csv'))}>
+      <MenuItem onClick={() => safely(async () => downloadText((await import('../export/csv')).devicesToCsv(project(), knownDefinitions()), `${base()}-dispositivos.csv`, 'text/csv'))}>
         Inventario (CSV)
       </MenuItem>
       <MenuItem
         onClick={() =>
-          safely(() => downloadText(bomToCsv(billOfMaterials(project(), knownDefinitions())), `${base()}-presupuesto.csv`, 'text/csv'))
+          safely(async () => {
+            const { billOfMaterials, bomToCsv } = await import('../export/bom');
+            downloadText(bomToCsv(billOfMaterials(project(), knownDefinitions())), `${base()}-presupuesto.csv`, 'text/csv');
+          })
         }
       >
         Presupuesto (CSV)
@@ -259,8 +258,6 @@ export function TopBar() {
       </MenuItem>
       <MenuItem onClick={() => useViewStore.getState().setProposalOpen(true)}>Propuesta (PDF)…</MenuItem>
       <MenuItem onClick={() => useExtrasStore.getState().openDialog('packages')}>Configuración HA (packages .zip)…</MenuItem>
-      {/* E1: laboratorio con un Home Assistant real (src/bridge). */}
-      <MenuItem onClick={() => useBridgeStore.getState().setPanel(true)}>Laboratorio…</MenuItem>
     </>
   );
 

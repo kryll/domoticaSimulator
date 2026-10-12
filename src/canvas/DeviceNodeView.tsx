@@ -8,6 +8,7 @@ import { useSimulationStore } from '../store/simulationStore';
 import { cx } from '../ui/cx';
 import { NodeBody } from './nodes/bodies';
 import { LOW_BATTERY_LEVEL } from '../simulation/energy';
+import { nodePowerKey, parseNodePower } from './nodePower';
 
 const DevicePopover = lazy(() => import('./DevicePopover').then((m) => ({ default: m.DevicePopover })));
 
@@ -58,9 +59,11 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
     highlighted,
     connectMode,
     crossFloorLinks,
-    watts,
-    batteryPct,
   } = data;
+  // Potencia y batería con un selector propio (texto primitivo): cambian en cada tick con la
+  // energía del motor sin reconstruir los datos del lienzo ni repintar los demás nodos.
+  const powerKey = useSimulationStore((s) => nodePowerKey(device, definition ?? undefined, s.sim));
+  const { watts, batteryPct } = parseNodePower(powerKey);
   const lowBattery = batteryPct !== undefined && batteryPct < LOW_BATTERY_LEVEL;
   // Evita repetir en la fila inferior lo que ya muestran los indicadores de potencia y batería.
   const secondary =

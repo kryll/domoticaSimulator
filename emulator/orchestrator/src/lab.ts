@@ -13,10 +13,12 @@ import {
   type Id,
   type Project,
 } from '../../../src/types';
-import { buildBridgeModel, type BridgeDevice, type BridgeModel, type MqttMessage } from '../../../src/bridge/mqtt/model';
-import { genericDiscovery, z2mBridgeDiscovery, z2mBridgeMessages, z2mDiscovery } from '../../../src/bridge/mqtt/discovery';
-import { entityStateToPayload, z2mDevicePayload } from '../../../src/bridge/mqtt/state';
+import { buildBridgeModel, type BridgeModel, type MqttMessage } from '../../../src/bridge/mqtt/model';
+import { desiredRetained, deviceDiscovery, deviceStateMessages } from '../../../src/bridge/mqtt/publish';
 import { availabilityMessages, type BridgeAvailability } from '../../../src/bridge/mqtt/availability';
+import { parseProject } from '../../../src/store/projectSchema';
+import { parseHaBridge } from '../../../src/bridge/schema';
+import { parseDefinition } from '../../../src/devices/catalog';
 import { createCommandParser, type CommandIndex } from '../../../src/bridge/mqtt/commands';
 import {
   trafficPayload,
@@ -33,7 +35,7 @@ import {
 import type { SnapshotStore } from './snapshots';
 import type { ContainerControl } from './docker';
 
-export const ORCHESTRATOR_VERSION = '0.1.0';
+export const ORCHESTRATOR_VERSION = '0.2.0';
 
 export interface LabOptions {
   mqttUrl: string;
@@ -54,9 +56,9 @@ export interface LabOptions {
   haContainer?: string;
   /** Exporta los packages y recarga HA (automatizaciones en HA). Devuelve un texto para el registro. */
   sync?: (project: Project, defs: DeviceDefinition[]) => Promise<string>;
+  /** Borra los packages del lab (packages/hasim) y recarga HA: automatizaciones de vuelta al simulador. */
+  unsync?: () => Promise<string | undefined>;
   syncDebounceMs?: number;
-  /** Pide a HA que se reinicie (sin Docker, tras restaurar un snapshot). */
-  restartHa?: () => Promise<void>;
   haTokenAvailable?: () => Promise<boolean>;
   log?: (msg: string) => void;
 }
@@ -66,6 +68,9 @@ export interface AppConnection {
   /** Suscrita al inspector de tráfico. */
   traffic: boolean;
 }
+
+/** Mensajes que solo puede mandar la app que controla el lab (el resto queda en solo lectura). */
+const CONTROL_TYPES = new Set<ClientMessage['type']>(['project', 'state', 'node', 'lab', 'command_result', 'goodbye']);
 
 type Outgoing = { [K in ServerMessage['type']]: Omit<Extract<ServerMessage, { type: K }>, 'v'> }[ServerMessage['type']];
 
@@ -112,6 +117,8 @@ export class Lab {
   private availability: BridgeAvailability = { live: false, unavailable: [] };
   private readonly nodes = new Map<Id, NodeState>();
   private readonly apps = new Set<AppConnection>();
+  /** La única app que controla el lab; las demás quedan en solo lectura. */
+  private controller: AppConnection | undefined;
   private main: Link | undefined;
   private z2m: Link | undefined;
   private mqttStatus: ServiceStatus = 'disconnected';
@@ -178,7 +185,11 @@ export class Lab {
     this.mqttStatus = 'connected';
     client.on('message', (topic, payload, packet) => this.onMessage(topic, payload.toString(), packet.retain));
     client.on('close', () => this.setMqttStatus('disconnected'));
+    client.on('offline', () => this.setMqttStatus('disconnected'));
     client.on('reconnect', () => this.setMqttStatus('connecting'));
+    const z2mClient = this.z2m.client;
+    z2mClient?.on('close', () => this.broadcastStatus());
+    z2mClient?.on('connect', () => this.broadcastStatus());
     client.on('connect', () => {
       this.setMqttStatus('connected');
       // Tras una reconexión se republica todo (el broker pudo reiniciarse sin persistencia).
@@ -196,6 +207,11 @@ export class Lab {
       { qos: 1 },
     );
     this.broadcastStatus();
+  }
+
+  /** Estado real de MQTT: las dos conexiones (genérica y Z2M) conectadas ahora mismo. */
+  private mqttConnected(): boolean {
+    return this.main?.client?.connected === true && this.z2m?.client?.connected === true;
   }
 
   private setMqttStatus(status: ServiceStatus): void {
@@ -269,7 +285,7 @@ export class Lab {
       this.log(`Comando ignorado: el nodo ${deviceId} está parado`);
       return;
     }
-    const app = this.primaryApp();
+    const app = this.controller;
     if (!app) {
       this.lastError = 'Comando de HA sin app conectada';
       return;
@@ -302,37 +318,13 @@ export class Lab {
     return new Set([...this.nodes].filter(([, s]) => s !== 'running').map(([id]) => id));
   }
 
-  private deviceDiscovery(model: BridgeModel, bdev: BridgeDevice): MqttMessage[] {
-    return bdev.profile === 'z2m' ? z2mDiscovery(model, bdev) : [genericDiscovery(model, bdev)];
-  }
-
-  private bridgeDiscovery(model: BridgeModel): MqttMessage[] {
-    return model.devices.some((d) => d.profile === 'z2m') ? [...z2mBridgeMessages(model), z2mBridgeDiscovery(model)] : [];
-  }
-
-  private desiredRetained(model: BridgeModel): MqttMessage[] {
-    return [
-      ...this.bridgeDiscovery(model),
-      ...model.devices.flatMap((d) => this.deviceDiscovery(model, d)),
-      ...availabilityMessages(model, this.effectiveAvailability(), this.stoppedSet()),
-    ];
-  }
-
-  private deviceStates(model: BridgeModel, bdev: BridgeDevice): MqttMessage[] {
-    if (bdev.profile === 'z2m') {
-      const payload = z2mDevicePayload(bdev, this.entities);
-      return payload === undefined ? [] : [{ topic: `${model.settings.z2mBaseTopic}/${bdev.friendlyName}`, payload, retain: false }];
-    }
-    const out: MqttMessage[] = [];
-    for (const e of bdev.entities) {
-      const payload = entityStateToPayload(e, this.entities[e.entityId]);
-      if (payload !== undefined) out.push({ topic: e.stateTopic, payload, retain: false });
-    }
-    return out;
+  /** Retenidos que deben existir (mismo camino que prueban los tests de src/bridge/mqtt). */
+  private desired(model: BridgeModel): MqttMessage[] {
+    return desiredRetained(model, this.effectiveAvailability(), this.stoppedSet());
   }
 
   private effectiveAvailability(): BridgeAvailability {
-    return { ...this.availability, live: this.availability.live && this.apps.size > 0 };
+    return { ...this.availability, live: this.availability.live && this.controller !== undefined };
   }
 
   /** Limpia los retenidos obsoletos (dispositivos borrados) con un payload vacío. */
@@ -349,7 +341,7 @@ export class Lab {
   private async publishAll(force = false): Promise<void> {
     const model = this.model;
     if (!model || !this.main?.client) return;
-    const desired = this.desiredRetained(model);
+    const desired = this.desired(model);
     await this.clearStale(desired);
     for (const m of desired) await this.publish(m, force);
     await this.publishStates(force);
@@ -365,7 +357,7 @@ export class Lab {
     if (!model) return;
     for (const bdev of model.devices) {
       if (!this.running(bdev.device.id)) continue;
-      for (const m of this.deviceStates(model, bdev)) await this.publish(m, force);
+      for (const m of deviceStateMessages(model, bdev, this.entities)) await this.publish(m, force);
     }
   }
 
@@ -375,22 +367,38 @@ export class Lab {
     return { v: 1, ...msg } as ServerMessage;
   }
 
-  private primaryApp(): AppConnection | undefined {
-    let last: AppConnection | undefined;
-    for (const a of this.apps) last = a;
-    return last;
+  private hello(conn: AppConnection): void {
+    conn.send(this.wrap({ type: 'hello', server: 'hasim-orchestrator', version: ORCHESTRATOR_VERSION, protocol: 1, readOnly: conn !== this.controller }));
   }
 
+  /**
+   * Conecta una app ya autenticada (el servidor comprobó el token). La primera controla el lab;
+   * las siguientes quedan en solo lectura (estado y tráfico) hasta que la que controla se vaya.
+   */
   attach(conn: AppConnection): void {
     this.apps.add(conn);
-    conn.send(this.wrap({ type: 'hello', server: 'hasim-orchestrator', version: ORCHESTRATOR_VERSION, protocol: 1 }));
+    if (!this.controller) this.controller = conn;
+    this.hello(conn);
     conn.send(this.statusMessage());
   }
 
   detach(conn: AppConnection): void {
     this.apps.delete(conn);
-    // Sin app no hay mundo físico: todo pasa a no disponible.
-    if (this.apps.size === 0) void this.enqueue(() => this.publishAvailability());
+    if (this.controller !== conn) return;
+    this.controller = undefined;
+    // La siguiente app pasa a controlar; hasta que mande su proyecto, todo queda no disponible.
+    const next = this.apps.values().next();
+    if (!next.done) {
+      this.controller = next.value;
+      this.hello(next.value);
+    }
+    // Sin app al mando no hay mundo físico: todo pasa a no disponible.
+    void this.enqueue(() => this.publishAvailability());
+  }
+
+  /** ¿Controla esta conexión el lab? (tests y /health). */
+  isController(conn: AppConnection): boolean {
+    return this.controller === conn;
   }
 
   statusMessage(): StatusMessage {
@@ -420,11 +428,24 @@ export class Lab {
 
   /** Atiende un mensaje de la app. */
   async handle(conn: AppConnection, msg: ClientMessage): Promise<void> {
+    if (CONTROL_TYPES.has(msg.type) && conn !== this.controller && !(msg.type === 'lab' && msg.action === 'list_snapshots')) {
+      conn.send(this.wrap({ type: 'error', code: 'readonly', message: 'Solo lectura: otra app controla el laboratorio' }));
+      return;
+    }
     switch (msg.type) {
       case 'hello':
         return;
       case 'project':
-        await this.onProject(msg);
+        try {
+          await this.onProject(msg);
+        } catch (err) {
+          // Proyecto o ajustes no válidos: no se aplica nada.
+          const message = err instanceof Error ? err.message : String(err);
+          conn.send(this.wrap({ type: 'error', code: 'invalid', message: `Proyecto rechazado: ${message}` }));
+        }
+        return;
+      case 'goodbye':
+        await this.retireAutomations('la app ha desactivado el laboratorio');
         return;
       case 'state':
         await this.onState(msg);
@@ -433,7 +454,7 @@ export class Lab {
         await this.onNode(msg.action, msg.deviceIds);
         return;
       case 'lab':
-        await this.onLab(conn, msg.action, msg.requestId, msg.name, msg.id);
+        await this.onLab(conn, msg.action, msg.requestId, msg.name, msg.id, msg.excludeCredentials === true);
         return;
       case 'traffic':
         conn.traffic = msg.subscribe;
@@ -447,27 +468,45 @@ export class Lab {
     }
   }
 
+  /**
+   * Proyecto completo o parche. Todo se valida antes de aplicar nada: el proyecto (resultado de
+   * aplicar el parche) con parseProject, los ajustes con parseHaBridge (un topic con # o + no es
+   * válido) y las definiciones con parseDefinition. Si algo falla se lanza y no cambia nada.
+   */
   private async onProject(msg: Extract<ClientMessage, { type: 'project' }>): Promise<void> {
+    let candidate: unknown;
+    let incomingDefs: unknown[] | undefined;
     if (msg.mode === 'full') {
-      this.project = msg.project;
-      this.defs = msg.definitions;
+      candidate = msg.project;
+      incomingDefs = msg.definitions;
     } else {
       if (!this.project) throw new Error('Parche de proyecto antes del proyecto completo');
-      this.project = { ...this.project, ...msg.changes };
-      if (msg.definitions) {
+      candidate = { ...this.project, ...msg.changes };
+      incomingDefs = msg.definitions;
+    }
+    const project = parseProject(JSON.parse(JSON.stringify(candidate)) as unknown);
+    const rawSettings = msg.mode === 'full' ? msg.settings : msg.settings;
+    const nextSettings = rawSettings === undefined ? this.settings : parseHaBridge(rawSettings, 'settings');
+    let defs = this.defs;
+    if (incomingDefs) {
+      const parsed = incomingDefs.map((d, i) => parseDefinition(d, i));
+      if (msg.mode === 'full') defs = parsed;
+      else {
         const byId = new Map(this.defs.map((d) => [d.id, d]));
-        for (const d of msg.definitions) byId.set(d.id, d);
-        this.defs = [...byId.values()];
+        for (const d of parsed) byId.set(d.id, d);
+        defs = [...byId.values()];
       }
     }
-    const nextSettings = msg.mode === 'full' ? msg.settings : (msg.settings ?? this.settings);
+    // Validado: se aplica.
+    this.project = project;
+    this.defs = defs;
+    const prevSettings = this.settings;
     const topicsChanged =
-      nextSettings.baseTopic !== this.settings.baseTopic ||
-      nextSettings.z2mBaseTopic !== this.settings.z2mBaseTopic ||
-      nextSettings.discoveryPrefix !== this.settings.discoveryPrefix;
+      nextSettings.baseTopic !== prevSettings.baseTopic ||
+      nextSettings.z2mBaseTopic !== prevSettings.z2mBaseTopic ||
+      nextSettings.discoveryPrefix !== prevSettings.discoveryPrefix;
     this.settings = { ...nextSettings };
     if (topicsChanged && this.main) await this.enqueue(() => this.reconnectMqtt());
-    const project = this.project;
     this.model = buildBridgeModel(project, this.defs, this.settings);
     this.parser = createCommandParser(this.model);
     // Nodos: los nuevos arrancan (autostart) o quedan parados; se olvidan los borrados.
@@ -476,7 +515,8 @@ export class Lab {
     for (const id of ids) if (!this.nodes.has(id)) this.nodes.set(id, this.opts.autostart === false ? 'stopped' : 'running');
     await this.enqueue(() => this.publishAll());
     this.broadcastStatus();
-    this.scheduleSync();
+    if (this.settings.automationsRunIn === 'home_assistant') this.scheduleSync();
+    else await this.retireAutomations('las automatizaciones vuelven al simulador');
   }
 
   private async onState(msg: Extract<ClientMessage, { type: 'state' }>): Promise<void> {
@@ -507,9 +547,9 @@ export class Lab {
         const bdev = model.devices.find((d) => d.device.id === id);
         if (!bdev) continue;
         try {
-          for (const m of this.deviceDiscovery(model, bdev)) await this.publish(m, true);
+          for (const m of deviceDiscovery(model, bdev)) await this.publish(m, true);
           this.nodes.set(id, 'running');
-          for (const m of this.deviceStates(model, bdev)) await this.publish(m, true);
+          for (const m of deviceStateMessages(model, bdev, this.entities)) await this.publish(m, true);
         } catch (err) {
           this.nodes.set(id, 'error');
           this.lastError = err instanceof Error ? err.message : String(err);
@@ -520,7 +560,7 @@ export class Lab {
     this.broadcastStatus();
   }
 
-  private async onLab(conn: AppConnection, action: LabAction, requestId: string, name?: string, id?: string): Promise<void> {
+  private async onLab(conn: AppConnection, action: LabAction, requestId: string, name?: string, id?: string, excludeCredentials = false): Promise<void> {
     const reply = (ok: boolean, message: string, extra: { project?: Project } = {}): void => {
       conn.send(this.wrap({ type: 'lab_result', requestId, action, ok, message, snapshots: this.snapshotList, ...extra }));
     };
@@ -540,7 +580,7 @@ export class Lab {
         }
         case 'snapshot': {
           const store = this.requireSnapshots();
-          const info = await store.create(name ?? 'Snapshot', this.project);
+          const info = await store.create(name ?? 'Snapshot', this.project, { excludeCredentials });
           this.snapshotList = await store.list();
           this.broadcastStatus();
           reply(true, `Snapshot «${info.name}» guardado (${Math.round(info.bytes / 1024)} KB de ha-config)`);
@@ -549,19 +589,21 @@ export class Lab {
         case 'restore': {
           const store = this.requireSnapshots();
           if (!id) throw new Error('Falta el id del snapshot');
+          await store.check(id);
+          // Restaurar exige parar HA antes de copiar (si no, al apagarse reescribe .storage encima
+          // de lo restaurado). Sin control de Docker (perfil opcional) no se restaura.
+          const docker = this.capabilities.docker ? this.opts.containers : undefined;
+          if (!docker) throw new Error('Restaurar necesita el perfil con Docker (emulator/scripts/setup.sh --docker): el orquestador debe parar Home Assistant antes de copiar la configuración.');
           const container = this.opts.haContainer ?? 'hasim-homeassistant';
-          const docker = this.capabilities.docker && this.opts.containers;
-          if (docker) await docker.stop(container);
-          const project = await store.restore(id);
-          let note: string;
-          if (docker) {
+          let project: Project | undefined;
+          await docker.stop(container);
+          try {
+            project = await store.restore(id);
+          } finally {
+            // HA vuelve a arrancar aunque la copia falle.
             await docker.start(container);
-            note = 'Home Assistant se ha reiniciado con la configuración del snapshot.';
-          } else if (this.opts.restartHa) {
-            await this.opts.restartHa().catch(() => undefined);
-            note = 'Se ha pedido a Home Assistant que se reinicie.';
-          } else note = 'Reinicia Home Assistant para aplicar la configuración restaurada.';
-          reply(true, `Snapshot restaurado. ${note}`, project ? { project } : {});
+          }
+          reply(true, 'Snapshot restaurado. Home Assistant se ha reiniciado con la configuración del snapshot.', project ? { project } : {});
           return;
         }
         case 'list_snapshots': {
@@ -623,6 +665,24 @@ export class Lab {
     }, this.opts.syncDebounceMs ?? 1500);
   }
 
+  /**
+   * Automatizaciones de vuelta al simulador (automationsRunIn: simulator o lab desactivado):
+   * borra packages/hasim y recarga HA. `unsync` no hace nada (undefined) si no hay packages.
+   */
+  private async retireAutomations(reason: string): Promise<void> {
+    if (this.syncTimer) clearTimeout(this.syncTimer);
+    this.syncTimer = undefined;
+    this.syncKey = '';
+    if (!this.opts.unsync) return;
+    try {
+      const done = await this.opts.unsync();
+      if (done !== undefined) this.log(`${done} (${reason})`);
+    } catch (err) {
+      this.lastError = `Retirar las automatizaciones de HA: ${err instanceof Error ? err.message : String(err)}`;
+      this.broadcastStatus();
+    }
+  }
+
   // ---------- Inspector de tráfico ----------
 
   private record(dir: 'in' | 'out', topic: string, payload: string, retain: boolean): void {
@@ -643,12 +703,14 @@ export class Lab {
 
   /** Para el endpoint /health y los tests. */
   health(): Record<string, unknown> {
+    const mqttOk = this.mqttConnected();
     return {
-      ok: this.mqttStatus === 'connected',
+      ok: mqttOk,
       version: ORCHESTRATOR_VERSION,
-      mqtt: this.mqttStatus,
+      mqtt: mqttOk ? 'connected' : this.mqttStatus === 'connected' ? 'disconnected' : this.mqttStatus,
       ha: this.haStatus,
       apps: this.apps.size,
+      controller: this.controller !== undefined,
       devices: this.model?.devices.length ?? 0,
       nodes: Object.fromEntries(this.nodes),
     };

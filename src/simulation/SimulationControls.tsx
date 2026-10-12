@@ -5,16 +5,20 @@ import { userWaits } from './engine';
 import { Button } from '../ui/Button';
 import { confirmDialog } from '../ui/confirm';
 import { DayPlanIndicator } from '../dayplanui/DayPlanIndicator';
+import { useBridgeLive } from '../bridge/useBridge';
+import { LIVE_SPEED_HINT, pauseSimulation } from '../bridge/liveControls';
 
 /** Controles de la simulación: reproducir/pausar, reiniciar, velocidad y reloj. */
 export function SimulationControls() {
   const running = useSimulationStore((s) => s.running);
   const speed = useSimulationStore((s) => s.speed);
   const start = useSimulationStore((s) => s.start);
-  const pause = useSimulationStore((s) => s.pause);
   const reset = useSimulationStore((s) => s.reset);
   const setSpeed = useSimulationStore((s) => s.setSpeed);
   const waits = useSimulationStore((s) => userWaits(s.sim).length);
+  // E1: en vivo con el laboratorio no se acelera y pausar pregunta antes (src/bridge/liveControls.ts).
+  const live = useBridgeLive();
+  const pause = () => void pauseSimulation();
 
   const onStart = () => {
     start();
@@ -70,6 +74,8 @@ export function SimulationControls() {
         id="sim-speed"
         value={speed}
         onChange={(e) => setSpeed(Number(e.target.value) as Speed)}
+        disabled={live}
+        title={live ? LIVE_SPEED_HINT : 'Velocidad de la simulación'}
         className="rounded-md border border-slate-300 bg-white px-1 py-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
       >
         {SPEEDS.map((s) => (

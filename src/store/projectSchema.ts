@@ -401,7 +401,7 @@ function actions(v: unknown, path: string): Action[] {
 function automation(v: unknown, path: string): Automation {
   const o = obj(v, path);
   if (typeof o.enabled !== 'boolean') fail(`${path}.enabled`, 'debe ser verdadero o falso');
-  return {
+  const a: Automation = {
     id: str(o, 'id', path),
     name: str(o, 'name', path),
     enabled: o.enabled,
@@ -410,6 +410,9 @@ function automation(v: unknown, path: string): Automation {
     conditions: arr(o.conditions, `${path}.conditions`).map((c, i) => condition(c, `${path}.conditions[${i}]`)),
     actions: actions(o.actions, `${path}.actions`),
   };
+  const description = optStr(o, 'description', path);
+  if (description !== undefined) a.description = description;
+  return a;
 }
 
 function entityState(v: unknown, path: string): EntityState {
@@ -493,6 +496,7 @@ function quoteSettings(v: unknown, path: string): QuoteSettings {
     q[key] = n;
   }
   if (o.hidePrices !== undefined) q.hidePrices = bool(o, 'hidePrices', path);
+  if (o.showMargin !== undefined) q.showMargin = bool(o, 'showMargin', path);
   return q;
 }
 
@@ -779,4 +783,29 @@ export function parseProject(raw: unknown): Project {
   // ---- Emulación (E1) ---- ajustes del puente con el lab y perfiles de radio (src/bridge/schema.ts).
   parseEmulationFields(o, project);
   return project;
+}
+
+/** Listas del proyecto cuyos elementos se pueden validar por separado (para repairProject). */
+export const PROJECT_LIST_KEYS = ['floors', 'rooms', 'devices', 'connections', 'automations', 'scenes', 'scripts', 'people', 'zones', 'timelines', 'variants', 'groups', 'helpers'] as const;
+export type ProjectListKey = (typeof PROJECT_LIST_KEYS)[number];
+
+const ITEM_PARSERS: Record<ProjectListKey, (v: unknown, path: string) => { id: string }> = {
+  floors: floor,
+  rooms: room,
+  devices: device,
+  connections: connection,
+  automations: automation,
+  scenes: scene,
+  scripts: script,
+  people: person,
+  zones: zone,
+  timelines: timeline,
+  variants: variant,
+  groups: group,
+  helpers: helper,
+};
+
+/** Valida un elemento suelto de una lista del proyecto (sin comprobar referencias). Lanza Error. */
+export function parseProjectItem(key: ProjectListKey, v: unknown, index: number): { id: string } {
+  return ITEM_PARSERS[key](v, `${key}[${index}]`);
 }

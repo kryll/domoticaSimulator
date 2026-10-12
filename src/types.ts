@@ -342,6 +342,8 @@ export interface TriggerCondition {
 export interface Automation {
   id: Id;
   name: string;
+  /** Descripción (la `description` de HA): se exporta e importa con el YAML. */
+  description?: string;
   enabled: boolean;
   triggers: Trigger[];
   conditions: Condition[];
@@ -392,6 +394,11 @@ export interface QuoteSettings {
   perDeviceInstallMinutes?: number;
   /** Margen sobre materiales y mano de obra en % (por defecto 0). 0-100. */
   marginPct?: number;
+  /**
+   * Mostrar el margen al cliente como línea aparte (por defecto false: se reparte en los
+   * precios de materiales y mano de obra).
+   */
+  showMargin?: boolean;
   /** Descuento en % (por defecto 0). 0-100. */
   discountPct?: number;
   /** IVA en % (por defecto 21). 0-100. */
@@ -1161,17 +1168,19 @@ export interface SimulationState {
 // ---- Emulación ----
 // Entorno emulado con un Home Assistant real (docs/EMULACION.md, tanda E1). Bloque propio del
 // puente (src/bridge, emulator/): los campos que se añaden a Project van por fusión de interfaces.
-// Los secretos (contraseñas MQTT, tokens de HA) NUNCA van en Project: viven en emulator/.env y
-// emulator/.secrets/, fuera de la app.
+// Los secretos (contraseñas MQTT, tokens de HA, token del laboratorio) NUNCA van en Project: viven
+// en emulator/.env y emulator/.secrets/; la app guarda el token del lab en localStorage.
 
 /** Dónde se ejecutan las automatizaciones con el puente activo (solo en un sitio). */
 export type AutomationsRunIn = 'home_assistant' | 'simulator';
 
-/** Ajustes del puente con el entorno emulado (sin secretos). */
+/**
+ * Ajustes del puente que viajan con el proyecto (sin secretos): topics MQTT y dónde se ejecutan
+ * las automatizaciones. Activar el lab, la URL del orquestador y el token del laboratorio son
+ * ajustes locales de cada máquina (src/bridge/localLab.ts, localStorage), nunca del proyecto: así
+ * un enlace compartido o un JSON importado no conectan solos con ningún orquestador.
+ */
 export interface HaBridgeSettings {
-  enabled: boolean;
-  /** WebSocket del orquestador, p. ej. ws://localhost:8080/orchestrator. */
-  orchestratorUrl: string;
   /** Prefijo de discovery de MQTT en HA (por defecto 'homeassistant'). */
   discoveryPrefix: string;
   /** Topic base del perfil MQTT genérico (por defecto 'hasim'). */
@@ -1183,8 +1192,6 @@ export interface HaBridgeSettings {
 
 export function defaultHaBridgeSettings(): HaBridgeSettings {
   return {
-    enabled: false,
-    orchestratorUrl: 'ws://localhost:8080/orchestrator',
     discoveryPrefix: 'homeassistant',
     baseTopic: 'hasim',
     z2mBaseTopic: 'hasim-z2m',

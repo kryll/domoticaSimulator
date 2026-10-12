@@ -13,3 +13,12 @@ export function radioProfileFor(project: Pick<Project, 'radioProfiles'>, protoco
 export function interferenceLossPct(channel802154: number, wifiChannels: readonly number[]): number {
   return wifiChannels.some((w) => WIFI_802154_OVERLAP[w]?.includes(channel802154)) ? WIFI_INTERFERENCE_LOSS_PCT : 0;
 }
+
+/**
+ * Latencia de radio (ms) de un protocolo para el motor: la del perfil de radio si el proyecto la
+ * ha ajustado (radioProfiles) y, si no, `fallback` (la tabla del motor, src/simulation/latency.ts).
+ */
+export function radioLatencyMs(project: Pick<Project, 'radioProfiles'>, protocol: Protocol, fallback: number): number {
+  const own = project.radioProfiles?.[protocol]?.latencyMs;
+  return own !== undefined ? radioProfileFor(project, protocol).latencyMs : fallback;
+}

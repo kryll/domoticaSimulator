@@ -1,5 +1,6 @@
 import type { Project } from '../types';
-import { createDemoProject, listProjects, loadProject, saveProject } from './persistence';
+import { createDemoProject, listProjects, loadProject, loadRawProject, saveProject } from './persistence';
+import { browserStorage, clearBackup, newerBackup, readBackup } from './unloadBackup';
 import { useProjectStore } from './projectStore';
 import { useSimulationStore } from './simulationStore';
 import { useUiStore } from './uiStore';
@@ -24,8 +25,12 @@ export function rememberLastProjectId(id: string): void {
   }
 }
 
-/** Abre un proyecto: lo carga en el store, limpia la interfaz y reinicia la simulación. */
-export function openProject(project: Project): void {
+/**
+ * Abre un proyecto: lo carga en el store, limpia la interfaz y reinicia la simulación.
+ * `remember: false` no lo marca como el último abierto (la demo provisional mientras se decide
+ * qué hacer con un proyecto ilegible).
+ */
+export function openProject(project: Project, remember = true): void {
   useProjectStore.getState().loadProject(project);
   useUiStore.getState().reset();
   // Lo que depende del proyecto anterior (routers sugeridos, menú de planta) no se conserva.
@@ -33,7 +38,7 @@ export function openProject(project: Project): void {
   useExtrasStore.getState().openFloorMenu(null);
   useUiStore.getState().setActiveFloor(project.floors[0]?.id ?? null);
   useSimulationStore.getState().reset(project);
-  rememberLastProjectId(project.id);
+  if (remember) rememberLastProjectId(project.id);
 }
 
 /** Si ya hay guardado un proyecto con el mismo id, devuelve una copia con id nuevo. */
@@ -51,15 +56,29 @@ export async function openAsNewProject(project: Project): Promise<Project> {
   return unique;
 }
 
+export interface UnreadableProject {
+  id: string;
+  name: string;
+  /** Mensaje de parseProject. */
+  error: string;
+  /** Lo guardado tal cual (para descargarlo o repararlo). Nunca se sobrescribe. */
+  raw: unknown;
+}
+
 export interface InitialLoad {
   /** No había ningún proyecto guardado: es la primera visita. */
   firstRun: boolean;
+  /** El último proyecto no se puede leer: se abre la demo sin guardar y se ofrece recuperarlo. */
+  unreadable?: UnreadableProject;
+  /** Se aplicó el respaldo de cierre (cambios de los últimos instantes que no llegaron a IndexedDB). */
+  restoredBackup?: boolean;
 }
 
 /**
  * Carga el último proyecto abierto (o el más reciente) o, si no hay ninguno, el de demo. La demo
  * se guarda en IndexedDB al abrirse (no solo tras la primera edición) para que otra pestaña abra
- * el mismo proyecto.
+ * el mismo proyecto. Si el proyecto no se puede leer, no se toca lo guardado: se abre una demo
+ * provisional (sin guardar ni recordar) y se devuelve `unreadable` para ofrecer recuperarlo.
  */
 export async function loadInitialProject(): Promise<InitialLoad> {
   let firstRun = true;
@@ -69,8 +88,26 @@ export async function loadInitialProject(): Promise<InitialLoad> {
     const remembered = lastProjectId();
     const target = list.find((p) => p.id === remembered) ?? [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (target) {
-      const project = await loadProject(target.id);
+      let project: Project | undefined;
+      try {
+        project = await loadProject(target.id);
+      } catch (err) {
+        const raw = await loadRawProject(target.id).catch(() => undefined);
+        console.error('El proyecto guardado no se puede leer', err);
+        const demo = createDemoProject();
+        openProject(demo, false);
+        return { firstRun: false, unreadable: { id: target.id, name: target.name, error: err instanceof Error ? err.message : String(err), raw } };
+      }
       if (project) {
+        // Cambios de los últimos instantes guardados al cerrar (localStorage) y no en IndexedDB.
+        const storage = browserStorage();
+        const backup = newerBackup(readBackup(storage, project.id), project);
+        if (backup) {
+          openProject(backup);
+          useProjectStore.getState().setSaveState({ dirty: true, baseRevision: project.revision ?? 0 });
+          return { firstRun: false, restoredBackup: true };
+        }
+        clearBackup(storage, project.id);
         openProject(project);
         return { firstRun: false };
       }

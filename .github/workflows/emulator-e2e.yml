@@ -40,7 +40,12 @@ jobs:
         run: emulator/scripts/setup.sh
       - name: Viaje completo (proyecto demo → HA → comando → estado)
         working-directory: emulator
-        run: npm run e2e
+        # El orquestador exige el token del laboratorio que setup.sh genera en .env.
+        run: |
+          LAB_TOKEN="$(grep '^LAB_TOKEN=' .env | cut -d= -f2-)"
+          echo "::add-mask::$LAB_TOKEN"
+          export LAB_TOKEN
+          npm run e2e
       - name: Logs si falla
         if: failure()
         working-directory: emulator

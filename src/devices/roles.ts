@@ -1,6 +1,9 @@
 // Utilidades sobre papeles de red y redes lógicas, compartidas por network/ y export/.
-import type { Device, DeviceDefinition, Integration, IotClass, NetworkRole, Protocol } from '../types';
+import type { Brand, Device, DeviceDefinition, Id, Integration, IotClass, NetworkRole, Protocol } from '../types';
 import { INTEGRATION_IOT_CLASS } from './labels';
+
+/** Equipo propuesto para cada hub propietario. */
+export const HUB_FOR_BRAND: Partial<Record<Brand, Id>> = { Aqara: 'aqara-hub-m2', IKEA: 'ikea-dirigera', 'Philips Hue': 'hue-bridge-v2' };
 
 const INFRA_ROLES: readonly NetworkRole[] = ['coordinator', 'hub', 'border_router', 'access_point', 'ha_server'];
 

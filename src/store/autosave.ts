@@ -5,6 +5,7 @@ import { loadProject } from './persistence';
 import { createTabChannel, getTabId, saveProjectChecked, type SaveCheckedResult, type TabChannel, type TabMessage } from './sync/tabSync';
 import { pruneAutoVersions, saveVersion } from './versions';
 import { useProjectStore } from './projectStore';
+import { browserStorage, clearBackup, writeBackup, type BackupStorage } from './unloadBackup';
 
 type SaveResult = SaveCheckedResult;
 
@@ -17,6 +18,8 @@ export interface AutosaveDeps {
   channel: (projectId: string) => TabChannel | null;
   autoVersion: (project: Project) => Promise<void>;
   now: () => number;
+  /** Almacenamiento síncrono del respaldo al cerrar (localStorage). */
+  backupStorage?: () => BackupStorage | undefined;
 }
 
 export const defaultAutosaveDeps: AutosaveDeps = {
@@ -34,6 +37,7 @@ export const defaultAutosaveDeps: AutosaveDeps = {
     await pruneAutoVersions(project.id);
   },
   now: () => Date.now(),
+  backupStorage: browserStorage,
 };
 
 /** Guardado activo (para «Reintentar» y para resolver conflictos). */
@@ -97,6 +101,8 @@ export function startAutosave(delayMs = 800, deps: AutosaveDeps = defaultAutosav
         ...(unchanged ? { dirty: false } : {}),
       });
       post({ type: 'saved', projectId: project.id, revision: result.revision, tabId: getTabId() });
+      // Lo guardado ya está en IndexedDB: el respaldo de cierre sobra.
+      if (unchanged) clearBackup((deps.backupStorage ?? browserStorage)(), project.id);
       if (!unchanged) again = true;
     } else if (result.reason === 'conflict') {
       store().setSaveState({
@@ -167,14 +173,34 @@ export function startAutosave(delayMs = 800, deps: AutosaveDeps = defaultAutosav
     if (deps.now() - lastAutoVersionAt >= AUTO_VERSION_MS) autoVersion(state.project);
   });
 
-  // Al ocultar o cerrar la pestaña se guarda ya, sin esperar al retardo.
+  /** Hay cambios que aún no están en IndexedDB. */
+  const unsaved = () => store().dirty || running !== null;
+
+  /** Respaldo síncrono en localStorage: IndexedDB puede no terminar antes de cerrar. */
+  const backup = () => {
+    const { project, baseRevision, conflict } = store();
+    if (conflict || !unsaved()) return;
+    writeBackup((deps.backupStorage ?? browserStorage)(), project, baseRevision, deps.now());
+  };
+
+  // Al ocultar o cerrar la pestaña: respaldo síncrono y guardado inmediato, sin esperar al retardo.
   const onHide = () => {
+    backup();
     if (store().dirty) void flush();
   };
   const onVisibility = () => {
     if (document.visibilityState === 'hidden') onHide();
   };
+  // Con cambios sin guardar, el navegador pregunta antes de cerrar o recargar.
+  const onBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (!unsaved()) return;
+    backup();
+    void flush();
+    e.preventDefault();
+    e.returnValue = '';
+  };
   window.addEventListener('pagehide', onHide);
+  window.addEventListener('beforeunload', onBeforeUnload);
   document.addEventListener('visibilitychange', onVisibility);
 
   const handle = { flush, deps };
@@ -186,6 +212,7 @@ export function startAutosave(delayMs = 800, deps: AutosaveDeps = defaultAutosav
     if (timer) clearTimeout(timer);
     unsubscribe();
     window.removeEventListener('pagehide', onHide);
+    window.removeEventListener('beforeunload', onBeforeUnload);
     document.removeEventListener('visibilitychange', onVisibility);
     unsubscribeChannel?.();
     channel?.close();

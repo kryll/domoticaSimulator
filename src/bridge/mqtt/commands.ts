@@ -305,8 +305,3 @@ export function createCommandParser(model: BridgeModel): CommandIndex {
 
   return { parse, deviceOf };
 }
-
-/** Atajo: interpreta un único mensaje con el modelo dado. */
-export function commandFromMqtt(model: BridgeModel, topic: string, payload: string): BridgeCommand[] | null {
-  return createCommandParser(model).parse(topic, payload);
-}

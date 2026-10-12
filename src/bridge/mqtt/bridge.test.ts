@@ -5,9 +5,10 @@ import { callService, createSimulationState } from '../../simulation/engine';
 import { setDeviceOffline } from '../../simulation/events';
 import { defaultHaBridgeSettings, transportFor, type Device, type Project } from '../../types';
 import { buildBridgeModel, ieeeAddress, type BridgeModel } from './model';
-import { discoveryMessages, discoveryMessagesForModel, ORIGIN_NAME, SIMULATED_VERSION } from './discovery';
-import { entityStateToPayload, stateMessages, z2mDevicePayload } from './state';
-import { commandFromMqtt, createCommandParser } from './commands';
+import { ORIGIN_NAME, SIMULATED_VERSION } from './discovery';
+import { entityStateToPayload, z2mDevicePayload } from './state';
+import { createCommandParser } from './commands';
+import { desiredRetained, stateMessages } from './publish';
 import { availabilityFromSim, availabilityMessages } from './availability';
 import { kelvinToMired, rgbToXy, xyToRgb } from './color';
 
@@ -27,8 +28,13 @@ function z2mProject(): Project {
   return { ...p, devices };
 }
 
+/** Lo mismo que publica el orquestador (desiredRetained), solo los discovery (…/config) y bridge/*. */
+function discoveryOf(model: BridgeModel): Array<{ topic: string; payload: string; retain: boolean }> {
+  return desiredRetained(model, { live: true, unavailable: [] }).filter((m) => m.topic.endsWith('/config') || /\/bridge\/(info|devices)$/.test(m.topic));
+}
+
 function payloadOf(model: BridgeModel, topic: string): Record<string, unknown> {
-  const msg = discoveryMessagesForModel(model).find((m) => m.topic === topic);
+  const msg = discoveryOf(model).find((m) => m.topic === topic);
   if (!msg) throw new Error(`sin mensaje ${topic}`);
   return JSON.parse(msg.payload) as Record<string, unknown>;
 }
@@ -93,11 +99,11 @@ describe('discovery genérico', () => {
     expect(light.schema).toBe('json');
     expect(light.brightness_scale).toBe(255);
     expect(light.supported_color_modes).toEqual(expect.arrayContaining(['rgb']));
-    expect(discoveryMessages(p, catalog).every((m) => m.retain)).toBe(true);
+    expect(discoveryOf(buildBridgeModel(p, catalog)).every((m) => m.retain)).toBe(true);
   });
 
   it('cubre los dominios del motor', () => {
-    const all = discoveryMessages(p, catalog).map((m) => JSON.parse(m.payload) as Record<string, unknown>);
+    const all = discoveryOf(buildBridgeModel(p, catalog)).map((m) => JSON.parse(m.payload) as Record<string, unknown>);
     const platforms = new Set(all.flatMap((c) => Object.values((c.cmps ?? {}) as Record<string, { p: string }>).map((x) => x.p)));
     for (const pl of ['light', 'switch', 'sensor', 'binary_sensor', 'cover', 'climate', 'lock', 'vacuum', 'number', 'select']) expect(platforms).toContain(pl);
   });
@@ -120,7 +126,7 @@ describe('discovery genérico', () => {
 
   it('respeta los topics configurados', () => {
     const settings = { ...defaultHaBridgeSettings(), discoveryPrefix: 'ha', baseTopic: 'lab' };
-    const msgs = discoveryMessages(p, catalog, settings);
+    const msgs = discoveryOf(buildBridgeModel(p, catalog, settings));
     expect(msgs.every((m) => m.topic.startsWith('ha/'))).toBe(true);
     expect(msgs.some((m) => m.payload.includes('"lab/'))).toBe(true);
   });
@@ -146,7 +152,7 @@ describe('discovery Z2M', () => {
   });
 
   it('bridge/devices con ieee, tipo, power_source y exposes', () => {
-    const msgs = discoveryMessagesForModel(model);
+    const msgs = discoveryOf(model);
     const devices = JSON.parse(msgs.find((m) => m.topic === 'hasim-z2m/bridge/devices')!.payload) as Array<Record<string, unknown>>;
     expect(devices[0]).toMatchObject({ type: 'Coordinator', ieee_address: coordIeee });
     const entry = devices.find((d) => d.ieee_address === luz.ieee)!;
@@ -227,7 +233,7 @@ describe('comandos', () => {
       { entityId: 'light.luz_pasillo', service: 'light.turn_on', data: { brightness: 255, color_temp_kelvin: 4000 } },
     ]);
     expect(parser.parse(base, 'OFF')).toEqual([{ entityId: 'light.luz_pasillo', service: 'light.turn_off', data: {} }]);
-    expect(commandFromMqtt(model, `${base}/brightness`, '127')?.[0]).toMatchObject({ service: 'light.turn_on', data: { brightness: 128 } });
+    expect(parser.parse(`${base}/brightness`, '127')?.[0]).toMatchObject({ service: 'light.turn_on', data: { brightness: 128 } });
     expect(parser.parse('hasim-z2m/desconocido/set', 'ON')).toBeNull();
   });
 
@@ -317,8 +323,37 @@ describe('dominios de la tanda 3 (alarma, válvula, sirena)', () => {
       { entityId: alarm.entityId, service: 'alarm_control_panel.alarm_arm_away', data: { code: '1234' } },
     ]);
     expect(parser.parse(`${valve.commandTopic}/set`, 'CLOSE')?.[0]?.service).toBe('valve.close_valve');
-    const platforms = discoveryMessagesForModel(model).flatMap((m) => Object.values((JSON.parse(m.payload).cmps ?? {}) as Record<string, { p: string }>).map((c) => c.p));
+    const platforms = discoveryOf(model).flatMap((m) => Object.values((JSON.parse(m.payload).cmps ?? {}) as Record<string, { p: string }>).map((c) => c.p));
     expect(platforms).toEqual(expect.arrayContaining(['alarm_control_panel', 'valve']));
     expect(entityStateToPayload(alarm, { state: 'armed_away' })).toBe('{"state":"armed_away"}');
+  });
+});
+
+describe('personalizados y perfil de radio', () => {
+  it('los dispositivos personalizados del proyecto llegan al modelo aunque no estén en las definiciones dadas', () => {
+    const p = demo();
+    const base = catalog.find((d) => d.id === p.devices.find((x) => x.id === 'demo-cafetera')!.definitionId)!;
+    const custom = { ...base, id: 'custom:cafetera-rara', name: 'Cafetera rara' };
+    const project: Project = { ...p, customDefinitions: [custom], devices: p.devices.map((d) => (d.id === 'demo-cafetera' ? { ...d, definitionId: custom.id } : d)) };
+    const model = buildBridgeModel(project, catalog);
+    expect(model.devices.find((d) => d.device.id === 'demo-cafetera')?.def.id).toBe('custom:cafetera-rara');
+  });
+
+  it('el Z2M emulado publica el canal del perfil de radio del proyecto', () => {
+    const channelOf = (p: Project): number => {
+      const info = discoveryOf(buildBridgeModel(p, catalog)).find((m) => m.topic === 'hasim-z2m/bridge/info')!;
+      return (JSON.parse(info.payload) as { network: { channel: number } }).network.channel;
+    };
+    expect(channelOf(z2mProject())).toBe(11);
+    expect(channelOf({ ...z2mProject(), radioProfiles: { zigbee: { channel: 25 } } })).toBe(25);
+  });
+
+  it('los nodos parados no publican estado', () => {
+    const p = z2mProject();
+    const model = buildBridgeModel(p, catalog);
+    const sim = createSimulationState(p, catalog, NOW);
+    const luz = model.devices.find((d) => d.device.id === 'demo-luz-salon')!;
+    expect(stateMessages(model, sim.entities).some((m) => m.topic === luz.entities[0]!.stateTopic)).toBe(true);
+    expect(stateMessages(model, sim.entities, new Set(['demo-luz-salon'])).some((m) => m.topic === luz.entities[0]!.stateTopic)).toBe(false);
   });
 });

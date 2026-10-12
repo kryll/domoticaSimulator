@@ -1,0 +1,9 @@
+# Perfil opcional «docker»: da al orquestador el socket de Docker para parar y arrancar el HA del
+# lab al restaurar un snapshot (restaurar con HA en marcha corrompería .storage). Ojo: el socket
+# de Docker equivale a acceso de administrador al PC; actívalo solo si lo necesitas.
+#   emulator/scripts/setup.sh --docker      (lo deja activado en .env con COMPOSE_FILE)
+#   emulator/scripts/setup.sh --no-docker   (lo desactiva)
+services:
+  orchestrator:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

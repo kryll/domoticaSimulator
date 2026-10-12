@@ -116,7 +116,7 @@ actions:
 `, ctx);
     expect(a.name).toBe('Prueba');
     expect(warnings.map((w) => w.path)).toEqual([
-      'description',
+      // description ya se conserva.
       'triggers[0].attribute',
       'triggers[0].entity_id',
       'triggers[0].to',
@@ -127,8 +127,8 @@ actions:
     ]);
     expect(a.conditions[0]).toMatchObject({ type: 'time', weekday: ['mon', 'tue'] });
     expect(a.actions[0]?.enabled).toBe(false);
-    expect(warnings[0]?.message).toBe('Clave «description» ignorada: el simulador no la admite');
-    expect(warnings.find((w) => w.path === 'triggers[0].entity_id')?.message).toContain('solo se usa la primera');
+    expect(warnings[0]?.message).toBe('Clave «attribute» ignorada: el simulador no la admite');
+    expect(warnings.find((w) => w.path === 'triggers[0].entity_id')?.message).toContain('un disparador por entidad');
     expect(warnings.find((w) => w.path === 'actions[0].target.area_id')?.message).toContain('garaje');
   });
 

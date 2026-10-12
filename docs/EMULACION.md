@@ -26,8 +26,9 @@ Diseño para que los dispositivos del simulador aparezcan en un Home Assistant r
 
 3. **No engañar.** Cada dispositivo indica en la interfaz su «Vía hacia HA» y «Radio: modelada, no real». En HA, `origin` dice «HA Simulator» y `sw_version` dice «simulado».
 4. **Las automatizaciones se ejecutan en un solo sitio.** Con el puente activo se exportan al HA (packages) y se desactivan en el simulador.
-5. **Tiempo real.** Con el puente activo, el simulador entra en «modo en vivo»: velocidad 1x, sin «Ir a…». Pausar o acelerar desacopla el puente: se publica `offline` y HA muestra `unavailable`.
-6. **Los secretos no van en el proyecto.** La contraseña MQTT y los tokens se guardan en IndexedDB aparte y nunca se exportan, ni en la URL compartida ni en las versiones.
+5. **Tiempo real.** Con el puente activo, el simulador entra en «modo en vivo»: velocidad 1x, sin «Ir a…» y sin poder acelerar (controles desactivados con explicación). Pausar pregunta «¿Parar todos los nodos?»: si se acepta, se paran los nodos y el puente se desacopla (se publica `offline`, HA muestra `unavailable`, sus comandos se ignoran y las automatizaciones vuelven al simulador) hasta «Volver a acoplar».
+6. **Los secretos no van en el proyecto.** Las contraseñas MQTT, el usuario de HA y el token del laboratorio (`LAB_TOKEN`) están en `emulator/.env` (0600); el token de larga duración de HA, en `emulator/.secrets/ha-token` (0600). En el navegador, el token del laboratorio, la URL del orquestador y si el lab está activado son un **ajuste local de la máquina** (localStorage, `src/bridge/localLab.ts`): nunca van en el proyecto, en la exportación, en la URL compartida ni en las versiones. Así un proyecto compartido o importado no puede conectar solo con ningún orquestador. Ojo: los snapshots del lab sí contienen secretos de HA (ver Controles).
+7. **Un solo controlador.** Un candado entre pestañas (Web Locks, con BroadcastChannel de reserva) deja controlar el lab a una sola pestaña; el orquestador deja en solo lectura cualquier otra app.
 
 ## Qué se puede emular con la integración real de HA
 
@@ -56,6 +57,7 @@ Navegador (app)  ──WS──►  hasim-orchestrator (Node, red host)
                             ├─ nodos ESPHome host ─► HA (esphome)
                             └─ emuladores Shelly ─► HA (shelly)
 Caddy sirve la app y hace de proxy de /orchestrator y /mqtt en el mismo origen (sin contenido mixto).
+Caddy escucha solo en 127.0.0.1 (LAB_BIND=0.0.0.0 para la LAN) y el orquestador exige el token.
 ```
 
 - El orquestador reconcilia de forma declarativa el JSON del proyecto con los emuladores (crear, actualizar, borrar) y reenvía en los dos sentidos los estados y comandos entre la app y los emuladores.
@@ -63,6 +65,8 @@ Caddy sirve la app y hace de proxy de /orchestrator y /mqtt en el mismo origen (
 - Recursos aproximados: entre 1,5 y 2 GB de RAM y 2 vCPU.
 
 ## Perfil de radio configurable (valores por defecto)
+
+Los perfiles se ajustan por protocolo en el proyecto (`radioProfiles`, sobre estos valores). Hoy se usan de verdad la **latencia** (si el proyecto la ajusta, el motor la usa en lugar de su tabla, `src/simulation/latency.ts`) y el **canal Zigbee**, que el Z2M emulado publica en `bridge/info`. El resto de la tabla (pérdida, saltos, hijos, disponibilidad, interferencia) se guarda y se valida, pero todavía no influye en el motor.
 
 | Protocolo | Latencia/salto | Pérdida | Saltos máx. | Hijos/padre | Canal | Disponibilidad |
 |---|---|---|---|---|---|---|
@@ -80,7 +84,7 @@ Interferencia: el canal Wi-Fi 1 solapa con los Zigbee/Thread 11-14, el 6 con los
 
 - Ciclo de vida por dispositivo: arrancar y parar (estados: parado, arrancando, en marcha, error). También «Arrancar todo» y «Parar todo».
 - «Resetear lab»: limpia los mensajes retenidos, vuelve a publicar todo y restaura los estados iniciales.
-- Snapshots: proyecto y `ha-config` (sin base de datos ni logs), guardados en `emulator/snapshots/`.
+- Snapshots: proyecto y `ha-config` (sin base de datos ni logs), guardados en `emulator/snapshots/` (carpetas 0700, archivos 0600). **Incluyen secretos**: usuarios y tokens de HA (`.storage/auth*`) y credenciales de las integraciones (`.storage/core.config_entries`); la opción «Excluir credenciales (auth*)» deja fuera los primeros. Restaurar necesita el perfil con Docker (`setup.sh --docker`) para parar HA antes de copiar; el proyecto restaurado se valida y se fusiona con el actual.
 - Inspector de tráfico: mensajes del lab con dirección, hora, dispositivo, filtros y exportación.
 
 ## Plan por tandas (E = emulación)
@@ -102,4 +106,5 @@ Interferencia: el canal Wi-Fi 1 solapa con los Zigbee/Thread 11-14, el 6 con los
 - Matter necesita Linux con red `host` e IPv6. No funciona en Docker Desktop de Mac ni de Windows.
 - HA va en tiempo real: no se puede acelerar el reloj de HA sin romperlo (`libfaketime` no es fiable).
 - La app pública de GitHub Pages no puede conectar con `ws://` local (contenido mixto y Local Network Access de Chrome). Para usar el puente, la app se sirve desde el propio entorno (Caddy en `http://localhost:8080`).
+- matterjs-server (perfil `matter`) necesita red `host` y su API (5580) no tiene autenticación: solo en una red de confianza.
 - En este contenedor de desarrollo no se pueden descargar imágenes Docker. La verificación de extremo a extremo se hace en GitHub Actions.

@@ -167,7 +167,9 @@ export function ProjectSettingsDialog() {
           save();
         }}
       >
-        <div role="tabpanel" id={tabPanelId(TABS_PREFIX, 'project')} aria-labelledby={`${TABS_PREFIX}-tab-project`} hidden={tab !== 'project'} className="flex flex-col gap-3">
+        {/* Paneles con renderizado condicional: «hidden» no oculta un elemento con flex/grid. */}
+        {tab === 'project' && (
+        <div role="tabpanel" id={tabPanelId(TABS_PREFIX, 'project')} aria-labelledby={`${TABS_PREFIX}-tab-project`} className="flex flex-col gap-3">
         <fieldset className="flex flex-col gap-2 rounded-md border border-slate-200 p-2">
           <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Ubicación</legend>
           <SelectField
@@ -221,7 +223,9 @@ export function ProjectSettingsDialog() {
           />
         </fieldset>
         </div>
-        <div role="tabpanel" id={tabPanelId(TABS_PREFIX, 'simulation')} aria-labelledby={`${TABS_PREFIX}-tab-simulation`} hidden={tab !== 'simulation'} className="flex flex-col gap-3">
+        )}
+        {tab === 'simulation' && (
+        <div role="tabpanel" id={tabPanelId(TABS_PREFIX, 'simulation')} aria-labelledby={`${TABS_PREFIX}-tab-simulation`} className="flex flex-col gap-3">
           <fieldset className="flex flex-col gap-2 rounded-md border border-slate-200 p-2">
             <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Clima</legend>
             <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -259,14 +263,15 @@ export function ProjectSettingsDialog() {
             <button
               type="button"
               aria-expanded={advOpen}
-              aria-controls={`${TABS_PREFIX}-avanzado`}
+              aria-controls={advOpen ? `${TABS_PREFIX}-avanzado` : undefined}
               onClick={() => setAdvOpen((o) => !o)}
               className="flex w-full items-center gap-1 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
             >
               <span aria-hidden="true">{advOpen ? '▾' : '▸'}</span> Avanzado
               {advancedInvalid && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-red-600" role="img" aria-label="(con errores)" />}
             </button>
-            <div id={`${TABS_PREFIX}-avanzado`} hidden={!advOpen} className="mt-2 grid grid-cols-2 gap-2">
+            {advOpen && (
+            <div id={`${TABS_PREFIX}-avanzado`} className="mt-2 grid grid-cols-2 gap-2">
               <NumberInput label="Probabilidad de fallo en la nube (0 a 1)" value={failureRate} onChange={setFailureRate} invalid={failure === undefined} hint="Entre 0 y 1" />
               <NumberInput
                 label="Semilla aleatoria"
@@ -279,12 +284,20 @@ export function ProjectSettingsDialog() {
               <NumberInput label="Pérdidas con ventana abierta (×)" value={windowFactor} onChange={setWindowFactor} invalid={windowNum === undefined} hint={`Entre ${fmt(L.windowFactor.min)} y ${fmt(L.windowFactor.max)}`} />
               <NumberInput label="Potencia de climatización (°C/h)" value={hvacRate} onChange={setHvacRate} invalid={hvacNum === undefined} hint={`Entre ${fmt(L.hvacRatePerHour.min)} y ${fmt(L.hvacRatePerHour.max)}`} />
             </div>
+            )}
           </div>
         </div>
+        )}
       </form>
-      <div role="tabpanel" id={tabPanelId(TABS_PREFIX, 'lab')} aria-labelledby={`${TABS_PREFIX}-tab-lab`} hidden={tab !== 'lab'}>
-        {tab === 'lab' && <LabSettingsPanel />}
-      </div>
+      {tab === 'lab' && (
+        <div role="tabpanel" id={tabPanelId(TABS_PREFIX, 'lab')} aria-labelledby={`${TABS_PREFIX}-tab-lab`}>
+          <p className="mb-2 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-950" data-testid="lab-settings-note">
+            Los cambios de esta pestaña se aplican al momento: «Guardar» y «Cancelar» solo afectan a las pestañas Proyecto y Simulación. Para
+            revertirlos, usa Deshacer (Ctrl+Z).
+          </p>
+          <LabSettingsPanel />
+        </div>
+      )}
     </Modal>
   );
 }

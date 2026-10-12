@@ -207,13 +207,16 @@ export function BottomPanel() {
           </Button>
         </div>
       </div>
-      {open && (
-        <div
-          role="tabpanel"
-          id={tabPanelId(PREFIX, tab)}
-          aria-labelledby={`${PREFIX}-tab-${tab}`}
-          className="min-h-0 flex-1 overflow-auto border-t border-slate-200"
-        >
+      {/* El panel siempre existe (aria-controls de la pestaña activa apunta a él); plegado, vacío y oculto. */}
+      <div
+        role="tabpanel"
+        id={tabPanelId(PREFIX, tab)}
+        aria-labelledby={`${PREFIX}-tab-${tab}`}
+        hidden={!open}
+        className="min-h-0 flex-1 overflow-auto border-t border-slate-200"
+      >
+        {open && (
+        <>
           {tab === 'validation' && <ValidationPanel issues={issues} />}
           <Suspense fallback={<Loading />}>
             {tab === 'automations' && (automationsModal ? <AutomationsInWorkspace /> : <AutomationsPanel />)}
@@ -224,8 +227,9 @@ export function BottomPanel() {
           </Suspense>
           {tab === 'logbook' && <LogbookPanel />}
           <ExtraTabPanel tab={tab} />
-        </div>
-      )}
+        </>
+        )}
+      </div>
     </section>
   );
 }

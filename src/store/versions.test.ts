@@ -6,7 +6,6 @@ import {
   contentHash,
   deleteProjectVersions,
   deleteVersion,
-  diffProjects,
   listVersions,
   loadVersion,
   pruneAutoVersions,
@@ -14,6 +13,7 @@ import {
   versionsToPrune,
   type VersionMeta,
 } from './versions';
+import { diffProjects } from './versionDiff';
 
 function base(id: string): Project {
   return project([dev('l1', 'hue-white-e27', undefined, { name: 'Luz salón' })], { id, name: 'Casa' });

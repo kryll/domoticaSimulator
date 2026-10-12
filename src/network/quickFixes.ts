@@ -21,14 +21,14 @@ import type {
 import { createDevice, uniqueDeviceName } from '../devices/factory';
 import { entitiesForDevice, slugify } from '../devices/entities';
 import { INTEGRATION_LABELS } from '../devices/labels';
-import { isInfra, isZigbeeCoordinator, requiredHubBrand, ZIGBEE_COORDINATOR_INTEGRATIONS } from '../devices/roles';
+import { HUB_FOR_BRAND, isInfra, isZigbeeCoordinator, requiredHubBrand, ZIGBEE_COORDINATOR_INTEGRATIONS } from '../devices/roles';
 import { renameEntityRefs } from '../devices/renaming';
-import { HUB_FOR_BRAND } from '../export/bom';
 import { groupEntityId, peopleEntities } from '../simulation/logic';
 import { serviceInfo } from '../simulation/serviceCatalog';
 import { NODE_SIZE, placeNewDevices, roomAt } from '../canvas/placement';
 import { polygonBounds, resolveRoomId } from '../canvas/geometry';
-import { canConnect, suggestConnections } from './connections';
+import { canConnect, isWiredLink, suggestConnections } from './connections';
+import { analyzeMesh } from './mesh';
 import { allDefinitions } from '../devices/catalog';
 
 export interface QuickFix {
@@ -116,6 +116,33 @@ function addDevice(
 ): Project {
   const def = defs.find((d) => d.id === definitionId);
   if (!def || !project.floors.some((f) => f.id === where.floorId)) return project;
+  const first = placeDevice(project, defs, def, definitionId, id, where, alsoConnect);
+  if (first.device.roomId && first.connected) return first.project;
+  // Sin sala (p. ej. el servidor no está en ninguna): se prueba en la sala más cercana de esa
+  // planta y luego en las de las demás, y se queda con la primera que lo deja en una sala y
+  // conectado; así el arreglo no crea incidencias nuevas.
+  const anchor = where.near ?? project.devices.find((d) => d.floorId === where.floorId)?.position ?? { x: 0, y: 0 };
+  const candidates = [
+    ...project.rooms.filter((r) => r.floorId === where.floorId && r.polygon.length >= 3).sort((a, b) => roomDistance(a, anchor) - roomDistance(b, anchor)),
+    ...sortedFloors(project).flatMap((f) => (f === where.floorId ? [] : project.rooms.filter((r) => r.floorId === f && r.polygon.length >= 3))),
+  ];
+  for (const room of candidates) {
+    const attempt = placeDevice(project, defs, def, definitionId, id, { floorId: room.floorId, roomId: room.id }, alsoConnect);
+    if (attempt.device.roomId && attempt.connected) return attempt.project;
+  }
+  return first.project;
+}
+
+/** Coloca y conecta el equipo en `where`; dice si ha quedado conectado. */
+function placeDevice(
+  project: Project,
+  defs: DeviceDefinition[],
+  def: DeviceDefinition,
+  definitionId: Id,
+  id: Id,
+  where: { floorId: Id; roomId?: Id; near?: Point },
+  alsoConnect: readonly Id[],
+): { project: Project; device: Device; connected: boolean } {
   const opts: { roomId?: Id; near?: Point } = {};
   if (where.roomId) opts.roomId = where.roomId;
   if (where.near) opts.near = where.near;
@@ -127,7 +154,17 @@ function addDevice(
   if (roomId) device.roomId = roomId;
   else delete device.roomId;
   const next: Project = { ...project, devices: [...project.devices, device] };
-  return withConnections(next, connectionsFor(next, defs, [id, ...alsoConnect]));
+  const connections = connectionsFor(next, defs, [id, ...alsoConnect]);
+  const connected = connections.some((c) => c.sourceId === id || c.targetId === id);
+  return { project: withConnections(next, connections), device, connected };
+}
+
+/** Distancia de un punto al rectángulo que envuelve una sala (0 si está dentro). */
+function roomDistance(r: Room, point: Point): number {
+  const b = polygonBounds(r.polygon);
+  const dx = Math.max(b.x - point.x, 0, point.x - (b.x + b.width));
+  const dy = Math.max(b.y - point.y, 0, point.y - (b.y + b.height));
+  return Math.hypot(dx, dy);
 }
 
 function updateDevices(project: Project, ids: readonly Id[], patch: (d: Device) => Device): Project {
@@ -285,6 +322,147 @@ function moveNear(project: Project, defs: DeviceDefinition[], deviceId: Id, pare
   return withConnections(next, connectionsFor(next, defs, [deviceId]));
 }
 
+/** Conexión explícita entre dos dispositivos (si no existe ya). */
+function addConnection(project: Project, a: Id, b: Id, protocol: Connection['protocol']): Project {
+  if (project.connections.some((c) => (c.sourceId === a && c.targetId === b) || (c.sourceId === b && c.targetId === a))) return project;
+  return { ...project, connections: [...project.connections, { id: newId(), sourceId: a, targetId: b, protocol }] };
+}
+
+const PARENT_ROLES: readonly DeviceDefinition['role'][] = ['access_point', 'ha_server'];
+
+/**
+ * «Conectar a…»: enlace directo con la infraestructura compatible. Para la infraestructura sin
+ * conexión, con el router (punto de acceso) o el servidor; para un dispositivo fuera de cobertura,
+ * solo los enlaces por cable (la radio depende de la distancia: para eso está «Acercar»).
+ */
+function connectToFixes(issue: ValidationIssue, project: Project, defs: DeviceDefinition[]): QuickFix[] {
+  const all = allDefinitions(project, defs);
+  const device = project.devices.find((d) => d.id === issue.deviceIds[0]);
+  if (!device) return [];
+  const dist = (o: Device): number =>
+    (o.floorId === device.floorId ? 0 : 1e6) + Math.hypot(o.position.x - device.position.x, o.position.y - device.position.y);
+  const reachable = issue.code === 'fuera-de-cobertura' ? analyzeMesh(project, all).reachable : undefined;
+  const fixes: QuickFix[] = [];
+  const targets = placed(project, all)
+    .filter((p) => p.device.id !== device.id)
+    .filter((p) => (issue.code === 'infraestructura-sin-conexion' ? PARENT_ROLES.includes(p.def.role) : isInfra(p.def) && (reachable?.has(p.device.id) ?? true)))
+    .sort((a, b) => dist(a.device) - dist(b.device));
+  for (const t of targets) {
+    if (fixes.length >= 2) break;
+    const r = canConnect(device, t.device, all);
+    if (!r.ok) continue;
+    if (issue.code === 'fuera-de-cobertura' && !isWiredLink(device, t.device, all, r.protocol)) continue;
+    const kind = t.def.role === 'ha_server' ? 'al servidor' : t.def.role === 'access_point' ? 'al router' : 'a';
+    const protocol = r.protocol;
+    fixes.push({
+      id: `${issue.id}#connect-${t.device.id}`,
+      label: `Conectar ${kind} «${t.device.name}»`,
+      selectAfter: [device.id],
+      apply: (p) => addConnection(p, device.id, t.device.id, protocol),
+    });
+  }
+  return fixes;
+}
+
+/** Repetidor (router de malla o punto de acceso) para extender cada protocolo. */
+function repeaterDefinition(device: Device, defs: DeviceDefinition[]): DeviceDefinition | undefined {
+  const p = device.protocol;
+  if (p === 'wifi' || p === 'matter') return defs.find((d) => d.role === 'access_point' && d.protocols.includes('wifi'));
+  const routers = defs.filter((d) => d.role === 'router' && d.protocols.includes(p) && d.integrations.includes(device.integration));
+  return routers.find((d) => d.category === 'plug') ?? routers[0];
+}
+
+const PROTOCOL_NAMES: Partial<Record<Device['protocol'], string>> = { zigbee: 'Zigbee', zwave: 'Z-Wave', thread: 'Thread', wifi: 'Wi-Fi', matter: 'Wi-Fi' };
+
+/**
+ * Coloca repetidores en línea desde el equipo alcanzable más cercano hacia el dispositivo, cada uno
+ * lo más lejos posible sin perder la señal, hasta que el dispositivo tenga cobertura (como mucho 6).
+ * Devuelve el proyecto y los ids añadidos; `ok` dice si el dispositivo ha quedado alcanzable.
+ */
+export function addRepeaters(
+  project: Project,
+  defs: DeviceDefinition[],
+  deviceId: Id,
+  def: DeviceDefinition,
+  ids: readonly Id[] = Array.from({ length: 6 }, newId),
+): { project: Project; added: Id[]; ok: boolean } {
+  const all = allDefinitions(project, defs);
+  let p = project;
+  const added: Id[] = [];
+  const target = project.devices.find((d) => d.id === deviceId);
+  if (!target) return { project, added, ok: false };
+  const integration = def.integrations.includes(target.integration) ? target.integration : def.integrations[0];
+  const protocol = def.protocols.includes(target.protocol) ? target.protocol : def.protocols[0];
+  if (!integration || !protocol) return { project, added, ok: false };
+  const make = (q: Project, id: Id, position: Point): Device => {
+    const created = createDevice(def, { floorId: target.floorId, position, name: uniqueDeviceName(`Repetidor ${PROTOCOL_NAMES[target.protocol] ?? ''}`.trim(), q.devices) }, q, all);
+    const d: Device = { ...created, id, integration, protocol };
+    const roomId = roomAt(q, target.floorId, position)?.id;
+    if (roomId) d.roomId = roomId;
+    else delete d.roomId;
+    return d;
+  };
+  for (let step = 0; step < ids.length; step++) {
+    const mesh = analyzeMesh(p, all);
+    if (mesh.reachable.has(deviceId)) return { project: p, added, ok: true };
+    const probeId = newId();
+    // Relé alcanzable más cercano que puede enlazar con un repetidor de este tipo.
+    const relays = placed(p, all)
+      .filter((x) => mesh.reachable.has(x.device.id) && x.device.floorId === target.floorId && (isInfra(x.def) || x.def.role === 'router'))
+      .filter((x) => canConnect(make(p, probeId, x.device.position), x.device, all).ok);
+    const dist = (d: Device): number => Math.hypot(d.position.x - target.position.x, d.position.y - target.position.y);
+    const relay = relays.map((x) => x.device).sort((a, b) => dist(a) - dist(b))[0];
+    if (!relay) break;
+    const at = (t: number): Point => ({
+      x: Math.round(relay.position.x + (target.position.x - relay.position.x) * t),
+      y: Math.round(relay.position.y + (target.position.y - relay.position.y) * t),
+    });
+    const reachableAt = (t: number): boolean => {
+      const q: Project = { ...p, devices: [...p.devices, make(p, probeId, at(t))] };
+      return analyzeMesh(q, all).reachable.has(probeId);
+    };
+    let lo = 0;
+    let hi = 1;
+    if (reachableAt(1)) lo = 1;
+    else {
+      for (let i = 0; i < 14; i++) {
+        const mid = (lo + hi) / 2;
+        if (reachableAt(mid)) lo = mid;
+        else hi = mid;
+      }
+      // Un poco de margen para no quedar en el límite exacto del alcance.
+      lo *= 0.9;
+    }
+    const id = ids[step];
+    if (lo <= 0 || id === undefined) break;
+    const repeater = make(p, id, at(lo));
+    p = { ...p, devices: [...p.devices, repeater] };
+    p = withConnections(p, connectionsFor(p, all, [id, deviceId]));
+    added.push(id);
+  }
+  return { project: p, added, ok: analyzeMesh(p, all).reachable.has(deviceId) };
+}
+
+/** «Añadir un repetidor del protocolo cerca»: solo se ofrece si de verdad le da cobertura. */
+function repeaterFix(issue: ValidationIssue, project: Project, defs: DeviceDefinition[]): QuickFix | undefined {
+  const all = allDefinitions(project, defs);
+  const device = project.devices.find((d) => d.id === issue.deviceIds[0]);
+  if (!device) return undefined;
+  const def = repeaterDefinition(device, all);
+  if (!def) return undefined;
+  const ids = Array.from({ length: 6 }, newId);
+  const preview = addRepeaters(project, all, device.id, def, ids);
+  if (!preview.ok || preview.added.length === 0) return undefined;
+  const n = preview.added.length;
+  const what = def.role === 'access_point' ? (n === 1 ? 'un punto de acceso Wi-Fi' : `${n} puntos de acceso Wi-Fi`) : n === 1 ? `un repetidor ${PROTOCOL_NAMES[device.protocol] ?? ''}` : `${n} repetidores ${PROTOCOL_NAMES[device.protocol] ?? ''}`;
+  return {
+    id: `${issue.id}#add-repeater`,
+    label: `Añadir ${what.trim()} cerca (${def.name})`,
+    selectAfter: preview.added,
+    apply: (p) => addRepeaters(p, all, device.id, def, ids).project,
+  };
+}
+
 function removeConnectionFix(issue: ValidationIssue): QuickFix[] {
   const id = issue.ref?.kind === 'connection' ? issue.ref.id : undefined;
   if (!id) return [];
@@ -325,13 +503,7 @@ function roomFix(issue: ValidationIssue, project: Project): QuickFix[] {
 }
 
 function nearestRoom(rooms: Room[], point: Point): Room | undefined {
-  const dist = (r: Room): number => {
-    const b = polygonBounds(r.polygon);
-    const dx = Math.max(b.x - point.x, 0, point.x - (b.x + b.width));
-    const dy = Math.max(b.y - point.y, 0, point.y - (b.y + b.height));
-    return Math.hypot(dx, dy);
-  };
-  return [...rooms].sort((a, b) => dist(a) - dist(b))[0];
+  return [...rooms].sort((a, b) => roomDistance(a, point) - roomDistance(b, point))[0];
 }
 
 // ---------- Automatizaciones, escenas y scripts ----------
@@ -615,8 +787,9 @@ export function quickFixesFor(issue: ValidationIssue, project: Project, defs: De
       case 'falta-hub-propietario':
         return hubFixes(issue, project, defs);
       case 'fuera-de-cobertura':
+        return [...autoConnectFix(issue, project, defs), ...connectToFixes(issue, project, defs), repeaterFix(issue, project, defs)];
       case 'infraestructura-sin-conexion':
-        return autoConnectFix(issue, project, defs);
+        return [...autoConnectFix(issue, project, defs), ...connectToFixes(issue, project, defs)];
       case 'conexion-invalida':
       case 'conexion-protocolo-incompatible':
         return removeConnectionFix(issue);

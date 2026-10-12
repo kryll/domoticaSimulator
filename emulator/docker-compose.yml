@@ -2,6 +2,11 @@
 # Todo va en red «host» (Linux): Matter necesita IPv6 y mDNS y así no hay que publicar puertos.
 # Arranque: scripts/setup.sh · Parada: scripts/stop.sh · Borrado: scripts/reset.sh
 # restart: "no" — el laboratorio se arranca y se para a voluntad (no vuelve solo al reiniciar el PC).
+#
+# Seguridad: Caddy (8080) escucha solo en 127.0.0.1 salvo que pongas LAB_BIND=0.0.0.0 en .env;
+# Mosquitto y el orquestador, solo en 127.0.0.1. El orquestador exige el token LAB_TOKEN de .env.
+# El control de Docker (docker.sock) NO se monta por defecto: va en docker-compose.docker.yml
+# (setup.sh --docker), necesario para restaurar snapshots.
 name: hasim-lab
 
 services:
@@ -10,23 +15,32 @@ services:
     container_name: hasim-mosquitto
     network_mode: host
     restart: "no"
-    env_file: .env
+    # Solo las dos contraseñas MQTT (no todo .env: el token del lab no hace falta aquí).
+    environment:
+      MQTT_HASIM_PASSWORD: ${MQTT_HASIM_PASSWORD}
+      MQTT_HA_PASSWORD: ${MQTT_HA_PASSWORD}
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./mosquitto/acl:/mosquitto/config/acl:ro
+      - ./mosquitto/acl:/mosquitto/config/acl.src:ro
       - mosquitto-data:/mosquitto/data
-    # Crea el archivo de contraseñas con las de .env (nunca se suben al repositorio).
+    # Crea passwd (con las contraseñas de .env, que nunca se suben) y copia la ACL a una carpeta
+    # propia dentro del contenedor, con propietario mosquitto y modo 0600: así Mosquitto 2 no
+    # avisa de permisos (el archivo montado del host tiene el uid del usuario del PC y modo 0644).
     entrypoint:
       - sh
       - -c
       - |
         set -e
-        rm -f /mosquitto/data/passwd
-        touch /mosquitto/data/passwd
-        mosquitto_passwd -b /mosquitto/data/passwd hasim "$$MQTT_HASIM_PASSWORD"
-        mosquitto_passwd -b /mosquitto/data/passwd homeassistant "$$MQTT_HA_PASSWORD"
-        chown mosquitto:mosquitto /mosquitto/data/passwd
-        chmod 0700 /mosquitto/data/passwd
+        umask 077
+        mkdir -p /mosquitto/auth
+        rm -f /mosquitto/auth/passwd /mosquitto/auth/acl
+        touch /mosquitto/auth/passwd
+        mosquitto_passwd -b /mosquitto/auth/passwd hasim "$$MQTT_HASIM_PASSWORD"
+        mosquitto_passwd -b /mosquitto/auth/passwd homeassistant "$$MQTT_HA_PASSWORD"
+        cp /mosquitto/config/acl.src /mosquitto/auth/acl
+        chown -R mosquitto:mosquitto /mosquitto/auth
+        chmod 0700 /mosquitto/auth
+        chmod 0600 /mosquitto/auth/passwd /mosquitto/auth/acl
         exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -u homeassistant -P \"$$MQTT_HA_PASSWORD\" -t '$$SYS/broker/uptime' -C 1 -W 3"]
@@ -68,13 +82,15 @@ services:
       SNAPSHOTS_DIR: /snapshots
       SECRETS_DIR: /secrets
       HA_CONTAINER: hasim-homeassistant
+      # LAB_TOKEN llega de .env (env_file): el orquestador lo exige a la app y en /project.
+      # Si sirves la app en la LAN con un nombre (p. ej. http://mipc.local:8080), añádelo aquí.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
     volumes:
       - ./ha-config:/ha-config
       - ./snapshots:/snapshots
       - ./.secrets:/secrets
-      # Opcional: permite parar y arrancar el HA del lab al restaurar un snapshot. Da al
-      # orquestador control sobre Docker: quítalo si no lo quieres (HA se reiniciará por su API).
-      - /var/run/docker.sock:/var/run/docker.sock
+    # docker.sock no se monta por defecto (da control total sobre Docker): está en
+    # docker-compose.docker.yml, que activa setup.sh --docker (necesario para restaurar snapshots).
     depends_on:
       mosquitto:
         condition: service_healthy
@@ -84,23 +100,34 @@ services:
     container_name: hasim-caddy
     network_mode: host
     restart: "no"
+    environment:
+      # 127.0.0.1 por defecto: la app y el orquestador solo desde este PC. LAB_BIND=0.0.0.0 en
+      # .env para abrirlo a la LAN (el orquestador sigue exigiendo el token).
+      LAB_BIND: ${LAB_BIND:-127.0.0.1}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ../dist:/srv:ro
       - caddy-data:/data
 
   # ---- Perfiles opcionales que se completan en E2 ----
+  # Z-Wave JS UI no necesita red host: sus puertos (8091 interfaz web, 3000 servidor de Z-Wave
+  # JS para HA) se publican solo en 127.0.0.1.
   zwave-js-ui:
     profiles: ["zwave"]
     image: zwavejs/zwave-js-ui:latest
     container_name: hasim-zwave-js-ui
-    network_mode: host
     restart: "no"
+    ports:
+      - "127.0.0.1:8091:8091"
+      - "127.0.0.1:3000:3000"
     environment:
       TZ: ${TZ:-Europe/Madrid}
     volumes:
       - zwave-data:/usr/src/app/store
 
+  # matterjs-server necesita red host (mDNS e IPv6) y su API WebSocket (5580) escucha en todas
+  # las interfaces y no tiene autenticación: actívalo solo en una red de confianza o bloquea el
+  # 5580 con el cortafuegos (p. ej. «sudo ufw deny 5580»).
   matter-server:
     profiles: ["matter"]
     image: ghcr.io/matter-js/matterjs-server:latest

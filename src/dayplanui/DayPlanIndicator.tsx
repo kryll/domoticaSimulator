@@ -1,17 +1,15 @@
 import { useSimulationStore } from '../store/simulationStore';
 import { useLayoutStore } from '../store/layoutStore';
 import { countLabel } from '../ui/plural';
-import { useBridgeLive } from '../bridge/useBridge';
 import { useViewStore } from '../store/viewStore';
 import { pendingPlanEvents } from './dayPlanActions';
 
 /** Indicador «Día típico» en los controles de la simulación (abre el diálogo). */
 export function DayPlanIndicator() {
   const pending = useSimulationStore((s) => pendingPlanEvents(s.sim.pending));
-  const live = useBridgeLive();
   const presentation = useViewStore((s) => s.presentation);
   if (pending === 0) {
-    if (live || presentation) return null;
+    if (presentation) return null;
     return (
       <button
         type="button"
