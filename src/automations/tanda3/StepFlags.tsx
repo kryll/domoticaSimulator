@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react';
-import type { ActionFlags, StepToggle, Weekday } from '../../types';
+import type { ActionFlags, Weekday } from '../../types';
+import { WEEKDAYS, withContinueOnError, withEnabled } from './stepFlags';
 import { cx } from '../../ui/cx';
 
 /** Interruptor accesible (role=switch) con etiqueta visible. */
@@ -22,21 +23,6 @@ export function SwitchToggle({ checked, onChange, label, srLabel }: { checked: b
       {label}
     </button>
   );
-}
-
-/** Quita `enabled` cuando vale true (es el valor por defecto de HA). */
-export function withEnabled<T extends StepToggle>(value: T, on: boolean): T {
-  const next = { ...value };
-  if (on) delete next.enabled;
-  else next.enabled = false;
-  return next;
-}
-
-export function withContinueOnError<T extends ActionFlags>(value: T, on: boolean): T {
-  const next = { ...value };
-  if (on) next.continueOnError = true;
-  else delete next.continueOnError;
-  return next;
 }
 
 /**
@@ -73,16 +59,6 @@ export function StepShell<T extends ActionFlags>({
     </div>
   );
 }
-
-export const WEEKDAYS: Array<{ key: Weekday; short: string; name: string }> = [
-  { key: 'mon', short: 'L', name: 'lunes' },
-  { key: 'tue', short: 'M', name: 'martes' },
-  { key: 'wed', short: 'X', name: 'miércoles' },
-  { key: 'thu', short: 'J', name: 'jueves' },
-  { key: 'fri', short: 'V', name: 'viernes' },
-  { key: 'sat', short: 'S', name: 'sábado' },
-  { key: 'sun', short: 'D', name: 'domingo' },
-];
 
 /** Chips L-M-X-J-V-S-D. Ninguno marcado = todos los días. */
 export function WeekdayChips({ value, onChange }: { value: Weekday[] | undefined; onChange: (days: Weekday[] | undefined) => void }) {

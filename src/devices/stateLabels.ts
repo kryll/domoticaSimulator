@@ -2,7 +2,7 @@
 // Tabla única: la usan las trazas, el lienzo, los selectores de estado de disparadores y
 // condiciones, los controles y el informe. Lógica pura.
 import type { EntityCapabilities, EntityStateValue } from '../types';
-import { BUTTON_ACTION_LABELS, HVAC_MODE_LABELS, labelOf } from './labels';
+import { ALARM_STATE_LABELS, BUTTON_ACTION_LABELS, HVAC_MODE_LABELS, labelOf, VALVE_STATE_LABELS } from './labels';
 
 export interface StateOption {
   value: string;
@@ -82,6 +82,12 @@ export const DOMAIN_STATE_LABELS: Record<string, Record<string, string>> = {
   sun: { above_horizon: 'Sobre el horizonte', below_horizon: 'Bajo el horizonte' },
   script: { on: 'En ejecución', off: 'Parado' },
   automation: { on: 'Activada', off: 'Desactivada' },
+  // Tanda 3
+  alarm_control_panel: ALARM_STATE_LABELS,
+  valve: VALVE_STATE_LABELS,
+  siren: { on: 'Sonando', off: 'Apagada' },
+  input_boolean: { on: 'Activado', off: 'Desactivado' },
+  timer: { idle: 'Inactivo', active: 'En marcha', paused: 'En pausa' },
 };
 
 /** Estados que no se ofrecen en los selectores aunque tengan traducción (transitorios). */

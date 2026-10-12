@@ -21,6 +21,26 @@ npm run dev
 
 Abre la URL que muestra la consola (por defecto http://localhost:5173). Al arrancar por primera vez se carga una casa de demostración.
 
+## Laboratorio con Home Assistant real (opcional)
+
+Además de la simulación en el navegador, el proyecto trae un **laboratorio** para tu PC: un Home Assistant real (de pruebas, nunca el de tu casa) al que se conectan los dispositivos del proyecto como si fueran de verdad. Es 100 % gratuito y libre (Docker, Home Assistant, Mosquitto, Caddy y Node) y, una vez descargadas las imágenes, funciona sin Internet.
+
+Requisitos: Linux con Docker Engine, unos 2 GB de RAM libres y unos 5 GB de disco.
+
+```bash
+# 1. Instala Docker Engine (gratuito): https://docs.docker.com/engine/install/
+#    y Node.js 22 (si no lo tienes, setup.sh compila la app dentro de un contenedor).
+# 2. Clona y arranca el laboratorio
+git clone https://github.com/kryll/domoticaSimulator.git
+cd domoticaSimulator
+emulator/scripts/setup.sh
+```
+
+3. Abre la app en http://localhost:8080 → **Ajustes → Laboratorio** → «Conectar con el laboratorio».
+4. Abre Home Assistant en http://localhost:8123 (usuario y contraseña en `emulator/.env`): los dispositivos del proyecto aparecen con sus entidades.
+
+Para parar: `emulator/scripts/stop.sh`. Para borrarlo y empezar de cero: `emulator/scripts/reset.sh`. La versión publicada en GitHub Pages no puede hablar con el laboratorio (el navegador bloquea `ws://` local desde `https://`): usa la que sirve el propio laboratorio en el puerto 8080. Detalles en [emulator/README.md](emulator/README.md).
+
 ## Comandos
 
 | Comando | Qué hace |

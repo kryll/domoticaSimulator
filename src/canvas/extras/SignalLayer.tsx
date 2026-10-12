@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { knownDefinitions } from '../analysis';
 import { ViewportPortal } from '@xyflow/react';
 import type { Floor, Project } from '../../types';
-import { PROTOCOL_LABELS, catalog } from '../../devices/catalog';
+import { PROTOCOL_LABELS } from '../../devices/catalog';
 import { heatSourcesFor, rssiHeatmap, type Heatmap } from '../../network/walls';
 import { useExtrasStore, type SignalProtocol } from '../../store/extrasStore';
 import { heatGridFor, marginRgba, SIGNAL_LEGEND } from './signalGrid';
@@ -27,7 +28,7 @@ function useHeatmap(project: Project, floor: Floor, protocol: SignalProtocol): {
   return useMemo(() => {
     // Solo lo que afecta a la señal: escala y paredes.
     const local: Floor = { id, name: '', level: 0, pixelsPerMeter, ...(walls ? { walls } : {}) };
-    const sources = heatSourcesFor({ ...projectRef.current, devices }, catalog, id, protocol);
+    const sources = heatSourcesFor({ ...projectRef.current, devices }, knownDefinitions(), id, protocol);
     const points = [...devices.map((d) => d.position), ...rooms.flatMap((r) => r.polygon)];
     const grid = heatGridFor(local, points);
     if (!grid || sources.length === 0) return { map: null, sources: sources.length };
@@ -83,7 +84,7 @@ const PROTOCOLS: SignalProtocol[] = ['zigbee', 'wifi', 'thread', 'zwave'];
 export function SignalLegend({ project, floor }: { project: Project; floor: Floor }) {
   const protocol = useExtrasStore((s) => s.signalProtocol);
   const setProtocol = useExtrasStore((s) => s.setSignalProtocol);
-  const sources = useMemo(() => heatSourcesFor(project, catalog, floor.id, protocol).length, [project, floor.id, protocol]);
+  const sources = useMemo(() => heatSourcesFor(project, knownDefinitions(), floor.id, protocol).length, [project, floor.id, protocol]);
   return (
     <div className="flex flex-col gap-1 rounded-md border border-slate-200 bg-white/95 px-2 py-1 text-xs shadow-sm" data-export-ignore="">
       <label className="flex items-center gap-1 font-semibold text-slate-700">

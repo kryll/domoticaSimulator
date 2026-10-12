@@ -120,13 +120,13 @@ actions:
       'triggers[0].attribute',
       'triggers[0].entity_id',
       'triggers[0].to',
-      'conditions[0].weekday',
+      // Tanda 3: weekday, enabled y continue_on_error ya se admiten.
       'actions[0].response_variable',
-      'actions[0].enabled',
       'actions[0].target.device_id',
       'actions[0].target.area_id',
-      'actions[1].choose[0].sequence[0].continue_on_error',
     ]);
+    expect(a.conditions[0]).toMatchObject({ type: 'time', weekday: ['mon', 'tue'] });
+    expect(a.actions[0]?.enabled).toBe(false);
     expect(warnings[0]?.message).toBe('Clave «description» ignorada: el simulador no la admite');
     expect(warnings.find((w) => w.path === 'triggers[0].entity_id')?.message).toContain('solo se usa la primera');
     expect(warnings.find((w) => w.path === 'actions[0].target.area_id')?.message).toContain('garaje');

@@ -187,6 +187,40 @@ const AUTOMATIONS: Automation[] = [
       },
     ],
   },
+  // Tanda 3: helpers (input_boolean «Modo vacaciones» y timer «Cafetera»).
+  {
+    id: 'demo-auto-cafetera-timer',
+    name: 'Cafetera: apagar sola a los 20 minutos',
+    enabled: true,
+    mode: 'restart',
+    triggers: [
+      { type: 'state', entityId: 'switch.cafetera', to: 'on', id: 'encendida' },
+      { type: 'event', eventType: 'timer.finished', eventData: { entity_id: 'timer.cafetera' }, id: 'fin' },
+    ],
+    conditions: [],
+    actions: [
+      {
+        type: 'choose',
+        choices: [
+          { conditions: [{ type: 'trigger', ids: ['encendida'] }], sequence: [{ type: 'service', service: 'timer.start', entityId: 'timer.cafetera' }] },
+          { conditions: [{ type: 'trigger', ids: ['fin'] }], sequence: [{ type: 'service', service: 'switch.turn_off', entityId: 'switch.cafetera' }] },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'demo-auto-vacaciones',
+    name: 'Modo vacaciones: simular presencia al anochecer',
+    enabled: true,
+    mode: 'single',
+    triggers: [{ type: 'sun', event: 'sunset', offsetMinutes: 30 }],
+    conditions: [{ type: 'state', entityId: 'input_boolean.modo_vacaciones', state: 'on' }],
+    actions: [
+      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness_pct: 70 } },
+      { type: 'delay', seconds: 7200 },
+      { type: 'service', service: 'light.turn_off', entityId: 'light.luz_salon' },
+    ],
+  },
 ];
 
 const SCENES: Scene[] = [
@@ -256,6 +290,10 @@ export function createDemoProject(): Project {
     ],
     zones: [{ id: 'demo-trabajo', name: 'Trabajo', kind: 'work', latitude: 40.453, longitude: -3.6883, radius: 200 }],
     groups: [{ id: 'demo-grupo-pb', name: 'Planta baja', domain: 'light', entityIds: ['light.luz_salon', 'light.luz_pasillo'] }],
+    helpers: [
+      { id: 'demo-helper-vacaciones', type: 'input_boolean', name: 'Modo vacaciones', icon: 'mdi:palm-tree' },
+      { id: 'demo-helper-cafetera', type: 'timer', name: 'Cafetera', duration: 1200, icon: 'mdi:coffee-maker' },
+    ],
   };
   return { ...base, connections: suggestConnections(base, catalog) };
 }

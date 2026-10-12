@@ -141,7 +141,7 @@ export function FloorBar() {
             useExtrasStore.getState().openFloorMenu({ floorId: f.id, x: e.clientX, y: e.clientY });
           }}
           className={cx(
-            'rounded-md px-2 py-0.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500',
+            'shrink-0 whitespace-nowrap rounded-md px-2 py-0.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500',
             current?.id === f.id ? 'bg-white font-semibold text-sky-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:bg-white',
           )}
         >

@@ -199,6 +199,28 @@ export function MediaBody({ view }: BodyProps) {
   );
 }
 
+/** Tanda 3: alarma (desarmada, armada o disparada). */
+export function AlarmBody({ view }: BodyProps) {
+  const st = view.state ?? '';
+  const tone = st === 'triggered' ? 'bg-red-600 text-white ha-flicker' : st.startsWith('armed') ? 'bg-emerald-100 text-emerald-900' : st === 'arming' || st === 'pending' ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-700';
+  return (
+    <div className="flex items-center gap-1" data-testid="node-summary">
+      <span className={`rounded px-1.5 text-xs font-semibold ${tone}`}>{view.summary}</span>
+    </div>
+  );
+}
+
+/** Tanda 3: válvula (abierta deja pasar el agua). */
+export function ValveBody({ view }: BodyProps) {
+  const open = view.state === 'open' || view.state === 'opening';
+  return (
+    <div className="flex items-center gap-1.5">
+      <span aria-hidden="true" className={`h-2 w-6 rounded-full ${open ? 'bg-sky-500' : 'bg-slate-300'}`} />
+      <Summary view={view} />
+    </div>
+  );
+}
+
 export function GenericBody({ view }: BodyProps) {
   return <Summary view={view} />;
 }
@@ -243,6 +265,10 @@ export function NodeBody(props: BodyProps) {
       return <LockBody {...props} />;
     case 'media':
       return <MediaBody {...props} />;
+    case 'alarm':
+      return <AlarmBody {...props} />;
+    case 'valve':
+      return <ValveBody {...props} />;
     default:
       return <GenericBody {...props} />;
   }

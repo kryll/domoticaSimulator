@@ -128,7 +128,7 @@
     "id": "aqara-hub-m3",
     "brand": "Aqara",
     "model": "HM-G01D",
-    "name": "Aqara Hub M3 (border router Thread)",
+    "name": "Aqara Hub M3 (alarma y border router Thread)",
     "category": "hub",
     "protocols": [
       "zigbee",
@@ -144,7 +144,27 @@
     "role": "hub",
     "power": "mains",
     "rangeMeters": 30,
-    "entities": [],
+    "entities": [
+      {
+        "key": "alarm",
+        "domain": "alarm_control_panel",
+        "name": "Alarma",
+        "initialState": "disarmed",
+        "capabilities": {
+          "alarmModes": [
+            "armed_home",
+            "armed_away",
+            "armed_night"
+          ]
+        }
+      },
+      {
+        "key": "siren",
+        "domain": "siren",
+        "name": "Sirena",
+        "initialState": "off"
+      }
+    ],
     "icon": "hub",
     "priceEur": 129
   },
@@ -2882,5 +2902,1290 @@
     ],
     "icon": "vacuum",
     "priceEur": 249
+  },
+  {
+    "id": "aqara-smoke-detector",
+    "brand": "Aqara",
+    "model": "JY-GZ-01AQ",
+    "name": "Aqara Smart Smoke Detector",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "smoke",
+        "domain": "binary_sensor",
+        "name": "Humo",
+        "deviceClass": "smoke",
+        "initialState": "off"
+      },
+      {
+        "key": "smoke_density",
+        "domain": "sensor",
+        "name": "Densidad de humo",
+        "unit": "dB/m",
+        "initialState": 0
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 45
+  },
+  {
+    "id": "heiman-smoke-hs1sa",
+    "brand": "Heiman",
+    "model": "HS1SA-E",
+    "name": "Heiman detector de humo Zigbee",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "smoke",
+        "domain": "binary_sensor",
+        "name": "Humo",
+        "deviceClass": "smoke",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 22
+  },
+  {
+    "id": "heiman-co-hs1ca",
+    "brand": "Heiman",
+    "model": "HS1CA-E",
+    "name": "Heiman detector de monóxido de carbono Zigbee",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "co",
+        "domain": "binary_sensor",
+        "name": "Monóxido de carbono",
+        "deviceClass": "carbon_monoxide",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 29
+  },
+  {
+    "id": "netatmo-smoke-alarm",
+    "brand": "Netatmo",
+    "model": "NSA-EC",
+    "name": "Netatmo Detector de Humo Inteligente",
+    "category": "sensor",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "netatmo",
+      "homekit_device"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "smoke",
+        "domain": "binary_sensor",
+        "name": "Humo",
+        "deviceClass": "smoke",
+        "initialState": "off"
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 89
+  },
+  {
+    "id": "netatmo-co-alarm",
+    "brand": "Netatmo",
+    "model": "NCO-EC",
+    "name": "Netatmo Detector de Monóxido de Carbono",
+    "category": "sensor",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "netatmo",
+      "homekit_device"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "co",
+        "domain": "binary_sensor",
+        "name": "Monóxido de carbono",
+        "deviceClass": "carbon_monoxide",
+        "initialState": "off"
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 89
+  },
+  {
+    "id": "heiman-siren",
+    "brand": "Heiman",
+    "model": "HS2WD-E",
+    "name": "Heiman sirena Zigbee",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "siren",
+        "domain": "siren",
+        "name": "Sirena",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 35
+  },
+  {
+    "id": "daikin-onecta-perfera",
+    "brand": "Daikin",
+    "model": "FTXM35R + RXM35R",
+    "name": "Daikin Perfera (Onecta) aire acondicionado",
+    "category": "climate",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "daikin_onecta"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "climate",
+        "domain": "climate",
+        "name": "Aire acondicionado",
+        "initialState": "off",
+        "capabilities": {
+          "hvacModes": [
+            "off",
+            "cool",
+            "heat",
+            "dry",
+            "fan_only",
+            "heat_cool"
+          ],
+          "fanModes": [
+            "auto",
+            "quiet",
+            "low",
+            "medium",
+            "high"
+          ],
+          "presetModes": [
+            "none",
+            "eco",
+            "boost"
+          ],
+          "minTemp": 18,
+          "maxTemp": 30,
+          "tempStep": 0.5,
+          "powerWatts": 1100
+        }
+      },
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 24
+      },
+      {
+        "key": "outside_temperature",
+        "domain": "sensor",
+        "name": "Temperatura exterior",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 30
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "thermostat",
+    "priceEur": 950
+  },
+  {
+    "id": "sensibo-air",
+    "brand": "Sensibo",
+    "model": "SKY-AIR",
+    "name": "Sensibo Air mando IR para aire acondicionado",
+    "category": "climate",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "sensibo",
+      "homekit_device"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "usb",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "climate",
+        "domain": "climate",
+        "name": "Aire acondicionado",
+        "initialState": "off",
+        "capabilities": {
+          "hvacModes": [
+            "off",
+            "cool",
+            "heat",
+            "dry",
+            "fan_only",
+            "heat_cool"
+          ],
+          "fanModes": [
+            "auto",
+            "low",
+            "medium",
+            "high"
+          ],
+          "minTemp": 16,
+          "maxTemp": 30,
+          "tempStep": 1
+        }
+      },
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 24
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      }
+    ],
+    "icon": "thermostat",
+    "priceEur": 129
+  },
+  {
+    "id": "tuya-ir-ac",
+    "brand": "Tuya",
+    "model": "S08 (ZS08)",
+    "name": "Tuya mando IR Wi-Fi para aire acondicionado",
+    "category": "climate",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "tuya"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "usb",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "climate",
+        "domain": "climate",
+        "name": "Aire acondicionado",
+        "initialState": "off",
+        "capabilities": {
+          "hvacModes": [
+            "off",
+            "cool",
+            "heat",
+            "fan_only",
+            "dry"
+          ],
+          "fanModes": [
+            "auto",
+            "low",
+            "medium",
+            "high"
+          ],
+          "minTemp": 16,
+          "maxTemp": 30,
+          "tempStep": 1
+        }
+      },
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 24
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      }
+    ],
+    "icon": "thermostat",
+    "priceEur": 22
+  },
+  {
+    "id": "shelly-pro-3em",
+    "brand": "Shelly",
+    "model": "SPEM-003CEBEU",
+    "name": "Shelly Pro 3EM medidor de energía trifásico",
+    "category": "sensor",
+    "protocols": [
+      "ethernet",
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      },
+      {
+        "key": "power_a",
+        "domain": "sensor",
+        "name": "Potencia fase A",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "power_b",
+        "domain": "sensor",
+        "name": "Potencia fase B",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "power_c",
+        "domain": "sensor",
+        "name": "Potencia fase C",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "voltage",
+        "domain": "sensor",
+        "name": "Tensión",
+        "deviceClass": "voltage",
+        "unit": "V",
+        "initialState": 230
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 129
+  },
+  {
+    "id": "shelly-em",
+    "brand": "Shelly",
+    "model": "SHEM",
+    "name": "Shelly EM medidor de energía",
+    "category": "sensor",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      },
+      {
+        "key": "voltage",
+        "domain": "sensor",
+        "name": "Tensión",
+        "deviceClass": "voltage",
+        "unit": "V",
+        "initialState": 230
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 49
+  },
+  {
+    "id": "sonoff-swv",
+    "brand": "SONOFF",
+    "model": "SWV",
+    "name": "SONOFF válvula de agua Zigbee",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "valve",
+        "domain": "valve",
+        "name": "Válvula",
+        "deviceClass": "water",
+        "initialState": "open"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 39
+  },
+  {
+    "id": "tuya-water-valve",
+    "brand": "Tuya",
+    "model": "BW-SHV",
+    "name": "Tuya válvula de agua Wi-Fi",
+    "category": "switch",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "tuya"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "valve",
+        "domain": "valve",
+        "name": "Válvula",
+        "deviceClass": "water",
+        "initialState": "open"
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 35
+  },
+  {
+    "id": "shelly-1-garage",
+    "brand": "Shelly",
+    "model": "S3SW-001X16EU + sensor de contacto",
+    "name": "Shelly 1 Gen3 para puerta de garaje",
+    "category": "cover",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "garage",
+        "domain": "cover",
+        "name": "Puerta de garaje",
+        "deviceClass": "garage",
+        "initialState": "closed",
+        "capabilities": {
+          "travelSeconds": 15
+        }
+      },
+      {
+        "key": "contact",
+        "domain": "binary_sensor",
+        "name": "Contacto",
+        "deviceClass": "garage_door",
+        "initialState": "off"
+      }
+    ],
+    "icon": "cover",
+    "priceEur": 32
+  },
+  {
+    "id": "meross-msg100",
+    "brand": "Meross",
+    "model": "MSG100",
+    "name": "Meross abridor de garaje Wi-Fi",
+    "category": "cover",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "meross_lan",
+      "homekit_device"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "garage",
+        "domain": "cover",
+        "name": "Puerta de garaje",
+        "deviceClass": "garage",
+        "initialState": "closed",
+        "capabilities": {
+          "travelSeconds": 15
+        }
+      }
+    ],
+    "icon": "cover",
+    "priceEur": 49
+  },
+  {
+    "id": "tuya-garage-opener",
+    "brand": "Tuya",
+    "model": "GDC311ZBQ1",
+    "name": "Tuya controlador de puerta de garaje Wi-Fi",
+    "category": "cover",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "tuya"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "garage",
+        "domain": "cover",
+        "name": "Puerta de garaje",
+        "deviceClass": "garage",
+        "initialState": "closed",
+        "capabilities": {
+          "travelSeconds": 15
+        }
+      },
+      {
+        "key": "contact",
+        "domain": "binary_sensor",
+        "name": "Contacto",
+        "deviceClass": "garage_door",
+        "initialState": "off"
+      }
+    ],
+    "icon": "cover",
+    "priceEur": 29
+  },
+  {
+    "id": "aqara-tvoc",
+    "brand": "Aqara",
+    "model": "VOCKQJK11LM",
+    "name": "Aqara TVOC monitor de calidad del aire",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "voc",
+        "domain": "sensor",
+        "name": "COV",
+        "deviceClass": "volatile_organic_compounds_parts",
+        "unit": "ppb",
+        "initialState": 120
+      },
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 22
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 48
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 39
+  },
+  {
+    "id": "ikea-vindstyrka",
+    "brand": "IKEA",
+    "model": "E2112",
+    "name": "IKEA VINDSTYRKA sensor de calidad del aire",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "usb",
+    "requiresHub": "IKEA",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "pm25",
+        "domain": "sensor",
+        "name": "PM2,5",
+        "deviceClass": "pm25",
+        "unit": "µg/m³",
+        "initialState": 8
+      },
+      {
+        "key": "voc_index",
+        "domain": "sensor",
+        "name": "Índice COV",
+        "initialState": 100
+      },
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 22
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 48
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 40
+  },
+  {
+    "id": "eve-energy-matter",
+    "brand": "Eve",
+    "model": "20EBO8301",
+    "name": "Eve Energy (Matter) enchufe",
+    "category": "plug",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2300
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug",
+    "priceEur": 40
+  },
+  {
+    "id": "eve-door-window",
+    "brand": "Eve",
+    "model": "20EBN9901",
+    "name": "Eve Door & Window (Matter)",
+    "category": "sensor",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "door",
+        "domain": "binary_sensor",
+        "name": "Puerta",
+        "deviceClass": "door",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 40
+  },
+  {
+    "id": "nanoleaf-essentials-e27",
+    "brand": "Nanoleaf",
+    "model": "NL45-0800WT240E27",
+    "name": "Nanoleaf Essentials bombilla E27 (Matter)",
+    "category": "light",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 2700,
+          "maxKelvin": 6500,
+          "powerWatts": 9
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 20
+  },
+  {
+    "id": "roborock-s8",
+    "brand": "Roborock",
+    "model": "S8",
+    "name": "Roborock S8 robot aspirador",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "roborock"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 549
+  },
+  {
+    "id": "ecovacs-deebot-t30",
+    "brand": "Ecovacs",
+    "model": "DEEBOT T30 Omni",
+    "name": "Ecovacs DEEBOT T30 Omni robot aspirador",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "ecovacs"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 599
+  },
+  {
+    "id": "hue-dimmer-switch",
+    "brand": "Philips Hue",
+    "model": "RWL022",
+    "name": "Philips Hue Dimmer Switch",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "hue",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Philips Hue",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "action",
+        "domain": "sensor",
+        "name": "Acción",
+        "initialState": "none",
+        "capabilities": {
+          "buttonActions": [
+            "on_press",
+            "on_hold",
+            "up_press",
+            "down_press",
+            "off_press",
+            "off_hold"
+          ]
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "button",
+    "priceEur": 22
+  },
+  {
+    "id": "ikea-rodret",
+    "brand": "IKEA",
+    "model": "E2201",
+    "name": "IKEA RODRET mando regulador",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "IKEA",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "action",
+        "domain": "sensor",
+        "name": "Acción",
+        "initialState": "none",
+        "capabilities": {
+          "buttonActions": [
+            "on",
+            "off",
+            "brightness_move_up",
+            "brightness_move_down",
+            "brightness_stop"
+          ]
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "button",
+    "priceEur": 8
+  },
+  {
+    "id": "esphome-esp32",
+    "brand": "ESPHome",
+    "model": "ESP32-DevKitC + BME280 + PIR",
+    "name": "ESPHome ESP32 con sensores",
+    "category": "sensor",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "esphome"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "usb",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 21.5
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      },
+      {
+        "key": "pressure",
+        "domain": "sensor",
+        "name": "Presión",
+        "deviceClass": "pressure",
+        "unit": "hPa",
+        "initialState": 1013
+      },
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 15
+  },
+  {
+    "id": "aeotec-multisensor-7",
+    "brand": "Aeotec",
+    "model": "ZWA024",
+    "name": "Aeotec MultiSensor 7",
+    "category": "sensor",
+    "protocols": [
+      "zwave"
+    ],
+    "integrations": [
+      "zwave_js"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      },
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 21.5
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      },
+      {
+        "key": "illuminance",
+        "domain": "sensor",
+        "name": "Iluminancia",
+        "deviceClass": "illuminance",
+        "unit": "lx",
+        "initialState": 120
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor",
+    "priceEur": 65
+  },
+  {
+    "id": "fibaro-wall-plug",
+    "brand": "Fibaro",
+    "model": "FGWPE/F-102 ZW5",
+    "name": "Fibaro Wall Plug (Z-Wave)",
+    "category": "plug",
+    "protocols": [
+      "zwave"
+    ],
+    "integrations": [
+      "zwave_js"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 40,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2500
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug",
+    "priceEur": 55
+  },
+  {
+    "id": "zooz-zen71",
+    "brand": "Zooz",
+    "model": "ZEN71 800LR",
+    "name": "Zooz ZEN71 interruptor de pared (Z-Wave)",
+    "category": "switch",
+    "protocols": [
+      "zwave"
+    ],
+    "integrations": [
+      "zwave_js"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 40,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Interruptor",
+        "initialState": "off"
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 35
   }
 ]

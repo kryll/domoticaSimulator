@@ -3,9 +3,8 @@ import type { Failures } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
-import { catalog } from '../devices/catalog';
 import { ROLE_LABELS } from '../devices/labels';
-import { definitionOf } from '../canvas/analysis';
+import { definitionOf, knownDefinitions } from '../canvas/analysis';
 import { FAILURE_SCENARIOS } from './scenarios';
 import { NO_FAILURES, hasFailures } from '../ui/failures';
 import { Button } from '../ui/Button';
@@ -58,7 +57,7 @@ export function ScenariosMenuBody({ onDone }: { onDone: () => void }) {
               title={sc.description}
               className="rounded px-1 py-1 text-left text-sm text-slate-700 hover:bg-slate-50 focus:bg-sky-50 focus:outline-none"
               onClick={() => {
-                setFailures({ ...NO_FAILURES, ...sc.failures(project, catalog) });
+                setFailures({ ...NO_FAILURES, ...sc.failures(project, knownDefinitions()) });
                 useUiStore.getState().setBottomTab('impact');
                 onDone();
               }}

@@ -1,7 +1,7 @@
 // Plantillas de automatización tipo blueprint (B7): entradas tipadas y construcción pura de la
 // automatización, más sugerencias según los dispositivos del proyecto.
 import type { Action, Automation, Condition, DeviceDefinition, EntityDomain, Project, Trigger } from '../types';
-import { catalog } from '../devices/catalog';
+import { allDefinitions } from '../devices/catalog';
 import { entitiesForDevice } from '../devices/entities';
 import { notifyAction } from '../simulation/notify';
 
@@ -72,7 +72,8 @@ export interface ProjectEntity {
 }
 
 /** Entidades del proyecto con sala y categoría, para elegir candidatas. */
-export function projectEntities(project: Pick<Project, 'devices'>, defs: DeviceDefinition[] = catalog): ProjectEntity[] {
+export function projectEntities(project: Pick<Project, 'devices' | 'customDefinitions'>, defs: DeviceDefinition[] = allDefinitions(project)): ProjectEntity[] {
+  defs = allDefinitions(project, defs);
   const out: ProjectEntity[] = [];
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);
@@ -95,7 +96,8 @@ function matches(input: EntityInput, e: ProjectEntity): boolean {
 }
 
 /** entity_id del proyecto válidos para una entrada de tipo entidad. */
-export function templateCandidates(project: Pick<Project, 'devices'>, defs: DeviceDefinition[], input: EntityInput): string[] {
+export function templateCandidates(project: Pick<Project, 'devices' | 'customDefinitions'>, defs: DeviceDefinition[], input: EntityInput): string[] {
+  defs = allDefinitions(project, defs);
   return projectEntities(project, defs).filter((e) => matches(input, e)).map((e) => e.entityId);
 }
 
@@ -454,6 +456,7 @@ export function isTemplateApplicable(template: AutomationTemplate, project: Proj
 
 /** Plantillas que tienen sentido con los dispositivos del proyecto (solo las aplicables), con valores propuestos. */
 export function suggestTemplates(project: Project, defs: DeviceDefinition[]): TemplateSuggestion[] {
+  defs = allDefinitions(project, defs);
   const entities = projectEntities(project, defs);
   const roomName = (id: string | undefined): string | undefined => project.rooms.find((r) => r.id === id)?.name;
   const result: TemplateSuggestion[] = [];

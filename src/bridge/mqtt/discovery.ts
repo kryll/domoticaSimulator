@@ -178,6 +178,44 @@ function genericComponents(e: BridgeEntity): Components {
       };
     case 'button':
       return { [e.key]: { p: 'button', ...base, command_topic: `${t}/set`, payload_press: 'PRESS' } };
+    case 'siren':
+      return { [e.key]: { p: 'siren', ...base, state_topic: t, state_value_template: tpl('state'), command_topic: `${t}/set`, payload_on: 'ON', payload_off: 'OFF' } };
+    case 'valve':
+      return {
+        [e.key]: {
+          p: 'valve',
+          ...base,
+          state_topic: t,
+          value_template: tpl('state'),
+          command_topic: `${t}/set`,
+          payload_open: 'OPEN',
+          payload_close: 'CLOSE',
+          payload_stop: 'STOP',
+          state_open: 'open',
+          state_closed: 'closed',
+          state_opening: 'opening',
+          state_closing: 'closing',
+          reports_position: false,
+        },
+      };
+    case 'alarm_control_panel': {
+      // El código lo comprueba el simulador: HA lo pide y lo manda en el comando (REMOTE_CODE).
+      const modes = e.caps.alarmModes ?? ['armed_home', 'armed_away'];
+      return {
+        [e.key]: {
+          p: 'alarm_control_panel',
+          ...base,
+          state_topic: t,
+          value_template: tpl('state'),
+          command_topic: `${t}/set`,
+          command_template: '{"action": "{{ action }}", "code": "{{ code }}"}',
+          code: 'REMOTE_CODE',
+          code_arm_required: e.caps.codeArmRequired === true,
+          code_disarm_required: true,
+          supported_features: [...modes.map((m) => m.replace(/^armed_/, 'arm_')), 'trigger'],
+        },
+      };
+    }
     case 'media_player': {
       const obj = objectPart(e.entityId);
       const label = (suffix: string): string => (e.name ? `${e.name} · ${suffix}` : suffix);

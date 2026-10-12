@@ -3,16 +3,19 @@ import type { DeviceDefinition } from '../types';
 import { PROTOCOL_INK } from '../canvas/style';
 import { deviceIcon } from '../devices/presentation';
 import { DEVICE_DRAG_MIME } from '../canvas/types';
-import { PROTOCOL_LABELS, isCloud } from '../devices/catalog';
+import { PROTOCOL_LABELS, isCloud, isCustomDefinitionId } from '../devices/catalog';
 import { Badge } from '../ui/Badge';
 
 export interface CatalogCardProps {
   definition: DeviceDefinition;
   onAdd: (definition: DeviceDefinition) => void;
+  /** «Clonar y editar» (o «Editar» si ya es personalizado). */
+  onClone?: (definition: DeviceDefinition) => void;
 }
 
-function CatalogCardImpl({ definition, onAdd }: CatalogCardProps) {
+function CatalogCardImpl({ definition, onAdd, onClone }: CatalogCardProps) {
   const cloud = isCloud(definition.iotClass);
+  const custom = isCustomDefinitionId(definition.id);
   return (
     <li
       draggable
@@ -43,7 +46,18 @@ function CatalogCardImpl({ definition, onAdd }: CatalogCardProps) {
           <Badge tone={cloud ? 'violet' : 'green'} title={cloud ? 'Depende de la nube' : 'Control local'}>
             {cloud ? 'Nube' : 'Local'}
           </Badge>
+          {custom && <Badge tone="amber">Personalizado</Badge>}
         </div>
+        {onClone && (
+          <button
+            type="button"
+            onClick={() => onClone(definition)}
+            className="mt-1 text-xs text-sky-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            aria-label={custom ? `Editar ${definition.name}` : `Clonar y editar ${definition.name}`}
+          >
+            {custom ? 'Editar' : 'Clonar y editar'}
+          </button>
+        )}
       </div>
       <button
         type="button"

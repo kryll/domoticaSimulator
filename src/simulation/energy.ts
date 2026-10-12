@@ -6,6 +6,7 @@ import { entitiesForDevice } from '../devices/entities';
 import { HOUR_MS } from './clock';
 import { activeFailures, needsMains } from './connectivity';
 import { toNumber } from './stateUtils';
+import { allDefinitions } from '../devices/catalog';
 
 /** Nivel de batería por debajo del cual se avisa. */
 export const LOW_BATTERY_LEVEL = 20;
@@ -164,6 +165,7 @@ export function initialBatteryLevel(device: Device, def: DeviceDefinition, entit
  * supone constante en ese intervalo). No cambia entidades: el motor refleja los resultados.
  */
 export function energyStep(sim: SimulationState, project: Project, defs: DeviceDefinition[], ms: number): EnergyStep {
+  defs = allDefinitions(project, defs);
   const energy: EnergyState = sim.energy ? { since: sim.energy.since, kwhByDevice: { ...sim.energy.kwhByDevice } } : { since: sim.now, kwhByDevice: {} };
   const batteries: Record<Id, number> = { ...sim.batteries };
   const lowCrossed: Id[] = [];
@@ -226,6 +228,7 @@ const round = (n: number, decimals: number): number => Math.round(n * 10 ** deci
 
 /** Potencia actual, energía acumulada, coste y baterías bajas del proyecto. */
 export function energySummary(sim: SimulationState, project: Project, defs: DeviceDefinition[]): EnergySummary {
+  defs = allDefinitions(project, defs);
   const price = projectSettings(project).electricityPriceEurKwh;
   const byDevice: DeviceEnergy[] = [];
   const rooms = new Map<string, RoomEnergy>();

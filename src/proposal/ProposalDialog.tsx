@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { useViewStore } from '../store/viewStore';
-import { catalog } from '../devices/catalog';
 import { buildProposalHtml } from '../report/proposal';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -22,8 +22,8 @@ export function ProposalDialog() {
 
   const result = useMemo((): { html: string } | { error: string } => {
     try {
-      const planSvg = buildPlanSvg(project, catalog);
-      return { html: buildProposalHtml(project, catalog, { ...(planSvg ? { planSvg } : {}), generatedAt }) };
+      const planSvg = buildPlanSvg(project, knownDefinitions());
+      return { html: buildProposalHtml(project, knownDefinitions(), { ...(planSvg ? { planSvg } : {}), generatedAt }) };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }

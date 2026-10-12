@@ -10,11 +10,14 @@ import { parseMoneyInput } from '../ui/money';
 import { parseNumberInput } from '../ui/formValues';
 import { ENVIRONMENT_LIMITS, environmentSettings } from '../simulation/thermal';
 import { SPANISH_CITIES, TIME_ZONES } from './cities';
+import { LabSettingsPanel } from '../bridge/LabSettingsPanel';
 
 const TABS_PREFIX = 'ajustes';
 const TABS: Array<{ key: SettingsTab; label: string }> = [
   { key: 'project', label: 'Proyecto' },
   { key: 'simulation', label: 'Simulación' },
+  // E1: laboratorio (sus cambios se aplican al momento, sin el botón Guardar).
+  { key: 'lab', label: 'Laboratorio' },
 ];
 
 const fmt = (n: number): string => String(n).replace('.', ',');
@@ -90,7 +93,7 @@ export function ProjectSettingsDialog() {
   const validProject = latitude !== undefined && longitude !== undefined && kwh !== undefined;
   const valid = validProject && validSim;
   const advancedInvalid = failure === undefined || !seedOk || tauNum === undefined || windowNum === undefined || hvacNum === undefined;
-  const tabErrors: Record<SettingsTab, boolean> = { project: !validProject, simulation: !validSim };
+  const tabErrors: Record<SettingsTab, boolean> = { project: !validProject, simulation: !validSim, lab: false };
   const preset = SPANISH_CITIES.find((c) => c.latitude === latitude && c.longitude === longitude)?.name ?? '';
 
   const save = () => {
@@ -279,6 +282,9 @@ export function ProjectSettingsDialog() {
           </div>
         </div>
       </form>
+      <div role="tabpanel" id={tabPanelId(TABS_PREFIX, 'lab')} aria-labelledby={`${TABS_PREFIX}-tab-lab`} hidden={tab !== 'lab'}>
+        {tab === 'lab' && <LabSettingsPanel />}
+      </div>
     </Modal>
   );
 }

@@ -1,7 +1,7 @@
 import { Suspense, lazy, useMemo } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
-import { catalog } from '../devices/catalog';
 import { FAILURE_SCENARIOS } from '../simulation/scenarios';
 import { NO_FAILURES, hasFailures } from '../ui/failures';
 import { cx } from '../ui/cx';
@@ -41,7 +41,7 @@ export function PresentationScenarios() {
             <button
               key={sc.id}
               type="button"
-              onClick={() => setFailures({ ...NO_FAILURES, ...sc.failures(project, catalog) })}
+              onClick={() => setFailures({ ...NO_FAILURES, ...sc.failures(project, knownDefinitions()) })}
               className="rounded-lg border border-slate-300 bg-white p-3 text-left hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600"
             >
               <span className="block text-sm font-semibold text-slate-900">{sc.name}</span>

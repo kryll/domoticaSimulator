@@ -12,6 +12,7 @@ import {
   zigbeeNetworkOf,
 } from '../devices/roles';
 import { deviceDistanceMeters, isInRange } from './coverage';
+import { allDefinitions } from '../devices/catalog';
 
 export type ConnectResult = { ok: true; protocol: Protocol } | { ok: false; reason: string };
 
@@ -213,6 +214,7 @@ function makeConnection(child: Device, c: Candidate): Connection {
  * y padres a alcance; si no hay ninguno a alcance se usa el compatible más cercano.
  */
 export function suggestConnections(project: Project, defs: DeviceDefinition[]): Connection[] {
+  defs = allDefinitions(project, defs);
   const hasUplink = new Set(project.connections.map((c) => c.sourceId));
   const result: Connection[] = [];
   const known = project.devices.filter((d) => defs.some((def) => def.id === d.definitionId));
@@ -304,6 +306,7 @@ function firstIncompatibility(device: Device, project: Project, defs: DeviceDefi
  * puede sugerir uno). El servidor HA no necesita enlace y no aparece.
  */
 export function explainUnconnected(project: Project, defs: DeviceDefinition[]): UnconnectedReason[] {
+  defs = allDefinitions(project, defs);
   const linked = new Set([...project.connections, ...suggestConnections(project, defs)].map((c) => c.sourceId));
   const present = project.devices.map((d) => defs.find((x) => x.id === d.definitionId)).filter((d): d is DeviceDefinition => d !== undefined);
   const result: UnconnectedReason[] = [];

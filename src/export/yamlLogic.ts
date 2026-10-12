@@ -118,5 +118,13 @@ export function fase3ActionToYaml(a: Fase3Action, ctx: YamlContext): YamlMap {
     }
     case 'variables':
       return { variables: { ...a.variables } };
+    case 'stop': {
+      const m: YamlMap = { stop: a.message };
+      if (a.error) m.error = true;
+      return m;
+    }
+    case 'parallel':
+      // Una rama de una sola acción se escribe tal cual; las de varias, como `sequence:`.
+      return { parallel: a.branches.map((b): YamlValue => (b.length === 1 && b[0] ? actionToYaml(b[0], ctx) : { sequence: seq(b, ctx) })) };
   }
 }

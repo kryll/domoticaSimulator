@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { createDemoProject, createEmptyProject, exportProjectJson, importProjectJson } from '../store/persistence';
 import { openAsNewProject, openProject } from '../store/bootstrap';
-import { catalog } from '../devices/catalog';
 import { SimulationControls } from '../simulation/SimulationControls';
 import { ScenariosMenu } from '../simulation/ScenariosMenu';
 import { Button } from './Button';
@@ -24,6 +24,8 @@ import { confirmDialog } from './confirm';
 import { useViewStore } from '../store/viewStore';
 import { enterPresentation } from '../presentation/presentationMode';
 import { cx } from './cx';
+import { LabHost } from '../bridge/LabHost';
+import { useBridgeStore } from '../bridge/bridgeStore';
 import { TABLET_QUERY } from './breakpoints';
 import { useLayoutStore } from '../store/layoutStore';
 
@@ -242,12 +244,12 @@ export function TopBar() {
       <MenuItem onClick={() => safely(() => downloadText(scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
         scripts.yaml
       </MenuItem>
-      <MenuItem onClick={() => safely(() => downloadText(devicesToCsv(project(), catalog), `${base()}-dispositivos.csv`, 'text/csv'))}>
+      <MenuItem onClick={() => safely(() => downloadText(devicesToCsv(project(), knownDefinitions()), `${base()}-dispositivos.csv`, 'text/csv'))}>
         Inventario (CSV)
       </MenuItem>
       <MenuItem
         onClick={() =>
-          safely(() => downloadText(bomToCsv(billOfMaterials(project(), catalog)), `${base()}-presupuesto.csv`, 'text/csv'))
+          safely(() => downloadText(bomToCsv(billOfMaterials(project(), knownDefinitions())), `${base()}-presupuesto.csv`, 'text/csv'))
         }
       >
         Presupuesto (CSV)
@@ -257,6 +259,8 @@ export function TopBar() {
       </MenuItem>
       <MenuItem onClick={() => useViewStore.getState().setProposalOpen(true)}>Propuesta (PDF)…</MenuItem>
       <MenuItem onClick={() => useExtrasStore.getState().openDialog('packages')}>Configuración HA (packages .zip)…</MenuItem>
+      {/* E1: laboratorio con un Home Assistant real (src/bridge). */}
+      <MenuItem onClick={() => useBridgeStore.getState().setPanel(true)}>Laboratorio…</MenuItem>
     </>
   );
 
@@ -264,11 +268,11 @@ export function TopBar() {
     <header
       className={cx(
         'flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5',
-        compact ? 'flex-wrap gap-y-1 px-2' : 'flex-wrap gap-y-1 lg:flex-nowrap',
+        compact ? 'flex-wrap gap-1 px-2' : 'flex-wrap gap-y-1 lg:flex-nowrap',
       )}
       data-compact={compact ? 'true' : undefined}
     >
-      <h1 className="mr-1 flex shrink-0 items-center gap-1.5 whitespace-nowrap text-base font-bold text-slate-800">
+      <h1 className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-base font-bold text-slate-800">
         <span aria-hidden="true">🏠</span>
         <span className={compact ? 'sr-only' : undefined}>HA Simulator</span>
       </h1>
@@ -359,6 +363,7 @@ export function TopBar() {
       </div>
 
       <div className={cx('flex items-center gap-1', compact ? 'w-full justify-between' : 'ml-auto')}>
+        <LabHost />
         <TopBarExtras />
         <SimulationControls />
       </div>

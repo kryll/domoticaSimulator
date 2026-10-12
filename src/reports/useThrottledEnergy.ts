@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
-import { catalog } from '../devices/catalog';
 import { energySummary, type EnergySummary } from '../simulation/energy';
 
 /** Intervalo mínimo entre recálculos del panel mientras corre el reloj. */
 export const ENERGY_THROTTLE_MS = 500;
 
 function compute(): EnergySummary {
-  return energySummary(useSimulationStore.getState().sim, useProjectStore.getState().project, catalog);
+  return energySummary(useSimulationStore.getState().sim, useProjectStore.getState().project, knownDefinitions());
 }
 
 /** Resumen de energía recalculado como mucho cada 500 ms (el reloj cambia en cada tick). */

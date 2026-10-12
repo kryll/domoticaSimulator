@@ -1,0 +1,9 @@
+# Datos locales del laboratorio: nunca se suben.
+.env
+.secrets/
+snapshots/
+ha-config/*
+!ha-config/configuration.yaml
+!ha-config/packages/
+ha-config/packages/*
+!ha-config/packages/.gitkeep

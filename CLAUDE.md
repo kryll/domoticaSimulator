@@ -12,7 +12,7 @@ Visión y límites en docs/EMULACION.md. Plan en docs/ROADMAP.md.
 - React Flow para el lienzo, Zustand para el estado, Tailwind CSS
 - Persistencia en IndexedDB (idb-keyval), exportar/importar JSON
 - Vitest + Testing Library para tests
-- Sin backend
+- Sin backend obligatorio: la app funciona sola (GitHub Pages). `emulator/` es un backend opcional para el laboratorio (Node 22 + TypeScript con tsx, mqtt.js y ws; Docker Compose con Home Assistant, Mosquitto y Caddy), con su propio package.json, tsconfig y tests (aedes)
 
 ## Estructura
 ```
@@ -27,7 +27,9 @@ src/
   export/        # generación de YAML, CSV, PNG
   store/         # stores de Zustand
   ui/            # componentes compartidos
+  bridge/        # puente con el laboratorio: mapeo MQTT puro (mqtt/), protocolo WS, panel «Laboratorio»
 data/devices.json  # catálogo de dispositivos
+emulator/        # laboratorio opcional: orquestador, docker-compose y scripts (ver emulator/README.md)
 ```
 
 ## Modelo de datos (fuente de verdad en src/types.ts)

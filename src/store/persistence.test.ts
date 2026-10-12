@@ -40,7 +40,7 @@ describe('createDemoProject', () => {
     expect(demo.rooms.length).toBeGreaterThanOrEqual(6);
     expect(demo.devices.length).toBeGreaterThanOrEqual(15);
     expect(demo.connections.length).toBeGreaterThanOrEqual(demo.devices.length - 1);
-    expect(demo.automations).toHaveLength(9);
+    expect(demo.automations).toHaveLength(11);
     expect(demo.scenes).toHaveLength(2);
     expect(demo.scripts).toHaveLength(1);
   });

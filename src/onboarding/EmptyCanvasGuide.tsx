@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { useViewStore } from '../store/viewStore';
-import { catalog } from '../devices/catalog';
 import { addCatalogDevice } from '../canvas/placeDevice';
 import { Button } from '../ui/Button';
 import { cx } from '../ui/cx';
@@ -15,7 +15,7 @@ function runStep(step: GuideStep) {
     ui.setCanvasMode('room');
     ui.notify('Arrastra en el lienzo para dibujar la sala. Esc cancela.', 'info');
   } else if (step === 'server') {
-    const def = defaultServerDefinition(catalog);
+    const def = defaultServerDefinition(knownDefinitions());
     if (def) addCatalogDevice(def.id);
   } else if (!focusCatalogSearch()) {
     ui.notify('Abre el catálogo (en pantallas más anchas está a la izquierda) para añadir dispositivos.', 'info');
@@ -34,7 +34,7 @@ export function EmptyCanvasGuide() {
   const manual = useViewStore((s) => s.guideManual);
   const mode = useUiStore((s) => s.canvasMode);
   const empty = isEmptyProject(project);
-  const progress = useMemo(() => guideProgress(project, catalog), [project]);
+  const progress = useMemo(() => guideProgress(project, knownDefinitions()), [project]);
 
   useEffect(() => {
     if (empty && dismissed !== project.id) useViewStore.getState().startGuide(project.id);

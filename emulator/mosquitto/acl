@@ -1,0 +1,11 @@
+# ACL del laboratorio. Si cambias los topics en la app (Ajustes → Laboratorio), cámbialos aquí.
+
+# Orquestador: Z2M emulado, MQTT genérico y discovery.
+user hasim
+topic readwrite hasim/#
+topic readwrite hasim-z2m/#
+topic readwrite homeassistant/#
+
+# Home Assistant: todo.
+user homeassistant
+topic readwrite #

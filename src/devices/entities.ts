@@ -2,6 +2,7 @@
 import type { Device, DeviceDefinition, EntityDefinition, EntityState, EntityStateValue, Project } from '../types';
 import { hvacAction } from './climate';
 import { foldText } from './text';
+import { allDefinitions } from './catalog';
 
 /** Minúsculas, sin acentos, solo a-z0-9_ (como los entity_id de HA). */
 export function slugify(name: string): string {
@@ -130,6 +131,7 @@ function initialAttributes(entity: DeviceEntity, siblings: DeviceEntity[]): Reco
 
 /** Estado inicial de todas las entidades del proyecto (entity_id -> estado). */
 export function initialEntityStates(project: Project, defs: DeviceDefinition[]): Record<string, EntityState> {
+  defs = allDefinitions(project, defs);
   const states: Record<string, EntityState> = {};
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);

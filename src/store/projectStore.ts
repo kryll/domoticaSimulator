@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { knownDefinitions, setCustomDefinitionsSource } from '../canvas/analysis';
 import type {
   Automation,
   Connection,
@@ -16,7 +17,7 @@ import { projectSettings } from '../simulation/energy';
 import { createEmptyProject } from './persistence';
 import { reassignRooms, resolveRoomId, translatePolygon } from '../canvas/geometry';
 import { newId } from '../ui/ids';
-import { catalog, getDefinition } from '../devices/catalog';
+import { getDefinition } from '../devices/catalog';
 import { uniqueDeviceName } from '../devices/factory';
 import { entityIdMappingForRename, renameEntityRefs } from '../devices/renaming';
 
@@ -255,7 +256,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
           // Nombre único (sin contar el propio dispositivo) y referencias de entity_id actualizadas.
           const others = p.devices.filter((d) => d.id !== id).map((d) => d.name);
           next = { ...next, name: uniqueDeviceName(patch.name.trim() || current.name, others) };
-          const def = getDefinition(current.definitionId, catalog);
+          const def = getDefinition(current.definitionId, knownDefinitions());
           if (def) mapping = entityIdMappingForRename(current, def, next.name);
         }
         const updated = { ...p, devices: p.devices.map((d) => (d.id === id ? next : d)) };
@@ -388,3 +389,6 @@ export function getProject(): Project {
   return useProjectStore.getState().project;
 }
 
+
+// Las definiciones personalizadas del proyecto abierto se suman al catálogo en toda la interfaz.
+setCustomDefinitionsSource(() => useProjectStore.getState().project);

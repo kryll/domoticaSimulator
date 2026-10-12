@@ -3,10 +3,11 @@
 import { defaultSettings, type Automation, type Device, type DeviceDefinition, type Id, type Integration, type Project, type ZoneKind } from '../types';
 import { entitiesForDevice, slugify } from '../devices/entities';
 import { INTEGRATION_LABELS, ROLE_LABELS } from '../devices/labels';
-import { isCloud } from '../devices/catalog';
+import { allDefinitions, isCloud } from '../devices/catalog';
 import { effectiveIotClass } from '../devices/roles';
 import { areaId, automationRoom, entityRoomMap, groupRoom, sceneRoom, scriptRoom } from '../devices/areas';
 import { groupEntityId, groupHaName } from '../simulation/logic';
+import { helpersByDomain } from '../simulation/helpers';
 import { automationToObject, scenesToYaml, scriptsToYaml, toYaml, type YamlMap, type YamlValue } from './yaml';
 import { zipFiles, type ZipEntry } from './zip';
 import { DEFAULT_ZONE_RADIUS, hasCoordinates, zoneConflicts, zoneGeo } from '../simulation/zones';
@@ -64,7 +65,8 @@ function packageContent(title: string, bucket: Bucket, project: Project, extra: 
  * grupos de cada sala; lo que no es de ninguna sala va a packages/general.yaml), areas.yaml y
  * GUIA_EMPAREJAMIENTO.md. Las salas sin nada que exportar no generan paquete.
  */
-export function projectToPackages(project: Project, defs: DeviceDefinition[]): ExportFile[] {
+export function projectToPackages(project: Project, baseDefs: DeviceDefinition[]): ExportFile[] {
+  const defs = allDefinitions(project, baseDefs);
   const map = entityRoomMap(project, defs);
   const buckets = new Map<string, Bucket>();
   const bucketFor = (roomId: Id | undefined): Bucket => {
@@ -98,12 +100,24 @@ export function projectToPackages(project: Project, defs: DeviceDefinition[]): E
   }
   const people = project.people ?? [];
   const extra = people.length > 0 ? [personsComment(people.map((p) => p.name))] : [];
+  // Tanda 3: los helpers van en el paquete general (input_boolean:, timer:, counter:...).
+  const helpers = helpersSection(project);
+  if (helpers) extra.push(helpers);
   const zones = zonesSection(project);
   if (zones) extra.push(zones);
   const general = packageContent('Elementos sin área', buckets.get(GENERAL_PACKAGE) ?? emptyBucket(), project, extra);
   if (general) files.push({ path: `packages/${GENERAL_PACKAGE}.yaml`, content: general });
   files.sort((a, b) => a.path.localeCompare(b.path));
   return [{ path: 'areas.yaml', content: areasYaml(project, defs) }, { path: 'GUIA_EMPAREJAMIENTO.md', content: pairingGuide(project, defs) }, ...files];
+}
+
+/** Tanda 3: configuración YAML de los helpers del proyecto, un bloque por dominio. */
+export function helpersSection(project: Pick<Project, 'helpers'>): string | undefined {
+  const byDomain = helpersByDomain(project.helpers ?? []);
+  if (byDomain.size === 0) return undefined;
+  const parts: string[] = [];
+  for (const [domain, items] of byDomain) parts.push(section(domain, toYaml(items as YamlMap)));
+  return parts.join('\n');
 }
 
 const ZONE_ICONS: Record<ZoneKind, string> = { home: 'mdi:home', work: 'mdi:briefcase', other: 'mdi:map-marker' };
@@ -173,6 +187,7 @@ export const ROLE_STEPS: Partial<Record<DeviceDefinition['role'], string[]>> = {
 
 /** areas.yaml: referencia de áreas con su planta, dispositivos y entidades (se crean en Ajustes → Áreas). */
 export function areasYaml(project: Project, defs: DeviceDefinition[]): string {
+  defs = allDefinitions(project, defs);
   const areas: YamlValue[] = project.rooms.map((room) => {
     const floor = project.floors.find((f) => f.id === room.floorId);
     const devices = project.devices.filter((d) => d.roomId === room.id);
@@ -272,6 +287,7 @@ function roomName(project: Project, d: Device): string {
 
 /** Guía en Markdown con el orden de alta: servidor, red, coordinadores, hubs y dispositivos por integración. */
 export function pairingGuide(project: Project, defs: DeviceDefinition[]): string {
+  defs = allDefinitions(project, defs);
   const placed = project.devices
     .map((device) => ({ device, def: defs.find((d) => d.id === device.definitionId) }))
     .filter((p): p is { device: Device; def: DeviceDefinition } => p.def !== undefined);
@@ -361,6 +377,7 @@ export function pairingGuide(project: Project, defs: DeviceDefinition[]): string
 
 /** ZIP listo para descargar con todos los ficheros de projectToPackages. */
 export function packagesZip(project: Project, defs: DeviceDefinition[]): Uint8Array {
+  defs = allDefinitions(project, defs);
   const entries: ZipEntry[] = projectToPackages(project, defs).map((f) => ({ path: f.path, content: f.content }));
   return zipFiles(entries);
 }

@@ -2,7 +2,6 @@ import { useId, useMemo, useState } from 'react';
 import type { Project } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
-import { catalog } from '../devices/catalog';
 import {
   AUTOMATION_TEMPLATES,
   buildTemplate,
@@ -15,7 +14,7 @@ import {
   type TemplateInput,
   type TemplateValues,
 } from './templates';
-import { entitiesOfDevice } from '../canvas/analysis';
+import { entitiesOfDevice, knownDefinitions } from '../canvas/analysis';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { TextField } from '../ui/Field';
@@ -32,9 +31,9 @@ interface Choice {
 
 /** Motivo por el que una plantilla no se puede aplicar (undefined si se puede). */
 function blockedReason(template: AutomationTemplate, project: Project): string | undefined {
-  if (isTemplateApplicable(template, project, catalog)) return undefined;
+  if (isTemplateApplicable(template, project, knownDefinitions())) return undefined;
   const lacking = template.inputs.filter(
-    (i) => i.kind === 'entity' && !i.optional && templateCandidates(project, catalog, i).length === 0,
+    (i) => i.kind === 'entity' && !i.optional && templateCandidates(project, knownDefinitions(), i).length === 0,
   );
   if (lacking.length > 0) return `Falta en el proyecto: ${lacking.map((i) => `«${i.label}»`).join(', ')}`;
   return 'Los dispositivos del proyecto no encajan con esta plantilla';
@@ -51,7 +50,7 @@ function choicesForDevice(project: Project, deviceId: string): Choice[] {
     let used = false;
     for (const input of template.inputs) {
       if (input.kind !== 'entity' || used) continue;
-      const match = templateCandidates(project, catalog, input).find((id) => own.has(id));
+      const match = templateCandidates(project, knownDefinitions(), input).find((id) => own.has(id));
       if (match) {
         values[input.key] = match;
         used = true;
@@ -77,7 +76,7 @@ function InputField({
 }) {
   switch (input.kind) {
     case 'entity': {
-      const allowed = templateCandidates(project, catalog, input);
+      const allowed = templateCandidates(project, knownDefinitions(), input);
       return (
         <EntityPicker
           label={input.optional ? `${input.label} (opcional)` : input.label}
@@ -225,7 +224,7 @@ export function TemplateGallery() {
 
   const { suggested, others } = useMemo(() => {
     if (deviceId) return { suggested: choicesForDevice(project, deviceId), others: [] as Choice[] };
-    const suggestions = suggestTemplates(project, catalog);
+    const suggestions = suggestTemplates(project, knownDefinitions());
     const sug: Choice[] = [];
     for (const s of suggestions) {
       const template = AUTOMATION_TEMPLATES.find((t) => t.id === s.templateId);

@@ -1,9 +1,9 @@
 // Atajos para simular eventos físicos desde la interfaz o los tests.
 import type { DeviceDefinition, EntityState, Id, Project, SimulationState } from '../types';
-import { catalog } from '../devices/catalog';
-import { entityCapabilities } from '../devices/capabilities';
+import { allDefinitions } from '../devices/catalog';
+import { entityCapabilities, findEntityOwner } from '../devices/capabilities';
 import { entitiesForDevice } from '../devices/entities';
-import { appendLog, cancelTimer, entityTimerKey, markRecordedEvent, scheduleTimer, setEntityState } from './engine';
+import { appendLog, cancelTimer, entityTimerKey, fireEvent, markRecordedEvent, scheduleTimer, setEntityState } from './engine';
 import { SECOND_MS } from './clock';
 import { isDownByFailure, offlineBlockReason, reconcileAvailability } from './availability';
 
@@ -77,7 +77,12 @@ export function pressButton(sim: SimulationState, project: Project, entityId: st
   const stop = blocked(sim, entityId, 'la pulsación');
   if (stop) return stop;
   const pressed = setEntityState(sim, project, entityId, action);
-  return markRecordedEvent(sim, setEntityState(pressed, project, entityId, 'none'), { kind: 'physical', event: 'button', entityId, value: action });
+  const released = markRecordedEvent(sim, setEntityState(pressed, project, entityId, 'none'), { kind: 'physical', event: 'button', entityId, value: action });
+  // Tanda 3: el mando también lanza su evento en el bus (zha_event o hue_event), como en HA.
+  const owner = findEntityOwner(project, entityId);
+  if (owner?.device.integration === 'zha') return fireEvent(released, project, 'zha_event', { device_id: owner.device.id, command: action });
+  if (owner?.device.integration === 'hue') return fireEvent(released, project, 'hue_event', { id: owner.device.id, type: action });
+  return released;
 }
 
 /** Cerradura atascada: solo se fuerza con este evento; lock/unlock la desatascan. */
@@ -111,8 +116,9 @@ export function setDeviceOffline(
   project: Project,
   deviceId: Id,
   offline: boolean,
-  defs: DeviceDefinition[] = catalog,
+  defs: DeviceDefinition[] = allDefinitions(project),
 ): SimulationState {
+  defs = allDefinitions(project, defs);
   const byFailure = isDownByFailure(sim, deviceId);
   if (offline) {
     // Ya caído por un fallo: pasa a estar desconectado a mano (conserva el estado guardado).
@@ -136,8 +142,9 @@ export function setDeviceOfflineRaw(
   project: Project,
   deviceId: Id,
   offline: boolean,
-  defs: DeviceDefinition[] = catalog,
+  defs: DeviceDefinition[] = allDefinitions(project),
 ): SimulationState {
+  defs = allDefinitions(project, defs);
   const device = project.devices.find((d) => d.id === deviceId);
   const def = device ? defs.find((d) => d.id === device.definitionId) : undefined;
   if (!device || !def) return warn(sim, `Dispositivo desconocido: ${deviceId}`);

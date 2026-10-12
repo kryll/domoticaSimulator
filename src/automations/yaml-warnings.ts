@@ -16,7 +16,7 @@ const join = (base: string, key: string): string => (base === '' ? key : `${base
 const at = (base: string, i: number): string => `${base}[${i}]`;
 
 /** Claves que HA admite en cualquier paso y que el simulador no usa (no cambian el resultado). */
-const HARMLESS = new Set(['alias']);
+const HARMLESS = new Set(['alias', 'enabled']);
 
 function ignoredKey(out: Out, path: string, key: string): void {
   out.push({ path: join(path, key), message: `Clave «${key}» ignorada: el simulador no la admite` });
@@ -26,10 +26,6 @@ function ignoredKey(out: Out, path: string, key: string): void {
 function checkKeys(out: Out, m: YamlMap, path: string, known: readonly string[]): void {
   for (const key of Object.keys(m)) {
     if (known.includes(key) || HARMLESS.has(key)) continue;
-    if (key === 'enabled' && m[key] === false) {
-      out.push({ path: join(path, key), message: 'enabled: false no se admite: el paso se importa activado' });
-      continue;
-    }
     ignoredKey(out, path, key);
   }
 }
@@ -60,9 +56,12 @@ function checkStateValue(out: Out, m: YamlMap, path: string, key: string): void 
 
 const TRIGGER_KEYS: Record<string, readonly string[]> = {
   state: ['entity_id', 'from', 'to', 'for'],
-  numeric_state: ['entity_id', 'above', 'below'],
+  numeric_state: ['entity_id', 'above', 'below', 'for'],
   time: ['at'],
   sun: ['event', 'offset'],
+  time_pattern: ['hours', 'minutes', 'seconds'],
+  homeassistant: ['event'],
+  event: ['event_type', 'event_data'],
   zone: ['entity_id', 'zone', 'event'],
   device: ['entity_id', 'subtype', 'action'],
 };
@@ -81,7 +80,7 @@ function checkTrigger(out: Out, v: YamlValue, path: string): void {
 const CONDITION_KEYS: Record<string, readonly string[]> = {
   state: ['entity_id', 'state', 'for'],
   numeric_state: ['entity_id', 'above', 'below'],
-  time: ['after', 'before'],
+  time: ['after', 'before', 'weekday'],
   sun: ['after', 'before', 'after_offset', 'before_offset'],
   and: ['conditions'],
   or: ['conditions'],
@@ -119,8 +118,21 @@ function checkTarget(out: Out, m: YamlMap, path: string, ctx: YamlContext | unde
   }
 }
 
-function checkAction(out: Out, v: YamlValue, path: string, ctx: YamlContext | undefined): void {
-  if (!isYamlMap(v)) return;
+function checkAction(out: Out, v0: YamlValue, path: string, ctx: YamlContext | undefined): void {
+  if (!isYamlMap(v0)) return;
+  // Tanda 3: continue_on_error se admite en cualquier acción.
+  const v: YamlMap = { ...v0 };
+  delete v.continue_on_error;
+  if (v.stop !== undefined) return checkKeys(out, v, path, ['stop', 'error']);
+  if (v.parallel !== undefined) {
+    checkKeys(out, v, path, ['parallel']);
+    items(v.parallel).forEach((b, i) => {
+      const bpath = at(join(path, 'parallel'), i);
+      if (isYamlMap(b) && b.sequence !== undefined) checkActions(out, b.sequence, join(bpath, 'sequence'), ctx);
+      else checkAction(out, b, bpath, ctx);
+    });
+    return;
+  }
   if (v.delay !== undefined && v.delay !== null) return checkKeys(out, v, path, ['delay']);
   if (v.choose !== undefined) {
     checkKeys(out, v, path, ['choose', 'default']);

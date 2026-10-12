@@ -11,6 +11,7 @@ import { findGroupByEntity } from './logic';
 import { actionConditions, conditionEntityIds, flattenActions, serviceEntityIds, triggerEntityIds } from '../automations/walk';
 import { resolveServiceTargets } from '../devices/areas';
 import { plural } from '../ui/plural';
+import { allDefinitions } from '../devices/catalog';
 
 export type FailureScenarioId = 'internet' | 'coordinator' | 'power' | 'ha_restart' | 'hub';
 
@@ -22,7 +23,8 @@ export interface FailureScenario {
   failures: (project: Project, defs: DeviceDefinition[]) => Partial<Failures>;
 }
 
-function devicesWhere(project: Project, defs: DeviceDefinition[], pred: (def: DeviceDefinition) => boolean): Id[] {
+function devicesWhere(project: Project, baseDefs: DeviceDefinition[], pred: (def: DeviceDefinition) => boolean): Id[] {
+  const defs = allDefinitions(project, baseDefs);
   return project.devices.filter((d) => {
     const def = defs.find((x) => x.id === d.definitionId);
     return def !== undefined && pred(def);
@@ -214,7 +216,8 @@ const HA_RESTART_REASON = 'Home Assistant se está reiniciando: no se pueden act
  * cada automatización (broken si su disparador depende de una entidad caída o HA se reinicia;
  * degraded si alguna condición o acción depende de una entidad caída), escena y script.
  */
-export function failureImpact(project: Project, defs: DeviceDefinition[], failures: Failures): ImpactReport {
+export function failureImpact(project: Project, baseDefs: DeviceDefinition[], failures: Failures): ImpactReport {
+  const defs = allDefinitions(project, baseDefs);
   const reasons = unavailabilityReasons(project, defs, failures);
   const down = downEntities(project, defs, reasons);
   const unavailableDevices = [...reasons.entries()].map(([deviceId, reason]) => ({ deviceId, reason }));
@@ -230,6 +233,11 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
       if (id !== undefined && d) result.push(describeDown(`Disparador ${i + 1}`, id, d));
     }
     let status: ImpactStatus = failures.haRestarting ? 'broken' : partialStatus(a.triggers.length, fallenTriggers.length);
+    // Tanda 3: con un disparador de arranque de HA, la automatización se ejecutará al volver.
+    if (failures.haRestarting && a.triggers.some((t) => t.type === 'homeassistant' && t.event === 'start' && t.enabled !== false)) {
+      status = 'degraded';
+      result.push('Se ejecutará cuando Home Assistant vuelva a arrancar (disparador de arranque)');
+    }
     const extra: string[] = [];
     for (const id of unique(a.conditions.flatMap(conditionEntities))) {
       const d = down.get(id);
@@ -271,5 +279,6 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
 
 /** Impacto de un escenario predefinido. */
 export function scenarioImpact(project: Project, defs: DeviceDefinition[], id: FailureScenarioId): ImpactReport {
+  defs = allDefinitions(project, defs);
   return failureImpact(project, defs, scenarioFailures(id, project, defs));
 }

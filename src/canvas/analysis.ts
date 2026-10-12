@@ -1,5 +1,5 @@
 import type { Device, DeviceDefinition, EntityDefinition, Id, Project, ValidationIssue } from '../types';
-import { catalog, getDefinition } from '../devices/catalog';
+import { allDefinitions, catalog, getDefinition } from '../devices/catalog';
 import { entitiesForDevice } from '../devices/entities';
 import { analyzeMesh } from '../network/mesh';
 import { validateProject } from '../network/validator';
@@ -13,6 +13,18 @@ export interface ProjectAnalysis {
 
 const cache = new WeakMap<Project, ProjectAnalysis>();
 
+/** De dónde salen las definiciones personalizadas (el proyecto abierto; lo fija projectStore). */
+let customSource: () => Pick<Project, 'customDefinitions'> = () => ({});
+
+export function setCustomDefinitionsSource(source: () => Pick<Project, 'customDefinitions'>): void {
+  customSource = source;
+}
+
+/** Catálogo + dispositivos personalizados del proyecto abierto. */
+export function knownDefinitions(): DeviceDefinition[] {
+  return allDefinitions(customSource());
+}
+
 /** Validación y análisis de malla memorizados por referencia de proyecto. */
 export function analyzeProject(project: Project): ProjectAnalysis {
   const cached = cache.get(project);
@@ -20,12 +32,12 @@ export function analyzeProject(project: Project): ProjectAnalysis {
   let issues: ValidationIssue[] = [];
   let unreachable = new Set<Id>();
   try {
-    issues = validateProject(project, catalog);
+    issues = validateProject(project, allDefinitions(project, catalog));
   } catch (err) {
     console.error('Error en el validador', err);
   }
   try {
-    unreachable = new Set(analyzeMesh(project, catalog).unreachable);
+    unreachable = new Set(analyzeMesh(project, allDefinitions(project, catalog)).unreachable);
   } catch (err) {
     console.error('Error en el análisis de malla', err);
   }
@@ -43,7 +55,7 @@ export function analyzeProject(project: Project): ProjectAnalysis {
 }
 
 export function definitionOf(device: Device): DeviceDefinition | undefined {
-  return getDefinition(device.definitionId, catalog);
+  return getDefinition(device.definitionId, knownDefinitions());
 }
 
 export interface EntityRef {

@@ -1,0 +1,117 @@
+# Laboratorio de HA Simulator: entorno de pruebas en tu PC, 100 % libre y gratuito.
+# Todo va en red «host» (Linux): Matter necesita IPv6 y mDNS y así no hay que publicar puertos.
+# Arranque: scripts/setup.sh · Parada: scripts/stop.sh · Borrado: scripts/reset.sh
+# restart: "no" — el laboratorio se arranca y se para a voluntad (no vuelve solo al reiniciar el PC).
+name: hasim-lab
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: hasim-mosquitto
+    network_mode: host
+    restart: "no"
+    env_file: .env
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/acl:/mosquitto/config/acl:ro
+      - mosquitto-data:/mosquitto/data
+    # Crea el archivo de contraseñas con las de .env (nunca se suben al repositorio).
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /mosquitto/data/passwd
+        touch /mosquitto/data/passwd
+        mosquitto_passwd -b /mosquitto/data/passwd hasim "$$MQTT_HASIM_PASSWORD"
+        mosquitto_passwd -b /mosquitto/data/passwd homeassistant "$$MQTT_HA_PASSWORD"
+        chown mosquitto:mosquitto /mosquitto/data/passwd
+        chmod 0700 /mosquitto/data/passwd
+        exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -u homeassistant -P \"$$MQTT_HA_PASSWORD\" -t '$$SYS/broker/uptime' -C 1 -W 3"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: hasim-homeassistant
+    network_mode: host
+    restart: "no"
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+    volumes:
+      - ./ha-config:/config
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: emulator/orchestrator/Dockerfile
+    image: hasim-orchestrator:local
+    container_name: hasim-orchestrator
+    network_mode: host
+    restart: "no"
+    env_file: .env
+    environment:
+      MQTT_URL: mqtt://127.0.0.1:1883
+      MQTT_USERNAME: hasim
+      MQTT_PASSWORD: ${MQTT_HASIM_PASSWORD}
+      HOST: 127.0.0.1
+      PORT: "8081"
+      HA_URL: http://127.0.0.1:8123
+      HA_CONFIG_DIR: /ha-config
+      SNAPSHOTS_DIR: /snapshots
+      SECRETS_DIR: /secrets
+      HA_CONTAINER: hasim-homeassistant
+    volumes:
+      - ./ha-config:/ha-config
+      - ./snapshots:/snapshots
+      - ./.secrets:/secrets
+      # Opcional: permite parar y arrancar el HA del lab al restaurar un snapshot. Da al
+      # orquestador control sobre Docker: quítalo si no lo quieres (HA se reiniciará por su API).
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2
+    container_name: hasim-caddy
+    network_mode: host
+    restart: "no"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../dist:/srv:ro
+      - caddy-data:/data
+
+  # ---- Perfiles opcionales que se completan en E2 ----
+  zwave-js-ui:
+    profiles: ["zwave"]
+    image: zwavejs/zwave-js-ui:latest
+    container_name: hasim-zwave-js-ui
+    network_mode: host
+    restart: "no"
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+    volumes:
+      - zwave-data:/usr/src/app/store
+
+  matter-server:
+    profiles: ["matter"]
+    image: ghcr.io/matter-js/matterjs-server:latest
+    container_name: hasim-matter-server
+    network_mode: host
+    restart: "no"
+    volumes:
+      - matter-data:/data
+
+volumes:
+  mosquitto-data:
+  caddy-data:
+  zwave-data:
+  matter-data:

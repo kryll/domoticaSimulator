@@ -1,7 +1,7 @@
 // Exportación del inventario de dispositivos a CSV.
 import type { DeviceDefinition, Project } from '../types';
 import { INTEGRATION_LABELS, PROTOCOL_LABELS } from '../devices/labels';
-import { isCloud } from '../devices/catalog';
+import { isCloud, allDefinitions } from '../devices/catalog';
 import { effectiveIotClass } from '../devices/roles';
 
 /** Separador de campos: punto y coma, como espera Excel con configuración regional española. */
@@ -18,6 +18,7 @@ export function csvField(value: string): string {
 }
 
 export function devicesToCsv(project: Project, defs: DeviceDefinition[]): string {
+  defs = allDefinitions(project, defs);
   const rows: string[][] = [[...CSV_HEADERS]];
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);

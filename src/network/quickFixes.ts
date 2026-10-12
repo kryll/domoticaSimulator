@@ -29,6 +29,7 @@ import { serviceInfo } from '../simulation/serviceCatalog';
 import { NODE_SIZE, placeNewDevices, roomAt } from '../canvas/placement';
 import { polygonBounds, resolveRoomId } from '../canvas/geometry';
 import { canConnect, suggestConnections } from './connections';
+import { allDefinitions } from '../devices/catalog';
 
 export interface QuickFix {
   /** Id estable del arreglo (`<id de la incidencia>#<arreglo>`). */
@@ -49,6 +50,7 @@ interface Placed {
 }
 
 function placed(project: Project, defs: DeviceDefinition[]): Placed[] {
+  defs = allDefinitions(project, defs);
   const out: Placed[] = [];
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);
@@ -440,6 +442,7 @@ export function removeEntityReference(project: Project, kind: Owner, ownerId: Id
 }
 
 function knownEntities(project: Project, defs: DeviceDefinition[]): string[] {
+  defs = allDefinitions(project, defs);
   return [
     ...placed(project, defs).flatMap((p) => entitiesForDevice(p.device, p.def).map((e) => e.entityId)),
     ...Object.keys(peopleEntities(project)),

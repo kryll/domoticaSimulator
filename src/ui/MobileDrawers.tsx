@@ -52,12 +52,14 @@ export function DrawerButtons({ which }: { which: 'catalog' | 'properties' }) {
         type="button"
         data-tour="catalog"
         onClick={() => setDrawer('catalog')}
+        aria-label="Catálogo"
         aria-haspopup="dialog"
         className="flex min-h-[2.75rem] min-w-[2.75rem] shrink-0 justify-center items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
       >
         <span aria-hidden="true">＋</span>
-        <span className="hidden sm:inline">Catálogo</span>
-        <span className="sr-only sm:hidden">Catálogo</span>
+        <span aria-hidden="true" className="hidden sm:inline">
+          Catálogo
+        </span>
       </button>
     );
   }
@@ -66,12 +68,14 @@ export function DrawerButtons({ which }: { which: 'catalog' | 'properties' }) {
       type="button"
       data-tour="properties"
       onClick={() => setDrawer('properties')}
+      aria-label={hasSelection ? 'Propiedades (hay selección)' : 'Propiedades'}
       aria-haspopup="dialog"
       className="relative flex min-h-[2.75rem] min-w-[2.75rem] shrink-0 justify-center items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
     >
       <span aria-hidden="true">☷</span>
-      <span className="hidden sm:inline">Propiedades</span>
-      <span className="sr-only sm:hidden">Propiedades</span>
+      <span aria-hidden="true" className="hidden sm:inline">
+        Propiedades
+      </span>
       {hasSelection && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-sky-600" aria-hidden="true" />}
     </button>
   );

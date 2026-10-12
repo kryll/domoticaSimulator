@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import type { Brand, DeviceCategory, DeviceDefinition, Protocol } from '../types';
-import { CATEGORY_LABELS, PROTOCOL_LABELS, catalog, filterCatalog, type CatalogFilter } from '../devices/catalog';
+import { CATEGORY_LABELS, PROTOCOL_LABELS, allDefinitions, filterCatalog, isCustomDefinitionId, type CatalogFilter } from '../devices/catalog';
+import { useProjectStore } from '../store/projectStore';
+import { useLayoutStore } from '../store/layoutStore';
 import { addCatalogDevice } from '../canvas/placeDevice';
 import { Panel, EmptyState } from '../ui/Panel';
 import { SelectField, TextField } from '../ui/Field';
@@ -10,6 +12,8 @@ import { CatalogCard } from './CatalogCard';
 import { countLabel } from '../ui/plural';
 
 type Connectivity = NonNullable<CatalogFilter['connectivity']>;
+/** Origen de las definiciones: todo, solo el catálogo o solo las personalizadas del proyecto. */
+type Origin = 'all' | 'catalog' | 'custom';
 
 export interface CatalogPanelProps {
   definitions?: DeviceDefinition[];
@@ -21,7 +25,12 @@ function uniqueSorted<T extends string>(values: T[]): T[] {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b, 'es'));
 }
 
-export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps) {
+const NO_CUSTOM: DeviceDefinition[] = [];
+
+export function CatalogPanel({ definitions: given, onAdd }: CatalogPanelProps) {
+  const custom = useProjectStore((s) => s.project.customDefinitions ?? NO_CUSTOM);
+  const definitions = useMemo(() => given ?? allDefinitions({ customDefinitions: custom }), [given, custom]);
+  const [origin, setOrigin] = useState<Origin>('all');
   const [query, setQuery] = useState('');
   const [brand, setBrand] = useState<Brand | ''>('');
   const [protocol, setProtocol] = useState<Protocol | ''>('');
@@ -40,8 +49,9 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
       categories: category ? [category] : undefined,
       connectivity,
     };
-    return filterCatalog(definitions, filter);
-  }, [definitions, query, brand, protocol, category, connectivity]);
+    const byOrigin = origin === 'all' ? definitions : definitions.filter((d) => isCustomDefinitionId(d.id) === (origin === 'custom'));
+    return filterCatalog(byOrigin, filter);
+  }, [definitions, query, brand, protocol, category, connectivity, origin]);
 
   const { screenToFlowPosition } = useReactFlow();
   const handleAdd = useCallback(
@@ -52,7 +62,10 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
     [onAdd, screenToFlowPosition],
   );
 
-  const hasFilters = query || brand || protocol || category || connectivity !== 'all';
+  const hasFilters = query || brand || protocol || category || connectivity !== 'all' || origin !== 'all';
+  const onClone = useCallback((def: DeviceDefinition) => {
+    useLayoutStore.getState().openCustomDevice(isCustomDefinitionId(def.id) ? { mode: 'edit', definitionId: def.id } : { mode: 'clone', definitionId: def.id });
+  }, []);
 
   return (
     <Panel as="aside" title="Catálogo" aria-label="Catálogo de dispositivos" className="h-full" bodyClassName="flex flex-col">
@@ -97,7 +110,21 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
               { value: 'cloud', label: 'Solo nube' },
             ]}
           />
+          <SelectField
+            label="Origen"
+            fieldClassName="col-span-2"
+            value={origin}
+            onChange={(e) => setOrigin(e.target.value as Origin)}
+            options={[
+              { value: 'all', label: 'Catálogo y personalizados' },
+              { value: 'catalog', label: 'Solo catálogo' },
+              { value: 'custom', label: `Personalizados (${custom.length})` },
+            ]}
+          />
         </div>
+        <Button size="sm" onClick={() => useLayoutStore.getState().openCustomDevice({ mode: 'new' })}>
+          + Dispositivo personalizado
+        </Button>
         <div className="flex items-center justify-between text-xs text-slate-500">
           <span aria-live="polite">{countLabel(results.length, 'dispositivo', 'dispositivos')}</span>
           {hasFilters && (
@@ -110,6 +137,7 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
                 setProtocol('');
                 setCategory('');
                 setConnectivity('all');
+                setOrigin('all');
               }}
             >
               Limpiar filtros
@@ -123,7 +151,7 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
         ) : (
           <ul className="flex flex-col gap-1.5" aria-label="Resultados del catálogo">
             {results.map((def) => (
-              <CatalogCard key={def.id} definition={def} onAdd={handleAdd} />
+              <CatalogCard key={def.id} definition={def} onAdd={handleAdd} onClone={onClone} />
             ))}
           </ul>
         )}

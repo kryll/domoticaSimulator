@@ -15,6 +15,7 @@ import { hvacAction } from '../devices/climate';
 import { DAY_MS, HOUR_MS, minutesOfDay, projectSunLocation, sunTimesAt } from './clock';
 import { updateClimateCurrentTemperature } from './services';
 import { setEntityState } from './engine';
+import { allDefinitions } from '../devices/catalog';
 
 export const DEFAULT_ENVIRONMENT: Required<EnvironmentSettings> = {
   enabled: true,
@@ -87,6 +88,7 @@ interface RoomEntities {
 
 /** Entidades relevantes de cada sala (por la sala del dispositivo). */
 export function roomEntities(project: Project, defs: DeviceDefinition[]): Record<Id, RoomEntities> {
+  defs = allDefinitions(project, defs);
   const result: Record<Id, RoomEntities> = {};
   for (const room of project.rooms) result[room.id] = { temperature: [], illuminance: [], climate: [], contact: [], lights: [], covers: [] };
   for (const device of project.devices) {
@@ -113,6 +115,7 @@ function num(v: unknown): number | undefined {
 
 /** Estado de entorno inicial: cada sala a la temperatura de su sensor (o 21 °C). */
 export function initialEnvironment(project: Project, defs: DeviceDefinition[], sim: SimulationState): EnvironmentState {
+  defs = allDefinitions(project, defs);
   const env = environmentSettings(project);
   const ents = roomEntities(project, defs);
   const rooms: Record<Id, RoomEnvironment> = {};

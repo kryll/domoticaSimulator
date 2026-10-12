@@ -1,7 +1,9 @@
 // Validador del proyecto: reglas de red y de dominio con códigos estables y mensajes en español.
 import type { Action, Brand, Condition, Device, Integration, DeviceDefinition, Id, IssueRef, IssueSeverity, Project, Trigger, ValidationIssue } from '../types';
 import { INTEGRATION_LABELS } from '../devices/labels';
-import { isCloud } from '../devices/catalog';
+import { allDefinitions, isCloud, validateDefinition } from '../devices/catalog';
+import { helperEntityId, helperEntityIds, validateHelper } from '../simulation/helpers';
+import { timePatternSets } from '../simulation/engine';
 import {
   effectiveIotClass,
   isBleProxy,
@@ -67,6 +69,11 @@ export const ISSUE_TITLES: Record<string, string> = {
   'dispositivo-sin-sala': 'Dispositivo sin sala',
   'servicio-falta-campo': 'Falta un dato obligatorio',
   'nombre-script-duplicado': 'Scripts con el mismo nombre',
+  'helper-no-valido': 'Helper mal configurado',
+  'helper-duplicado': 'Helpers con el mismo nombre',
+  'patron-hora-no-valido': 'Patrón de hora no válido',
+  'opcion-no-valida': 'Opción que no existe',
+  'definicion-personalizada-no-valida': 'Dispositivo personalizado con errores',
 };
 
 /** Título legible de una incidencia (el suyo o, si no lo tiene, el de su código). */
@@ -249,8 +256,8 @@ const KIND_LABELS: Record<EntityReference['kind'], string> = {
 
 function knownEntityIds(ctx: Ctx): Set<string> {
   const ids = ctx.placed.flatMap((p) => entityIdsForDevice(p.device, p.def));
-  // Fase 3: personas, zonas y grupos también son entidades.
-  return new Set([...ids, ...Object.keys(peopleEntities(ctx.project)), ...(ctx.project.groups ?? []).map(groupEntityId)]);
+  // Fase 3: personas, zonas y grupos también son entidades. Tanda 3: y los helpers.
+  return new Set([...ids, ...Object.keys(peopleEntities(ctx.project)), ...(ctx.project.groups ?? []).map(groupEntityId), ...helperEntityIds(ctx.project)]);
 }
 
 function refExists(entityId: string, known: Set<string>, project: Project): boolean {
@@ -413,12 +420,58 @@ function duplicateScriptNameRule(ctx: Ctx): ValidationIssue[] {
     );
 }
 
+/** Tanda 3: helpers, patrones de hora, opciones de input_select y dispositivos personalizados. */
+function tanda3Rules(ctx: Ctx): ValidationIssue[] {
+  const result: ValidationIssue[] = [];
+  const helpers = ctx.project.helpers ?? [];
+  for (const h of helpers) {
+    const errors = validateHelper(h);
+    if (errors.length > 0) result.push(issue('error', 'helper-no-valido', `El helper «${h.name}»: ${errors.join('; ')}`, [], h.id));
+  }
+  const byEntity = new Map<string, string[]>();
+  for (const h of helpers) byEntity.set(helperEntityId(h), [...(byEntity.get(helperEntityId(h)) ?? []), h.name]);
+  for (const [entityId, list] of byEntity) {
+    if (list.length > 1) result.push(issue('error', 'helper-duplicado', `Hay ${list.length} helpers que generan ${entityId} (${list.map((n) => `«${n}»`).join(', ')}): cambia el nombre de alguno`, [], entityId));
+  }
+  const owners = [
+    ...ctx.project.automations.map((a) => ({ kind: 'La automatización', ref: 'automation' as const, id: a.id, name: a.name, triggers: a.triggers, actions: a.actions })),
+    ...ctx.project.scripts.map((s) => ({ kind: 'El script', ref: 'script' as const, id: s.id, name: s.name, triggers: [] as Trigger[], actions: s.sequence })),
+  ];
+  for (const o of owners) {
+    const nested = flattenActions(o.actions);
+    const triggers = [...o.triggers, ...nested.flatMap((x) => (x.type === 'wait_for_trigger' ? x.triggers : []))];
+    triggers.forEach((t, i) => {
+      if (t.type === 'time_pattern' && !timePatternSets(t)) {
+        result.push(issue('error', 'patron-hora-no-valido', `${o.kind} «${o.name}» tiene un patrón de hora no válido (usa un número, * o /N en horas 0-23, minutos y segundos 0-59)`, [], `${o.id}:${i}`, { kind: o.ref, id: o.id }));
+      }
+    });
+    for (const a of nested) {
+      if (a.type !== 'service' || a.service !== 'input_select.select_option') continue;
+      const option = a.data?.option;
+      const h = helpers.find((x) => helperEntityId(x) === a.entityId);
+      if (h?.type === 'input_select' && option !== undefined && !String(option).includes('{{') && !h.options.includes(String(option))) {
+        result.push(issue('warning', 'opcion-no-valida', `${o.kind} «${o.name}» elige la opción «${String(option)}», que no está en «${h.name}» (${h.options.join(', ')})`, [], `${o.id}:${a.entityId}:${String(option)}`, { kind: o.ref, id: o.id, entityId: a.entityId }));
+      }
+    }
+  }
+  for (const def of ctx.project.customDefinitions ?? []) {
+    const errors = validateDefinition(def);
+    if (errors.length > 0) {
+      const used = ctx.project.devices.filter((d) => d.definitionId === def.id).map((d) => d.id);
+      result.push(issue('error', 'definicion-personalizada-no-valida', `El dispositivo personalizado «${def.name}»: ${errors.join('; ')}`, used, def.id));
+    }
+  }
+  return result;
+}
+
 const GROUP_DOMAIN_LABELS: Record<'light' | 'switch' | 'cover', string> = { light: 'luces', switch: 'interruptores', cover: 'persianas' };
 
 const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1, info: 2 };
 
 /** Valida el proyecto. Devuelve los problemas ordenados por gravedad (errores primero). */
-export function validateProject(project: Project, defs: DeviceDefinition[]): ValidationIssue[] {
+export function validateProject(project: Project, baseDefs: DeviceDefinition[]): ValidationIssue[] {
+  // Tanda 3: el catálogo recibido más los dispositivos personalizados del proyecto.
+  const defs = allDefinitions(project, baseDefs);
   const placed: Placed[] = [];
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);
@@ -444,6 +497,7 @@ export function validateProject(project: Project, defs: DeviceDefinition[]): Val
     ...zoneRule(ctx),
     ...missingFieldRule(ctx),
     ...duplicateScriptNameRule(ctx),
+    ...tanda3Rules(ctx),
     ...isolatedInfraRule(ctx),
     ...cloudRule(ctx),
     ...roomRule(ctx),

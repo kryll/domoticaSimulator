@@ -13,6 +13,7 @@ import {
   zigbeeNetworkOf,
 } from '../devices/roles';
 import { CSV_BOM, CSV_SEPARATOR, csvField } from './csv';
+import { allDefinitions } from '../devices/catalog';
 
 export interface BomLine {
   definitionId: Id;
@@ -121,6 +122,7 @@ function missingInfrastructure(placed: Placed[], project: Project, defs: DeviceD
 
 /** Lista de materiales y presupuesto del proyecto. */
 export function billOfMaterials(project: Project, defs: DeviceDefinition[]): BomReport {
+  defs = allDefinitions(project, defs);
   const placed: Placed[] = [];
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);

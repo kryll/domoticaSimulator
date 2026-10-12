@@ -1,6 +1,6 @@
 // Capacidades efectivas de una entidad: las del catálogo con valores por defecto por dominio.
 import type { Device, DeviceDefinition, EntityCapabilities, Project } from '../types';
-import { catalog } from './catalog';
+import { allDefinitions } from './catalog';
 import { entitiesForDevice, entityDomain, type DeviceEntity } from './entities';
 
 export const DEFAULT_MOTION_TIMEOUT_SECONDS = 60;
@@ -23,6 +23,8 @@ export function withDefaults(domain: string, caps: EntityCapabilities = {}): Ent
       return { travelSeconds: DEFAULT_TRAVEL_SECONDS, ...caps };
     case 'binary_sensor':
       return { motionTimeoutSeconds: DEFAULT_MOTION_TIMEOUT_SECONDS, ...caps };
+    case 'alarm_control_panel':
+      return { alarmModes: ['armed_home', 'armed_away', 'armed_night'], ...caps };
     default:
       return { ...caps };
   }
@@ -40,7 +42,7 @@ export interface EntityOwner {
 }
 
 /** Dispositivo, definición y entidad a la que pertenece un entity_id del proyecto. */
-export function findEntityOwner(project: Pick<Project, 'devices'>, entityId: string, defs: DeviceDefinition[] = catalog): EntityOwner | undefined {
+export function findEntityOwner(project: Pick<Project, 'devices' | 'customDefinitions'>, entityId: string, defs: DeviceDefinition[] = allDefinitions(project)): EntityOwner | undefined {
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);
     if (!def) continue;
@@ -51,6 +53,6 @@ export function findEntityOwner(project: Pick<Project, 'devices'>, entityId: str
 }
 
 /** Capacidades efectivas de una entidad del proyecto (por defecto las del dominio). */
-export function entityCapabilities(project: Pick<Project, 'devices'>, entityId: string, defs: DeviceDefinition[] = catalog): EntityCapabilities {
+export function entityCapabilities(project: Pick<Project, 'devices' | 'customDefinitions'>, entityId: string, defs: DeviceDefinition[] = allDefinitions(project)): EntityCapabilities {
   return withDefaults(entityDomain(entityId), findEntityOwner(project, entityId, defs)?.entity.definition.capabilities);
 }

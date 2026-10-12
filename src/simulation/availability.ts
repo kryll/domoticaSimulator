@@ -7,9 +7,10 @@
 import type { Device, DeviceDefinition, Failures, Id, Project, SimulationState } from '../types';
 import { isBleProxy, isInfra } from '../devices/roles';
 import { canConnect } from '../network/connections';
-import { appendLog, cancelAllRuns } from './engine';
+import { appendLog, cancelAllRuns, fireHomeAssistantEvent } from './engine';
 import { setDeviceOfflineRaw } from './events';
 import { activeFailures, internetAvailable, isCloudDevice, needsMains } from './connectivity';
+import { allDefinitions } from '../devices/catalog';
 
 export { activeFailures, hasFailures, internetAvailable, isCloudDevice, isHaRestarting, needsMains, NO_FAILURES } from './connectivity';
 
@@ -19,6 +20,7 @@ interface Placed {
 }
 
 function placedDevices(project: Project, defs: DeviceDefinition[]): Map<Id, Placed> {
+  defs = allDefinitions(project, defs);
   const map = new Map<Id, Placed>();
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);
@@ -207,7 +209,9 @@ const FAILURE_LOG: Record<'internet' | 'powerOutage' | 'haRestarting', [string, 
 export function setFailures(sim: SimulationState, project: Project, defs: DeviceDefinition[], patch: Partial<Failures>): SimulationState {
   const before = activeFailures(sim);
   const failures: Failures = { ...before, ...patch, devicesDown: [...(patch.devicesDown ?? before.devicesDown)] };
-  let result: SimulationState = { ...sim, failures };
+  // Tanda 3: al empezar a reiniciarse, HA se detiene (trigger: homeassistant, event: shutdown).
+  const stopping = failures.haRestarting && !before.haRestarting;
+  let result: SimulationState = { ...(stopping ? fireHomeAssistantEvent(sim, project, 'shutdown') : sim), failures };
   for (const key of ['internet', 'powerOutage', 'haRestarting'] as const) {
     if (before[key] !== failures[key]) result = appendLog(result, failures[key] ? 'warning' : 'info', FAILURE_LOG[key][failures[key] ? 0 : 1]);
   }
@@ -225,6 +229,8 @@ export function setFailures(sim: SimulationState, project: Project, defs: Device
   if (fallen > 0) {
     result = appendLog(result, 'warning', `${fallen} dispositivo${fallen === 1 ? '' : 's'} sin disponibilidad por los fallos simulados`);
   }
+  // Tanda 3: HA vuelve a arrancar (trigger: homeassistant, event: start).
+  if (before.haRestarting && !failures.haRestarting) result = fireHomeAssistantEvent(result, project, 'start');
   return result;
 }
 

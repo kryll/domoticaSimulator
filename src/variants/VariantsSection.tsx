@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { countLabel } from '../ui/plural';
 import type { ProjectVariant } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
-import { catalog } from '../devices/catalog';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { SelectField, TextField } from '../ui/Field';
@@ -65,7 +65,7 @@ function CompareDialog({ initialA, initialB, onClose }: { initialA: string; init
     const snap = (id: string): ProjectSnapshot | undefined => (id === CURRENT ? snapshotOf(project) : variants.find((v) => v.id === id)?.snapshot);
     const sa = snap(a);
     const sb = snap(b);
-    return sa && sb ? compareVariants(sa, sb, catalog, budgetCost(catalog)) : null;
+    return sa && sb ? compareVariants(sa, sb, knownDefinitions(), budgetCost(knownDefinitions())) : null;
   }, [a, b, project, variants]);
 
   return (

@@ -3,6 +3,7 @@ import type { Automation, DeviceDefinition, EntityGroup, Id, Project, Room, Scen
 import { entitiesForDevice, slugify } from './entities';
 import { actionEntityIds, conditionEntityIds, serviceAreaIds, serviceEntityIds, triggerEntityIds } from '../automations/walk';
 import { groupEntityId } from '../simulation/logic';
+import { allDefinitions } from './catalog';
 
 /** Id del área de HA de una sala (slug del nombre). */
 export function areaId(room: Pick<Room, 'name'>): string {
@@ -11,6 +12,7 @@ export function areaId(room: Pick<Room, 'name'>): string {
 
 /** entity_id -> id de la sala del dispositivo (solo dispositivos con sala). Incluye los grupos. */
 export function entityRoomMap(project: Project, defs: DeviceDefinition[]): Record<string, Id> {
+  defs = allDefinitions(project, defs);
   const map: Record<string, Id> = {};
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);
@@ -71,7 +73,8 @@ const CONTROLLABLE_DOMAINS = new Set(['light', 'switch', 'fan', 'cover', 'climat
  * entity_id de los dispositivos de una sala (área de HA) del dominio indicado. Con el dominio
  * 'homeassistant' (o sin dominio) devuelve las entidades controlables (luces, enchufes, persianas...).
  */
-export function areaEntityIds(project: Pick<Project, 'devices'>, defs: DeviceDefinition[], roomId: Id, domain?: string): string[] {
+export function areaEntityIds(project: Pick<Project, 'devices' | 'customDefinitions'>, defs: DeviceDefinition[], roomId: Id, domain?: string): string[] {
+  defs = allDefinitions(project, defs);
   const ids: string[] = [];
   const any = domain === undefined || domain === '' || domain === 'homeassistant';
   for (const device of project.devices) {
@@ -94,7 +97,8 @@ function serviceDomain(service: string): string {
  * Todas las entidades de destino de una llamada a servicio: el entity_id principal, los de
  * `targets.entityIds` y las del dominio del servicio en cada sala de `targets.areaIds`, sin repetir.
  */
-export function resolveServiceTargets(project: Pick<Project, 'devices'>, defs: DeviceDefinition[], a: ServiceAction): string[] {
+export function resolveServiceTargets(project: Pick<Project, 'devices' | 'customDefinitions'>, defs: DeviceDefinition[], a: ServiceAction): string[] {
+  defs = allDefinitions(project, defs);
   const ids = serviceEntityIds(a);
   const domain = serviceDomain(a.service);
   for (const roomId of serviceAreaIds(a)) {

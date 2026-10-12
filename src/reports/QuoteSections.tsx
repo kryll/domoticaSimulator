@@ -1,8 +1,8 @@
 import { useEffect, useId, useMemo, useState } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import type { QuoteSettings } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useViewStore } from '../store/viewStore';
-import { catalog } from '../devices/catalog';
 import { QUOTE_DEFAULTS, buildQuote, type QuoteLine } from '../report/quote';
 import { formatDecimal, formatMoney, parseMoneyInput } from '../ui/money';
 import { inputClass } from '../ui/Field';
@@ -173,7 +173,7 @@ function LinesGroup({ title, lines }: { title: string; lines: QuoteLine[] }) {
 /** Partidas de buildQuote: materiales, infraestructura, mano de obra, margen, descuento, IVA y total. */
 export function QuoteBreakdown() {
   const project = useProjectStore((s) => s.project);
-  const quote = useMemo(() => buildQuote(project, catalog), [project]);
+  const quote = useMemo(() => buildQuote(project, knownDefinitions()), [project]);
   const totals: Array<[string, number, boolean?]> = [
     ['Subtotal materiales e infraestructura', quote.subtotalMaterials],
     ['Subtotal mano de obra', quote.subtotalLabor],

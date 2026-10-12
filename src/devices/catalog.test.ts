@@ -29,9 +29,9 @@ const valid = {
 };
 
 describe('catálogo', () => {
-  it('carga entre 45 y 80 definiciones válidas con ids únicos', () => {
-    expect(catalog.length).toBeGreaterThanOrEqual(45);
-    expect(catalog.length).toBeLessThanOrEqual(80);
+  it('carga entre 100 y 140 (Tanda 3: catálogo ampliado) definiciones válidas con ids únicos', () => {
+    expect(catalog.length).toBeGreaterThanOrEqual(100);
+    expect(catalog.length).toBeLessThanOrEqual(140);
     expect(new Set(catalog.map((d) => d.id)).size).toBe(catalog.length);
   });
 

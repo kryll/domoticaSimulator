@@ -8,8 +8,7 @@ import { primaryAction, stepAction } from '../devices/presentation';
 import { ContextMenu, type MenuEntry } from '../ui/ContextMenu';
 import { isInfra } from '../devices/roles';
 import { offlineBlockReason } from '../simulation/availability';
-import { catalog } from '../devices/catalog';
-import { definitionOf, entitiesOfDevice } from './analysis';
+import { definitionOf, entitiesOfDevice, knownDefinitions } from './analysis';
 import { createAutomationForDevice } from './actions';
 import { copySelection, deleteDevices, duplicateSelection, pasteFromClipboard } from './selectionActions';
 import { selectedDeviceIds } from '../store/uiStore';
@@ -73,7 +72,7 @@ function DeviceMenuBody({ deviceId, x, y }: { deviceId: string; x: number; y: nu
     ...(offline ? { hint: 'sin conexión' } : {}),
     onSelect: () => ui.setAddToScene(sceneIds),
   });
-  const blocked = offline ? offlineBlockReason(sim, useProjectStore.getState().project, catalog, device.id) : null;
+  const blocked = offline ? offlineBlockReason(sim, useProjectStore.getState().project, knownDefinitions(), device.id) : null;
   entries.push({
     kind: 'item',
     id: 'offline',

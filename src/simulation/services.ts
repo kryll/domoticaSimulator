@@ -565,6 +565,8 @@ export function applyService(
       return alarmService(svc, current, data, caps, ctx.code ?? DEFAULT_ALARM_CODE);
     case 'valve':
       return valveService(svc, current);
+    case 'siren':
+      return switchService(svc, current);
     default:
       return undefined;
   }

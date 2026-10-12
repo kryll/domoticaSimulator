@@ -138,6 +138,7 @@ const DOMAIN_SET: Record<EntityDomain, true> = {
   button: true,
   alarm_control_panel: true,
   valve: true,
+  siren: true,
 };
 
 function keysOf<K extends string>(record: Record<K, unknown>): K[] {

@@ -1,3 +1,5 @@
+import { WEEKDAYS } from '../automations/tanda3/stepFlags';
+import { describeTimePattern } from '../automations/tanda3/timePattern';
 // Automatizaciones en lenguaje natural para el cliente (Tanda 2): «Cuando se detecta movimiento
 // en el pasillo y es de noche, enciende la luz del pasillo al 30 % durante 2 minutos».
 // Lógica pura, sin React.
@@ -283,6 +285,12 @@ function describeTriggerClause(t: Trigger, ctx: Ctx): string {
     }
     case 'device_action':
       return `se pulsa ${devicePhrase(ctx, t.entityId)} (${labelOf(BUTTON_ACTION_LABELS, t.action).toLowerCase()})`;
+    case 'time_pattern':
+      return `toca según el patrón de hora (${describeTimePattern(t)})`;
+    case 'homeassistant':
+      return t.event === 'start' ? 'arranca Home Assistant' : 'se para Home Assistant';
+    case 'event':
+      return `llega el evento ${quoted(t.eventType || 'sin nombre')}`;
   }
 }
 
@@ -309,11 +317,13 @@ function describeConditionClause(c: Condition, ctx: Ctx): string {
     case 'numeric_state':
       if (c.entityId.startsWith('zone.')) return zoneCountText(ctx, c.entityId, c.above, c.below);
       return `${quantityPhrase(ctx, c.entityId)} ${rangeText(c.above, c.below, unitOf(ctx, c.entityId), { above: 'está por encima de', below: 'está por debajo de', between: 'está entre' })}`;
-    case 'time':
-      if (c.after && c.before) return `es entre las ${c.after} y las ${c.before}`;
-      if (c.after) return `son más de las ${c.after}`;
-      if (c.before) return `son menos de las ${c.before}`;
-      return 'es cualquier hora';
+    case 'time': {
+      const days = c.weekday && c.weekday.length > 0 ? ` (${joinList(WEEKDAYS.filter((d) => c.weekday?.includes(d.key)).map((d) => d.name), 'o')})` : '';
+      if (c.after && c.before) return `es entre las ${c.after} y las ${c.before}${days}`;
+      if (c.after) return `son más de las ${c.after}${days}`;
+      if (c.before) return `son menos de las ${c.before}${days}`;
+      return days ? `es${days}` : 'es cualquier hora';
+    }
     case 'sun':
       return sunConditionText(c);
     case 'and':
@@ -497,6 +507,10 @@ function describeAction(a: Action, ctx: Ctx): string {
       const what = joinList(a.triggers.map((t) => describeTriggerClause(t, ctx)), 'o');
       return `espera a que ocurra esto: ${what}${a.timeoutSeconds ? ` (como mucho ${durationText(a.timeoutSeconds)})` : ''}`;
     }
+    case 'stop':
+      return `se detiene${a.message ? ` (${a.message})` : ''}`;
+    case 'parallel':
+      return `a la vez: ${a.branches.map((b) => describeSequence(b, ctx) || 'nada').join('; ')}`;
   }
 }
 

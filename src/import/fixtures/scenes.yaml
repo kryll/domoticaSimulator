@@ -1,0 +1,12 @@
+- id: '1700000000100'
+  name: Cine
+  entities:
+    light.salon_techo:
+      state: 'on'
+      brightness: 60
+      color_temp_kelvin: 2700
+      friendly_name: Lámpara salón
+    media_player.altavoz_salon:
+      state: playing
+    switch.luz_cocina: 'off'
+  icon: mdi:movie

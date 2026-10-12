@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "minor_version": 8,
+  "key": "core.device_registry",
+  "data": {
+    "devices": [
+      { "area_id": "salon", "config_entries": ["01J0ZHA"], "connections": [["zigbee", "84:2e:14:ff:fe:aa:01:02"]], "disabled_by": null, "entry_type": null, "hw_version": null, "id": "4f1d0c2b9a7e", "identifiers": [["zha", "84:2e:14:ff:fe:aa:01:02"]], "labels": [], "manufacturer": "IKEA of Sweden", "model": "TRADFRI bulb E27 WS opal 980lm", "model_id": null, "name_by_user": "Lámpara salón", "name": "IKEA of Sweden TRADFRI bulb E27 WS opal 980lm", "serial_number": null, "sw_version": "0x23086631", "via_device_id": "9c0ffee00001" },
+      { "area_id": "salon", "config_entries": ["01J0ZHA"], "connections": [["zigbee", "00:15:8d:00:01:a2:b3:c4"]], "disabled_by": null, "entry_type": null, "hw_version": null, "id": "7a8b9c0d1e2f", "identifiers": [["zha", "00:15:8d:00:01:a2:b3:c4"]], "labels": [], "manufacturer": "LUMI", "model": "lumi.sensor_magnet.aq2", "model_id": null, "name_by_user": "Ventana salón", "name": "LUMI lumi.sensor_magnet.aq2", "serial_number": null, "sw_version": null, "via_device_id": "9c0ffee00001" },
+      { "area_id": "cocina", "config_entries": ["01J0SHELLY"], "connections": [["mac", "dc:da:0c:11:22:33"]], "disabled_by": null, "entry_type": null, "hw_version": "gen3", "id": "c0c1n4", "identifiers": [["shelly", "dcda0c112233"]], "labels": [], "manufacturer": "Shelly", "model": "Shelly 1PM Gen3", "model_id": "S3SW-001P16EU", "name_by_user": null, "name": "Luz cocina", "serial_number": null, "sw_version": "1.4.4", "via_device_id": null },
+      { "area_id": "dormitorio", "config_entries": ["01J0MIIO"], "connections": [["mac", "50:ec:50:aa:bb:cc"]], "disabled_by": null, "entry_type": null, "hw_version": null, "id": "purif3h", "identifiers": [["xiaomi_miio", "391234567"]], "labels": [], "manufacturer": "Xiaomi", "model": "zhimi.airpurifier.mb3", "model_id": null, "name_by_user": "Purificador", "name": "Mi Air Purifier 3H", "serial_number": null, "sw_version": "2.1.7", "via_device_id": null },
+      { "area_id": "salon", "config_entries": ["01J0SONOS"], "connections": [], "disabled_by": null, "entry_type": null, "hw_version": null, "id": "sonosera", "identifiers": [["sonos", "RINCON_38420B000001"]], "labels": [], "manufacturer": "Sonos", "model": "Era 100", "model_id": "S39", "name_by_user": null, "name": "Altavoz salón", "serial_number": null, "sw_version": "16.3", "via_device_id": null },
+      { "area_id": null, "config_entries": ["01J0ZHA"], "connections": [], "disabled_by": null, "entry_type": null, "hw_version": null, "id": "9c0ffee00001", "identifiers": [["zha", "00:12:4b:00:2a:bc:de:f0"]], "labels": [], "manufacturer": "Texas Instruments", "model": "CC2652P", "model_id": null, "name_by_user": null, "name": "Coordinador ZHA", "serial_number": null, "sw_version": null, "via_device_id": null },
+      { "area_id": null, "config_entries": ["01J0MET"], "connections": [], "disabled_by": null, "entry_type": "service", "hw_version": null, "id": "metno", "identifiers": [["met", "home"]], "labels": [], "manufacturer": "Met.no", "model": "Forecast", "model_id": null, "name_by_user": null, "name": "Casa", "serial_number": null, "sw_version": null, "via_device_id": null }
+    ],
+    "deleted_devices": []
+  }
+}

@@ -1,8 +1,10 @@
+import { helperEntities, helperEntityId } from '../simulation/helpers';
 import { create } from 'zustand';
+import { knownDefinitions } from '../canvas/analysis';
 import type { EntityState, EntityStateValue, Failures, Id, Project, ServiceData, SimulationState } from '../types';
 import { NO_FAILURES, hasFailures, reconcileAvailability, setFailures } from '../simulation/availability';
 import { entitiesForDevice, initialEntityStates } from '../devices/entities';
-import { catalog, getDefinition } from '../devices/catalog';
+import { getDefinition } from '../devices/catalog';
 import { applyQuickAction, primaryAction, setLevelAction, stepAction, type QuickAction } from '../devices/presentation';
 import { simNowForProject } from '../simulation/clock';
 import { jamLock, motionPulse, openDoor, pressButton, setDeviceOffline, setSensorValue } from '../simulation/events';
@@ -90,14 +92,14 @@ function project(): Project {
 }
 
 export const useSimulationStore = create<SimulationStoreState>()((set, get) => ({
-  sim: createSimulationState(project(), catalog, simNowForProject(project(), new Date())),
+  sim: createSimulationState(project(), knownDefinitions(), simNowForProject(project(), new Date())),
   running: false,
   speed: 1,
 
   reset: (p) => {
     stopLoop();
     const target = p ?? project();
-    const sim = createSimulationState(target, catalog, simNowForProject(target, new Date()));
+    const sim = createSimulationState(target, knownDefinitions(), simNowForProject(target, new Date()));
     set({ sim: { ...sim, speed: get().speed, running: false }, running: false });
   },
   start: () => {
@@ -119,7 +121,7 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
   setSpeed: (speed) => set((s) => ({ speed, sim: { ...s.sim, speed } })),
   advance: (realMs) => {
     // tick multiplica por sim.speed, que se mantiene sincronizado con `speed`.
-    set((s) => ({ sim: tick(s.sim, project(), realMs, { defs: catalog }) }));
+    set((s) => ({ sim: tick(s.sim, project(), realMs, { defs: knownDefinitions() }) }));
   },
   setEntity: (entityId, next) => set((s) => ({ sim: setEntityState(s.sim, project(), entityId, next) })),
   pressButton: (entityId, action) => set((s) => ({ sim: pressButton(s.sim, project(), entityId, action) })),
@@ -133,17 +135,17 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     applyDeviceAction(deviceId, (device, def, sim) => setLevelAction(device, def, sim, Math.max(0, Math.min(100, pct)))),
   runAutomation: (automationId, skipConditions = false) =>
     set((s) => ({ sim: runAutomation(s.sim, project(), automationId, { skipConditions }) })),
-  setFailures: (patch) => set((s) => ({ sim: setFailures(s.sim, project(), catalog, patch) })),
+  setFailures: (patch) => set((s) => ({ sim: setFailures(s.sim, project(), knownDefinitions(), patch) })),
   testTrigger: (automationId, triggerIndex) => set((s) => ({ sim: testTrigger(s.sim, project(), automationId, triggerIndex) })),
   jumpTo: (targetMs) => {
     lastTick = performance.now();
-    set((s) => ({ sim: jumpTo(s.sim, project(), catalog, targetMs) }));
+    set((s) => ({ sim: jumpTo(s.sim, project(), knownDefinitions(), targetMs) }));
   },
   setDeviceOffline: (deviceId, offline) =>
     set((s) => {
       const p = project();
       // Después de cambiar el dispositivo, recalcula lo que depende de él (hijos de un coordinador...).
-      return { sim: reconcileAvailability(setDeviceOffline(s.sim, p, deviceId, offline), p, catalog) };
+      return { sim: reconcileAvailability(setDeviceOffline(s.sim, p, deviceId, offline), p, knownDefinitions()) };
     }),
   motionPulse: (entityId, seconds) => set((s) => ({ sim: motionPulse(s.sim, project(), entityId, seconds) })),
   setBinary: (entityId, on) => set((s) => ({ sim: openDoor(s.sim, project(), entityId, on) })),
@@ -156,9 +158,12 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     if (renamed.size > 0) base = renameEntities(base, Object.fromEntries([...renamed].map(([next, old]) => [old, next])));
     const current = base.entities;
     // Además de los dispositivos: personas, zonas y grupos (Fase 3), que el motor crea al empezar.
-    const deviceStates = initialEntityStates(p, catalog);
+    const deviceStates = initialEntityStates(p, knownDefinitions());
     const groups = groupEntities(p, { ...deviceStates, ...current });
-    const initial = { ...deviceStates, ...groups };
+    // Tanda 3: helpers (input_*, timer, counter). Conservan su valor; la configuración (opciones,
+    // límites, duración...) se toma siempre del proyecto.
+    const helpers = helperEntities(p);
+    const initial = { ...deviceStates, ...helpers, ...groups };
     let entities: SimulationState['entities'] = {};
     let changed = base !== get().sim;
     for (const [id, init] of Object.entries(initial)) {
@@ -172,6 +177,18 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
       }
       const oldId = renamed.get(id);
       const kept = current[id] ?? (oldId !== undefined ? current[oldId] : undefined);
+      if (kept && helpers[id]) {
+        const attributes = { ...kept.attributes, ...init.attributes };
+        // Los atributos de una cuenta atrás en curso siguen siendo los del estado actual.
+        for (const k of ['remaining', 'finishes_at'] as const) {
+          const v = kept.attributes?.[k];
+          if (v !== undefined) attributes[k] = v;
+        }
+        const same = JSON.stringify(attributes) === JSON.stringify(kept.attributes);
+        entities[id] = same ? kept : { ...kept, attributes };
+        if (!same || !current[id]) changed = true;
+        continue;
+      }
       if (kept) {
         // conserva el estado pero actualiza atributos derivados del nombre (friendly_name)
         entities[id] = { ...kept, attributes: { ...kept.attributes, friendly_name: init.attributes?.friendly_name ?? id } };
@@ -211,7 +228,7 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     }
     // Con fallos, desconexiones o baterías, la disponibilidad depende del proyecto: un dispositivo
     // nuevo durante un fallo, deshacer, cambiar el SAI o la integración, borrar el coordinador...
-    if (needsReconcile(next)) next = reconcileAvailability(next, p, catalog);
+    if (needsReconcile(next)) next = reconcileAvailability(next, p, knownDefinitions());
     if (next !== get().sim) set({ sim: next });
   },
 }));
@@ -242,7 +259,7 @@ type ActionPicker = (
 function applyDeviceAction(deviceId: Id, pick: ActionPicker): boolean {
   const p = project();
   const device = p.devices.find((d) => d.id === deviceId);
-  const def = device ? getDefinition(device.definitionId, catalog) : undefined;
+  const def = device ? getDefinition(device.definitionId, knownDefinitions()) : undefined;
   if (!device || !def) return false;
   const { sim } = useSimulationStore.getState();
   const action = pick(device, def, sim);
@@ -258,13 +275,21 @@ export function renamedEntityIds(prev: Project, next: Project): Map<string, stri
   for (const device of next.devices) {
     const old = before.get(device.id);
     if (!old || old.name === device.name || old.definitionId !== device.definitionId) continue;
-    const def = getDefinition(device.definitionId, catalog);
+    const def = getDefinition(device.definitionId, knownDefinitions());
     if (!def) continue;
     const oldIds = entitiesForDevice(old, def);
     entitiesForDevice(device, def).forEach((e, i) => {
       const o = oldIds[i];
       if (o && o.entityId !== e.entityId) map.set(e.entityId, o.entityId);
     });
+  }
+  const oldHelpers = new Map((prev.helpers ?? []).map((h) => [h.id, h]));
+  for (const h of next.helpers ?? []) {
+    const old = oldHelpers.get(h.id);
+    if (!old || old.type !== h.type) continue;
+    const from = helperEntityId(old);
+    const to = helperEntityId(h);
+    if (from !== to) map.set(to, from);
   }
   return map;
 }

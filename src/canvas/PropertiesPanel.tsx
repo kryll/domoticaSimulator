@@ -1,5 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { Connection, Device, Protocol, Room } from '../types';
+import { DeviceBridgeLine } from '../bridge/DeviceBridgeLine';
+import type { Connection, Device, Helper, Protocol, Room } from '../types';
+import { HelperControl } from '../helpers/HelperControl';
+import { HELPER_ICONS } from '../helpers/helperModel';
+import { helperEntityId } from '../simulation/helpers';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { primarySelection, useUiStore } from '../store/uiStore';
@@ -100,6 +104,8 @@ function DeviceProperties({ device }: { device: Device }) {
           options={(def?.integrations ?? [device.integration]).map((i) => ({ value: i, label: INTEGRATION_LABELS[i] }))}
           onChange={(e) => updateDevice(device.id, { integration: e.target.value as Device['integration'] })}
         />
+        {/* E1: «Vía hacia HA» con el laboratorio activado (src/bridge). */}
+        <DeviceBridgeLine device={device} def={def} />
         {def && def.power !== 'battery' && (
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
@@ -285,6 +291,27 @@ function ConnectionProperties({ connection }: { connection: Connection }) {
   );
 }
 
+const NO_HELPERS: Helper[] = [];
+
+/** Sin selección: los helpers del proyecto con sus controles (Tanda 3). */
+function HelpersQuickPanel() {
+  const helpers = useProjectStore((s) => s.project.helpers ?? NO_HELPERS);
+  if (helpers.length === 0) return null;
+  return (
+    <section aria-label="Ayudantes" className="flex flex-col gap-2 border-t border-slate-200 p-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ayudantes</h3>
+      {helpers.map((h) => (
+        <div key={h.id} className="flex flex-col gap-1">
+          <span className="text-sm text-slate-800">
+            <span aria-hidden="true">{HELPER_ICONS[h.type]}</span> {h.name}
+          </span>
+          <HelperControl helper={h} entityId={helperEntityId(h)} />
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /** Panel derecho contextual con las propiedades de la selección. */
 export function PropertiesPanel() {
   const { ids, kind } = useUiStore(useShallow((s) => ({ ids: s.selection, kind: s.selectionKind })));
@@ -293,7 +320,10 @@ export function PropertiesPanel() {
 
   let title = 'Propiedades';
   let body: ReactNode = (
-    <EmptyState>Selecciona un dispositivo, una sala o una conexión en el lienzo.</EmptyState>
+    <>
+      <EmptyState>Selecciona un dispositivo, una sala o una conexión en el lienzo.</EmptyState>
+      <HelpersQuickPanel />
+    </>
   );
 
   if (kind === 'device' && ids.length > 1) {

@@ -5,6 +5,7 @@ import { canConnect, isWiredLink } from './connections';
 import { DEFAULT_RANGE_METERS, distanceMeters, FLOOR_ATTENUATION, FLOOR_HEIGHT_METERS, isInRange, rangeForProtocol } from './coverage';
 import { analyzeMesh } from './mesh';
 import { isInfra, MESH_PROTOCOLS } from '../devices/roles';
+import { allDefinitions } from '../devices/catalog';
 
 /** Atenuación por pared en dB según el material. */
 export const WALL_ATTENUATION_DB: Record<WallMaterial, number> = {
@@ -207,6 +208,7 @@ export function rssiHeatmap(floor: Floor, sources: readonly HeatSource[], grid: 
 
 /** Fuentes de una planta para el mapa: infraestructura y routers que emiten en ese protocolo. */
 export function heatSourcesFor(project: Project, defs: DeviceDefinition[], floorId: Id, protocol: Protocol): HeatSource[] {
+  defs = allDefinitions(project, defs);
   const sources: HeatSource[] = [];
   for (const d of project.devices) {
     const def = defs.find((x) => x.id === d.definitionId);
@@ -236,6 +238,7 @@ export interface RouterSuggestion {
  * planta y protocolo que maximiza el peor de los dos enlaces. Agrupa propuestas a menos de 2 m.
  */
 export function suggestRouterPlacement(project: Project, defs: DeviceDefinition[]): RouterSuggestion[] {
+  defs = allDefinitions(project, defs);
   const mesh = analyzeMesh(project, defs);
   const suggestions: RouterSuggestion[] = [];
   for (const id of mesh.unreachable) {

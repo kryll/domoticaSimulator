@@ -4,6 +4,7 @@ import { SimClock } from './SimClock';
 import { userWaits } from './engine';
 import { Button } from '../ui/Button';
 import { confirmDialog } from '../ui/confirm';
+import { DayPlanIndicator } from '../dayplanui/DayPlanIndicator';
 
 /** Controles de la simulación: reproducir/pausar, reiniciar, velocidad y reloj. */
 export function SimulationControls() {
@@ -77,6 +78,7 @@ export function SimulationControls() {
           </option>
         ))}
       </select>
+      <DayPlanIndicator />
       <SimClock />
     </div>
   );

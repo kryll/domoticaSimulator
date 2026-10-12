@@ -30,7 +30,8 @@ describe('escenarios de fallo (B2) con la casa de ejemplo', () => {
     expect(down(r)).toEqual(['demo-cafetera', 'demo-termostato']);
     expect(r.unavailableDevices[0]?.reason).toMatch(/nube sin Internet/);
     // Solo se degrada la automatización de zona (ubicación por la app y notificaciones a la app).
-    expect(r.automations.filter((a) => a.status !== 'ok').map((a) => [a.automationId, a.status])).toEqual([['demo-auto-salir', 'degraded']]);
+    // Tanda 3: y la de la cafetera (su temporizador sigue, pero el enchufe cae).
+    expect(r.automations.filter((a) => a.status !== 'ok').map((a) => [a.automationId, a.status])).toEqual([['demo-auto-salir', 'degraded'], ['demo-auto-cafetera-timer', 'degraded']]);
     const salir = r.automations.find((a) => a.automationId === 'demo-auto-salir');
     expect(salir?.reasons.join(' ')).toMatch(/app móvil por Internet/);
     expect(salir?.reasons.join(' ')).toMatch(/notificaciones a la app móvil/);

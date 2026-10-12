@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
-import { catalog } from '../devices/catalog';
 import { PROTOCOL_LABELS } from '../devices/labels';
 import { billOfMaterials, bomToCsv, type BomGroup, type BomLine } from '../export/bom';
 import { Button } from '../ui/Button';
@@ -88,7 +88,7 @@ function GroupTable({ title, groups }: { title: string; groups: BomGroup[] }) {
 /** Pestaña «Presupuesto»: lista de materiales con precio editable, totales e infraestructura necesaria. */
 export function BudgetPanel() {
   const project = useProjectStore((s) => s.project);
-  const report = useMemo(() => billOfMaterials(project, catalog), [project]);
+  const report = useMemo(() => billOfMaterials(project, knownDefinitions()), [project]);
 
   if (report.lines.length === 0)
     return (

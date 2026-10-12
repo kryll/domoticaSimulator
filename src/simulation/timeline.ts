@@ -16,6 +16,7 @@ import { DAY_MS, formatSimTime, MINUTE_MS, parseHHMM, startOfDay } from './clock
 import { activateScene, callService, createSimulationState, runScript, sameState, setEntityState, tick } from './engine';
 import { openDoor, pressButton, triggerMotion } from './events';
 import { findZone, movePerson } from './people';
+import { allDefinitions } from '../devices/catalog';
 
 export interface TimelineStepResult {
   /** Índice del paso en timeline.steps. */
@@ -81,7 +82,8 @@ function truthy(v: EntityStateValue | undefined): boolean {
   return !(v === false || v === 'off' || v === 'closed' || v === 0);
 }
 
-function applyEvent(sim: SimulationState, project: Project, step: TimelineEventStep): SimulationState | string {
+/** Aplica un evento de línea de tiempo (o un texto con el motivo si no se puede). */
+export function applyTimelineEvent(sim: SimulationState, project: Project, step: TimelineEventStep): SimulationState | string {
   const entity = step.entityId ?? '';
   switch (step.event) {
     case 'state':
@@ -158,6 +160,7 @@ export function recordedTimeline(log: LogEntry[], opts: { id: string; name: stri
  * aserciones. Una hora mal formada o un evento incompleto cuentan como fallo del paso.
  */
 export function runTimeline(project: Project, defs: DeviceDefinition[], timeline: Timeline, fallbackStartMs?: number): TimelineRun {
+  defs = allDefinitions(project, defs);
   const startMs = timelineStart(timeline, fallbackStartMs ?? DEFAULT_TIMELINE_START);
   let sim: SimulationState = { ...createSimulationState(project, defs, startMs), speed: 1 };
   const results: TimelineStepResult[] = [];
@@ -172,7 +175,7 @@ export function runTimeline(project: Project, defs: DeviceDefinition[], timeline
     const at = times[index] ?? sim.now;
     if (at > sim.now) sim = tick(sim, project, at - sim.now, { defs });
     if (step.kind === 'event') {
-      const next = applyEvent(sim, project, step);
+      const next = applyTimelineEvent(sim, project, step);
       if (typeof next === 'string') {
         results.push({ index, step, at, ok: false, actual: null, expected: null, message: `Evento no válido: ${next}` });
         return;

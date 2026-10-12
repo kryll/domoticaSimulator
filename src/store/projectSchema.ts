@@ -31,8 +31,10 @@ import type {
   TimelineAssertStep,
   ServiceAction,
   ServiceTargets,
+  Helper,
 } from '../types';
 import { INTEGRATIONS, PROTOCOLS } from '../devices/labels';
+import { CUSTOM_PREFIX, isCustomDefinitionId, parseDefinition } from '../devices/catalog';
 import { parseEmulationFields } from '../bridge/schema';
 
 type Obj = Record<string, unknown>;
@@ -169,6 +171,8 @@ function device(v: unknown, path: string): Device {
     d.loadWatts = load;
   }
   if (o.showAs !== undefined) d.showAs = oneOf(o, 'showAs', ['light', 'switch'] as const, path);
+  const alarmCode = optStr(o, 'alarmCode', path);
+  if (alarmCode !== undefined) d.alarmCode = alarmCode;
   return d;
 }
 
@@ -182,12 +186,27 @@ function trigger(v: unknown, path: string): Trigger {
   const t = triggerBody(o, path);
   const id = optStr(o, 'id', path);
   if (id !== undefined) t.id = id;
+  if (o.enabled !== undefined) t.enabled = bool(o, 'enabled', path);
   return t;
 }
 
 function triggerBody(o: Obj, path: string): Trigger {
-  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'zone', 'device_action'] as const, path);
+  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'zone', 'device_action', 'time_pattern', 'homeassistant', 'event'] as const, path);
   if (type === 'time') return { type, at: str(o, 'at', path) };
+  if (type === 'time_pattern') {
+    const t: Trigger = { type };
+    for (const key of ['hours', 'minutes', 'seconds'] as const) {
+      const v = optStr(o, key, path);
+      if (v !== undefined) t[key] = v;
+    }
+    return t;
+  }
+  if (type === 'homeassistant') return { type, event: oneOf(o, 'event', ['start', 'shutdown'] as const, path) };
+  if (type === 'event') {
+    const t: Trigger = { type, eventType: str(o, 'eventType', path) };
+    if (o.eventData !== undefined) t.eventData = stateRecord(o.eventData, `${path}.eventData`);
+    return t;
+  }
   if (type === 'zone') {
     return { type, personId: str(o, 'personId', path), zoneId: str(o, 'zoneId', path), event: oneOf(o, 'event', ['enter', 'leave'] as const, path) };
   }
@@ -204,6 +223,8 @@ function triggerBody(o: Obj, path: string): Trigger {
     const below = optNum(o, 'below', path);
     if (above !== undefined) t.above = above;
     if (below !== undefined) t.below = below;
+    const forSeconds = optDuration(o, path);
+    if (forSeconds !== undefined) t.for = forSeconds;
     return t;
   }
   const t: Trigger = { type, entityId: str(o, 'entityId', path) };
@@ -218,6 +239,14 @@ function triggerBody(o: Obj, path: string): Trigger {
 
 function condition(v: unknown, path: string): Condition {
   const o = obj(v, path);
+  const c = conditionBody(o, path);
+  if (o.enabled !== undefined) c.enabled = bool(o, 'enabled', path);
+  return c;
+}
+
+const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+function conditionBody(o: Obj, path: string): Condition {
   const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'and', 'or', 'not', 'zone', 'trigger'] as const, path);
   switch (type) {
     case 'state': {
@@ -240,6 +269,13 @@ function condition(v: unknown, path: string): Condition {
       const before = optStr(o, 'before', path);
       if (after !== undefined) c.after = after;
       if (before !== undefined) c.before = before;
+      if (o.weekday !== undefined) {
+        c.weekday = arr(o.weekday, `${path}.weekday`).map((d, i) => {
+          const day = WEEKDAYS.find((x) => x === d);
+          if (day === undefined) fail(`${path}.weekday[${i}]`, `tiene un valor no válido (${JSON.stringify(d)})`);
+          return day;
+        });
+      }
       return c;
     }
     case 'sun': {
@@ -277,10 +313,17 @@ function conditions(v: unknown, path: string): Condition[] {
 
 function action(v: unknown, path: string): Action {
   const o = obj(v, path);
+  const a = actionBody(o, path);
+  if (o.enabled !== undefined) a.enabled = bool(o, 'enabled', path);
+  if (o.continueOnError !== undefined) a.continueOnError = bool(o, 'continueOnError', path);
+  return a;
+}
+
+function actionBody(o: Obj, path: string): Action {
   const type = oneOf(
     o,
     'type',
-    ['service', 'scene', 'script', 'delay', 'choose', 'if', 'wait_for_trigger', 'repeat', 'notify', 'variables'] as const,
+    ['service', 'scene', 'script', 'delay', 'choose', 'if', 'wait_for_trigger', 'repeat', 'notify', 'variables', 'stop', 'parallel'] as const,
     path,
   );
   switch (type) {
@@ -341,6 +384,13 @@ function action(v: unknown, path: string): Action {
     }
     case 'variables':
       return { type, variables: stateRecord(o.variables, `${path}.variables`) };
+    case 'stop': {
+      const a: Action = { type, message: str(o, 'message', path) };
+      if (o.error !== undefined) a.error = bool(o, 'error', path);
+      return a;
+    }
+    case 'parallel':
+      return { type, branches: arr(o.branches, `${path}.branches`).map((b, i) => actions(b, `${path}.branches[${i}]`)) };
   }
 }
 
@@ -605,8 +655,88 @@ function parseFase3(o: Obj, project: Project): void {
   if (variants) project.variants = variants;
   if (groups) project.groups = groups;
   if (o.reliability !== undefined) project.reliability = reliability(o.reliability, 'reliability');
+  // Tanda 3: helpers y definiciones personalizadas.
+  const helpers = optList(o, 'helpers', helper);
+  if (helpers) {
+    checkUniqueIds('helpers', helpers);
+    project.helpers = helpers;
+  }
+  if (o.customDefinitions !== undefined) {
+    const defs = arr(o.customDefinitions, 'customDefinitions').map((d, i) => {
+      try {
+        return parseDefinition(d, i);
+      } catch (e) {
+        return fail(`customDefinitions[${i}]`, e instanceof Error ? e.message : String(e));
+      }
+    });
+    defs.forEach((d, i) => {
+      if (!isCustomDefinitionId(d.id)) fail(`customDefinitions[${i}].id`, `debe empezar por «${CUSTOM_PREFIX}»`);
+    });
+    checkUniqueIds('customDefinitions', defs);
+    project.customDefinitions = defs;
+  }
   for (const [name, items] of [['people', people], ['zones', zones], ['timelines', timelines], ['variants', variants], ['groups', groups]] as const) {
     if (items) checkUniqueIds(name, items);
+  }
+}
+
+const HELPER_TYPES = ['input_boolean', 'input_number', 'input_select', 'input_text', 'input_datetime', 'timer', 'counter'] as const;
+
+function helper(v: unknown, path: string): Helper {
+  const o = obj(v, path);
+  const base = { id: str(o, 'id', path), name: str(o, 'name', path) };
+  const icon = optStr(o, 'icon', path);
+  const withIcon = <T extends Helper>(h: T): T => (icon === undefined ? h : { ...h, icon });
+  const type = oneOf(o, 'type', HELPER_TYPES, path);
+  switch (type) {
+    case 'input_boolean': {
+      const h: Helper = { ...base, type };
+      if (o.initial !== undefined) h.initial = bool(o, 'initial', path);
+      return withIcon(h);
+    }
+    case 'input_number': {
+      const h: Helper = { ...base, type, min: numAt(o, 'min', path), max: numAt(o, 'max', path), step: numAt(o, 'step', path), mode: oneOf(o, 'mode', ['slider', 'box'] as const, path) };
+      if (h.min >= h.max) fail(`${path}.min`, 'debe ser menor que max');
+      if (h.step <= 0) fail(`${path}.step`, 'debe ser mayor que 0');
+      const unit = optStr(o, 'unit', path);
+      const initial = optNum(o, 'initial', path);
+      if (unit !== undefined) h.unit = unit;
+      if (initial !== undefined) h.initial = initial;
+      return withIcon(h);
+    }
+    case 'input_select': {
+      const h: Helper = { ...base, type, options: strList(o.options, `${path}.options`) };
+      const initial = optStr(o, 'initial', path);
+      if (initial !== undefined) h.initial = initial;
+      return withIcon(h);
+    }
+    case 'input_text': {
+      const h: Helper = { ...base, type };
+      const max = optNum(o, 'max', path);
+      const initial = optStr(o, 'initial', path);
+      if (max !== undefined) h.max = max;
+      if (initial !== undefined) h.initial = initial;
+      return withIcon(h);
+    }
+    case 'input_datetime': {
+      const h: Helper = { ...base, type, has_date: bool(o, 'has_date', path), has_time: bool(o, 'has_time', path) };
+      const initial = optStr(o, 'initial', path);
+      if (initial !== undefined) h.initial = initial;
+      return withIcon(h);
+    }
+    case 'timer': {
+      const duration = numAt(o, 'duration', path);
+      if (duration < 0) fail(`${path}.duration`, 'no puede ser negativa');
+      return withIcon({ ...base, type, duration });
+    }
+    case 'counter': {
+      const h: Helper = { ...base, type, initial: numAt(o, 'initial', path), step: numAt(o, 'step', path) };
+      const minimum = optNum(o, 'minimum', path);
+      const maximum = optNum(o, 'maximum', path);
+      if (minimum !== undefined) h.minimum = minimum;
+      if (maximum !== undefined) h.maximum = maximum;
+      return withIcon(h);
+    }
   }
 }
 

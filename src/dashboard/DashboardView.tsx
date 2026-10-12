@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import type { EntityDefinition, EntityState } from '../types';
+import type { EntityDefinition, EntityState, Helper } from '../types';
+import { HelperControl } from '../helpers/HelperControl';
+import { HELPER_ICONS } from '../helpers/helperModel';
+import { helperEntityId } from '../simulation/helpers';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
-import { catalog } from '../devices/catalog';
-import { projectEntities } from '../canvas/analysis';
+import { projectEntities, knownDefinitions } from '../canvas/analysis';
 import { entityStateText } from '../ui/stateText';
 import { EntityControls } from '../simulation/EntityControls';
 import { Button } from '../ui/Button';
@@ -174,15 +176,35 @@ function MoreInfo({ entityId, lookup, onClose }: { entityId: string; lookup: Loo
   );
 }
 
+const NO_HELPERS: Helper[] = [];
+
+/** Tanda 3: tarjeta con los helpers del proyecto y sus controles. */
+function HelpersCard({ helpers }: { helpers: Helper[] }) {
+  return (
+    <section aria-label="Ayudantes" className="flex flex-col gap-2 rounded-2xl bg-slate-100/70 p-2">
+      <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Ayudantes</h3>
+      {helpers.map((h) => (
+        <div key={h.id} className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          <span className="text-sm font-medium text-slate-800">
+            <span aria-hidden="true">{HELPER_ICONS[h.type]}</span> {h.name}
+          </span>
+          <HelperControl helper={h} entityId={helperEntityId(h)} />
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /** Pestaña «Dashboard»: el dashboard Lovelace generado, interactivo, con exportación a YAML (B15). */
 export function DashboardView({ readOnly = false }: { readOnly?: boolean } = {}) {
   const project = useProjectStore((s) => s.project);
-  const dashboard = useMemo(() => generateDashboard(project, catalog), [project]);
+  const dashboard = useMemo(() => generateDashboard(project, knownDefinitions()), [project]);
   const lookup = useMemo<Lookup>(() => {
     const map: Lookup = new Map();
     for (const ref of projectEntities(project)) map.set(ref.entityId, { name: ref.friendlyName, definition: ref.definition });
     return map;
   }, [project]);
+  const helpers = project.helpers ?? NO_HELPERS;
   const [viewPath, setViewPath] = useState<string | null>(null);
   const [more, setMore] = useState<string | null>(null);
   const view = dashboard.views.find((v) => v.path === viewPath) ?? dashboard.views[0];
@@ -212,17 +234,18 @@ export function DashboardView({ readOnly = false }: { readOnly?: boolean } = {})
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-3" role="region" aria-label={view ? `Vista ${view.title}` : 'Dashboard'}>
-        {!view || view.sections.length === 0 ? (
+        {(!view || view.sections.length === 0) && helpers.length === 0 ? (
           <EmptyState>El dashboard está vacío: añade dispositivos con entidades al plano.</EmptyState>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] items-start gap-3">
-            {view.sections.map((section, i) => (
+            {(view?.sections ?? []).map((section, i) => (
               <section key={section.roomId ?? `s${i}`} className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100/70 p-2">
                 {section.cards.map((card, j) => (
                   <Card key={j} card={card} lookup={lookup} onMore={setMore} />
                 ))}
               </section>
             ))}
+            {helpers.length > 0 && <HelpersCard helpers={helpers} />}
           </div>
         )}
       </div>

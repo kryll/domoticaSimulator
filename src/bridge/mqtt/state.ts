@@ -106,6 +106,11 @@ export function genericFields(entity: BridgeEntity, st: EntityState | undefined)
     }
     case 'button':
       return undefined;
+    case 'siren':
+      return { state: onOff(st) };
+    case 'alarm_control_panel':
+    case 'valve':
+      return { state: String(st.state) };
     default:
       return { state: typeof st.state === 'boolean' ? onOff(st) : st.state };
   }

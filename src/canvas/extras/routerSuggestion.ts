@@ -1,8 +1,8 @@
 // «Sugerir router» (B21): calcula las propuestas de la planta y las muestra o las quita.
 import { useProjectStore } from '../../store/projectStore';
+import { knownDefinitions } from '../analysis';
 import { useUiStore } from '../../store/uiStore';
 import { useExtrasStore } from '../../store/extrasStore';
-import { catalog } from '../../devices/catalog';
 import { suggestRouterPlacement } from '../../network/walls';
 
 /** Activa o desactiva las marcas de routers sugeridos en la planta `floorId`. */
@@ -13,7 +13,7 @@ export function toggleRouterSuggestion(floorId: string | undefined): void {
     return;
   }
   const project = useProjectStore.getState().project;
-  const all = suggestRouterPlacement(project, catalog);
+  const all = suggestRouterPlacement(project, knownDefinitions());
   const here = all.filter((s) => s.floorId === floorId);
   const ui = useUiStore.getState();
   if (!floorId || here.length === 0) {

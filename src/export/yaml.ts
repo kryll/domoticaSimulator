@@ -158,7 +158,7 @@ function dataToYaml(data: Record<string, EntityStateValue>): YamlMap {
 }
 
 export function triggerToYaml(t: Trigger, ctx: YamlContext = {}): YamlMap {
-  const m = triggerBodyToYaml(t, ctx);
+  const m = withEnabled(triggerBodyToYaml(t, ctx), t);
   if (t.id === undefined || t.id === '') return m;
   // `id` justo después de `trigger:`, como lo escribe el editor de HA.
   const [first, ...rest] = Object.entries(m);
@@ -178,10 +178,25 @@ function triggerBodyToYaml(t: Trigger, ctx: YamlContext): YamlMap {
       const m: YamlMap = { trigger: 'numeric_state', entity_id: t.entityId };
       if (t.above !== undefined) m.above = t.above;
       if (t.below !== undefined) m.below = t.below;
+      if (t.for !== undefined && t.for > 0) m.for = formatHms(t.for);
       return m;
     }
     case 'time':
       return { trigger: 'time', at: t.at };
+    case 'time_pattern': {
+      const m: YamlMap = { trigger: 'time_pattern' };
+      if (t.hours !== undefined) m.hours = patternValue(t.hours);
+      if (t.minutes !== undefined) m.minutes = patternValue(t.minutes);
+      if (t.seconds !== undefined) m.seconds = patternValue(t.seconds);
+      return m;
+    }
+    case 'homeassistant':
+      return { trigger: 'homeassistant', event: t.event };
+    case 'event': {
+      const m: YamlMap = { trigger: 'event', event_type: t.eventType };
+      if (t.eventData && Object.keys(t.eventData).length > 0) m.event_data = dataToYaml(t.eventData);
+      return m;
+    }
     case 'sun': {
       const m: YamlMap = { trigger: 'sun', event: t.event };
       if (t.offsetMinutes) m.offset = formatOffset(t.offsetMinutes);
@@ -193,7 +208,21 @@ function triggerBodyToYaml(t: Trigger, ctx: YamlContext): YamlMap {
   }
 }
 
+/** Tanda 3: `enabled: false` al final del paso (solo si está desactivado). */
+function withEnabled(m: YamlMap, x: { enabled?: boolean }): YamlMap {
+  return x.enabled === false ? { ...m, enabled: false } : m;
+}
+
+/** "/5" y "*" como texto; un número suelto como número (como lo escribe HA). */
+function patternValue(v: string): YamlValue {
+  return /^\d+$/.test(v) ? Number(v) : v;
+}
+
 export function conditionToYaml(c: Condition, ctx: YamlContext = {}): YamlMap {
+  return withEnabled(conditionBodyToYaml(c, ctx), c);
+}
+
+function conditionBodyToYaml(c: Condition, ctx: YamlContext): YamlMap {
   switch (c.type) {
     case 'state': {
       const m: YamlMap = { condition: 'state', entity_id: c.entityId, state: stateValueToYaml(c.state) };
@@ -210,6 +239,7 @@ export function conditionToYaml(c: Condition, ctx: YamlContext = {}): YamlMap {
       const m: YamlMap = { condition: 'time' };
       if (c.after !== undefined) m.after = c.after;
       if (c.before !== undefined) m.before = c.before;
+      if (c.weekday !== undefined && c.weekday.length > 0) m.weekday = c.weekday.length === 1 ? (c.weekday[0] ?? 'mon') : [...c.weekday];
       return m;
     }
     case 'sun': {
@@ -248,6 +278,11 @@ function serviceTargetToYaml(a: ServiceAction, ctx: YamlContext): YamlMap | unde
 }
 
 export function actionToYaml(a: Action, ctx: YamlContext = {}): YamlMap {
+  const m = withEnabled(actionBodyToYaml(a, ctx), a);
+  return a.continueOnError ? { ...m, continue_on_error: true } : m;
+}
+
+function actionBodyToYaml(a: Action, ctx: YamlContext): YamlMap {
   switch (a.type) {
     case 'service': {
       // notify.* no tiene entidad de destino.

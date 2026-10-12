@@ -1,5 +1,5 @@
 // Parser YAML mínimo (bloques, escalares, comillas, flujo simple) y conversión a Automation.
-import type { Action, Automation, ChooseOption, Condition, EntityStateValue, RepeatAction, ServiceAction, ServiceTargets, SunEvent, Trigger } from '../types';
+import type { Action, Automation, ChooseOption, Condition, EntityStateValue, RepeatAction, ServiceAction, ServiceTargets, SunEvent, Trigger, Weekday } from '../types';
 import { findRoomByArea } from '../devices/areas';
 import { collectYamlWarnings, type YamlWarning } from './yaml-warnings';
 import { isYamlMap, type YamlContext, type YamlMap, type YamlValue } from '../export/yaml';
@@ -292,6 +292,7 @@ export function parseTrigger(v: YamlValue, i = 0, ctx?: Ctx): Trigger {
   const m = asMap(v, where);
   const t = parseTriggerBody(m, where, ctx);
   if (m.id !== undefined && m.id !== null && m.id !== '') t.id = str(m.id, `${where} (id)`);
+  if (m.enabled === false) t.enabled = false;
   return t;
 }
 
@@ -313,10 +314,42 @@ function parseTriggerBody(m: YamlMap, where: string, ctx: Ctx | undefined): Trig
       const below = num(m.below, where);
       if (above !== undefined) t.above = above;
       if (below !== undefined) t.below = below;
+      const forSeconds = durationOf(m.for, where);
+      if (forSeconds !== undefined) t.for = forSeconds;
       return t;
     }
     case 'time':
       return { type: 'time', at: hhmm(req(m, 'at', where), where) };
+    case 'time_pattern': {
+      const t: Trigger = { type: 'time_pattern' };
+      for (const key of ['hours', 'minutes', 'seconds'] as const) {
+        const v = m[key];
+        if (v === undefined || v === null) continue;
+        const text = str(v, `${where} (${key})`).trim();
+        if (!/^(\*|\/?\d+)$/.test(text)) throw new Error(`Valor no válido en ${where} (${key}): "${text}" (usa un número, * o /5)`);
+        t[key] = text;
+      }
+      if (t.hours === undefined && t.minutes === undefined && t.seconds === undefined) throw new Error(`El patrón de hora de ${where} necesita hours, minutes o seconds`);
+      return t;
+    }
+    case 'homeassistant': {
+      const event = str(req(m, 'event', where), where);
+      if (event !== 'start' && event !== 'shutdown') throw new Error(`Evento de Home Assistant no válido en ${where}: "${event}" (start o shutdown)`);
+      return { type: 'homeassistant', event };
+    }
+    case 'event': {
+      const raw = req(m, 'event_type', where);
+      const eventType = str(Array.isArray(raw) ? (raw[0] ?? null) : raw, where);
+      const t: Trigger = { type: 'event', eventType };
+      if (m.event_data !== undefined && m.event_data !== null) {
+        const data: Record<string, EntityStateValue> = {};
+        for (const [k, v] of Object.entries(asMap(m.event_data, `${where} (event_data)`))) {
+          if (v !== null && !Array.isArray(v) && !isYamlMap(v)) data[k] = stateValue(v, `${where} (event_data.${k})`);
+        }
+        t.eventData = data;
+      }
+      return t;
+    }
     case 'sun': {
       const t: Trigger = { type: 'sun', event: sunEvent(req(m, 'event', where), where) };
       if (m.offset !== undefined && m.offset !== null) t.offsetMinutes = offsetMinutes(m.offset, where);
@@ -333,6 +366,14 @@ function parseTriggerBody(m: YamlMap, where: string, ctx: Ctx | undefined): Trig
 export function parseCondition(v: YamlValue, i = 0, ctx?: Ctx): Condition {
   const where = `la condición ${i + 1}`;
   const m = asMap(v, where);
+  const c = parseConditionBody(m, where, ctx);
+  if (m.enabled === false) c.enabled = false;
+  return c;
+}
+
+const WEEKDAY_KEYS: readonly Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+function parseConditionBody(m: YamlMap, where: string, ctx: Ctx | undefined): Condition {
   const kind = str(req(m, 'condition', where), where);
   switch (kind) {
     case 'state': {
@@ -353,6 +394,13 @@ export function parseCondition(v: YamlValue, i = 0, ctx?: Ctx): Condition {
       const c: Condition = { type: 'time' };
       if (m.after !== undefined && m.after !== null) c.after = hhmm(m.after, where);
       if (m.before !== undefined && m.before !== null) c.before = hhmm(m.before, where);
+      if (m.weekday !== undefined && m.weekday !== null) {
+        c.weekday = list(m.weekday).map((d) => {
+          const day = WEEKDAY_KEYS.find((x) => x === str(d, `${where} (weekday)`));
+          if (!day) throw new Error(`Día no válido en ${where}: "${str(d, where)}" (mon, tue, wed, thu, fri, sat o sun)`);
+          return day;
+        });
+      }
       return c;
     }
     case 'sun': {
@@ -439,6 +487,13 @@ function resolveScript(entityId: string, ctx: Ctx | undefined, where: string): s
 export function parseAction(v: YamlValue, i = 0, ctx?: Ctx): Action {
   const where = `la acción ${i + 1}`;
   const m = asMap(v, where);
+  const a = parseActionBody(m, where, ctx);
+  if (m.enabled === false) a.enabled = false;
+  if (m.continue_on_error === true) a.continueOnError = true;
+  return a;
+}
+
+function parseActionBody(m: YamlMap, where: string, ctx: Ctx | undefined): Action {
   if (m.delay !== undefined && m.delay !== null) return { type: 'delay', seconds: delaySeconds(m.delay, where) };
   const logic = parseFase3Action(m, where, ctx);
   if (logic) return logic;
@@ -480,6 +535,11 @@ function serviceTarget(service: string, m: YamlMap, where: string, ctx: Ctx | un
 }
 
 const MODES: readonly Automation['mode'][] = ['single', 'restart', 'queued', 'parallel'];
+
+/** Tanda 3: automatización a partir de un mapa YAML ya leído (para importar listas completas). */
+export function parseAutomationObject(m: YamlMap, ctx?: Ctx, fallbackId: string = crypto.randomUUID()): Automation {
+  return objectToAutomation(m, ctx, fallbackId);
+}
 
 function objectToAutomation(m: YamlMap, ctx: Ctx | undefined, fallbackId: string): Automation {
   const mode = m.mode === undefined || m.mode === null ? 'single' : str(m.mode, 'mode');
@@ -605,6 +665,18 @@ function parseFase3Action(m: YamlMap, where: string, ctx: Ctx | undefined): Acti
     if (r.until !== undefined && r.until !== null) a.until = conditionList(r.until, ctx);
     if (a.count === undefined && !a.while && !a.until) throw new Error(`repeat necesita count, while o until en ${where}`);
     return a;
+  }
+  if (m.stop !== undefined) {
+    const a: Action = { type: 'stop', message: m.stop === null ? '' : str(m.stop, `${where} (stop)`) };
+    if (m.error === true) a.error = true;
+    return a;
+  }
+  if (m.parallel !== undefined) {
+    const branches = list(m.parallel).map((b, j) => {
+      const bm = asMap(b, `${where} (rama ${j + 1})`);
+      return bm.sequence !== undefined && Object.keys(bm).every((k) => k === 'sequence' || k === 'alias') ? actionList(bm.sequence, ctx) : [parseAction(bm, j, ctx)];
+    });
+    return { type: 'parallel', branches };
   }
   if (m.variables !== undefined) {
     const variables: Record<string, EntityStateValue> = {};

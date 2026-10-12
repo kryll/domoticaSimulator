@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "minor_version": 15,
+  "key": "core.entity_registry",
+  "data": {
+    "entities": [
+      { "area_id": null, "device_class": null, "device_id": "4f1d0c2b9a7e", "disabled_by": null, "entity_id": "light.salon_techo", "hidden_by": null, "name": null, "original_device_class": null, "original_name": null, "platform": "zha", "unique_id": "84:2e:14:ff:fe:aa:01:02-1", "unit_of_measurement": null },
+      { "area_id": null, "device_class": null, "device_id": "7a8b9c0d1e2f", "disabled_by": null, "entity_id": "binary_sensor.ventana_salon_opening", "hidden_by": null, "name": null, "original_device_class": "window", "original_name": "Opening", "platform": "zha", "unique_id": "00:15:8d:00:01:a2:b3:c4-1-6", "unit_of_measurement": null },
+      { "area_id": null, "device_class": null, "device_id": "7a8b9c0d1e2f", "disabled_by": null, "entity_id": "sensor.ventana_salon_battery", "hidden_by": null, "name": null, "original_device_class": "battery", "original_name": "Battery", "platform": "zha", "unique_id": "00:15:8d:00:01:a2:b3:c4-1-1", "unit_of_measurement": "%" },
+      { "area_id": null, "device_class": null, "device_id": "c0c1n4", "disabled_by": null, "entity_id": "switch.luz_cocina", "hidden_by": null, "name": null, "original_device_class": null, "original_name": null, "platform": "shelly", "unique_id": "dcda0c112233-switch:0", "unit_of_measurement": null },
+      { "area_id": null, "device_class": null, "device_id": "c0c1n4", "disabled_by": null, "entity_id": "sensor.luz_cocina_power", "hidden_by": null, "name": null, "original_device_class": "power", "original_name": "Power", "platform": "shelly", "unique_id": "dcda0c112233-switch:0-power", "unit_of_measurement": "W" },
+      { "area_id": null, "device_class": null, "device_id": "c0c1n4", "disabled_by": null, "entity_id": "sensor.luz_cocina_energy", "hidden_by": null, "name": null, "original_device_class": "energy", "original_name": "Energy", "platform": "shelly", "unique_id": "dcda0c112233-switch:0-energy", "unit_of_measurement": "kWh" },
+      { "area_id": null, "device_class": null, "device_id": "purif3h", "disabled_by": null, "entity_id": "fan.purificador", "hidden_by": null, "name": null, "original_device_class": null, "original_name": null, "platform": "xiaomi_miio", "unique_id": "391234567", "unit_of_measurement": null },
+      { "area_id": null, "device_class": null, "device_id": "purif3h", "disabled_by": null, "entity_id": "sensor.purificador_pm2_5", "hidden_by": null, "name": null, "original_device_class": "pm25", "original_name": "PM2.5", "platform": "xiaomi_miio", "unique_id": "391234567-pm25", "unit_of_measurement": "µg/m³" },
+      { "area_id": null, "device_class": null, "device_id": "purif3h", "disabled_by": null, "entity_id": "sensor.purificador_humidity", "hidden_by": null, "name": null, "original_device_class": "humidity", "original_name": "Humidity", "platform": "xiaomi_miio", "unique_id": "391234567-humidity", "unit_of_measurement": "%" },
+      { "area_id": null, "device_class": null, "device_id": "purif3h", "disabled_by": null, "entity_id": "select.purificador_led_brightness", "hidden_by": null, "name": null, "original_device_class": null, "original_name": "Led brightness", "platform": "xiaomi_miio", "unique_id": "391234567-led", "unit_of_measurement": null },
+      { "area_id": null, "device_class": null, "device_id": "purif3h", "disabled_by": "user", "entity_id": "sensor.purificador_filter_life", "hidden_by": null, "name": null, "original_device_class": null, "original_name": "Filter life", "platform": "xiaomi_miio", "unique_id": "391234567-filter", "unit_of_measurement": "%" },
+      { "area_id": null, "device_class": null, "device_id": "sonosera", "disabled_by": null, "entity_id": "media_player.altavoz_salon", "hidden_by": null, "name": null, "original_device_class": "speaker", "original_name": null, "platform": "sonos", "unique_id": "RINCON_38420B000001", "unit_of_measurement": null },
+      { "area_id": null, "device_class": null, "device_id": "metno", "disabled_by": null, "entity_id": "weather.casa", "hidden_by": null, "name": null, "original_device_class": null, "original_name": null, "platform": "met", "unique_id": "home", "unit_of_measurement": null },
+      { "area_id": null, "device_class": null, "device_id": null, "disabled_by": null, "entity_id": "sensor.sun_next_rising", "hidden_by": null, "name": null, "original_device_class": "timestamp", "original_name": "Next rising", "platform": "sun", "unique_id": "sun-next_rising", "unit_of_measurement": null }
+    ],
+    "deleted_entities": []
+  }
+}

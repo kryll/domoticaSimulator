@@ -27,6 +27,10 @@ export function tileAction(entityId: string, state: EntityState | undefined): Ti
       return st === 'cleaning' ? { service: 'vacuum.return_to_base', label: 'Volver a la base' } : { service: 'vacuum.start', label: 'Limpiar' };
     case 'button':
       return { service: 'button.press', label: 'Pulsar' };
+    case 'valve':
+      return on ? { service: 'valve.close_valve', label: 'Cerrar' } : { service: 'valve.open_valve', label: 'Abrir' };
+    case 'input_boolean':
+      return on ? { service: 'input_boolean.turn_off', label: 'Apagar' } : { service: 'input_boolean.turn_on', label: 'Encender' };
     case 'media_player':
       return st === 'off' || st === 'standby' ? { service: 'media_player.turn_on', label: 'Encender' } : { service: 'media_player.turn_off', label: 'Apagar' };
     default:
@@ -37,7 +41,7 @@ export function tileAction(entityId: string, state: EntityState | undefined): Ti
 /** ¿Se pinta la tarjeta como activa? */
 export function tileActive(state: EntityState | undefined): boolean {
   const st = state?.state;
-  return st === true || ON.has(String(st)) || st === 'home' || st === 'heat' || st === 'cool';
+  return st === true || ON.has(String(st)) || st === 'home' || st === 'heat' || st === 'cool' || String(st).startsWith('armed_') || st === 'triggered' || st === 'active';
 }
 
 const DOMAIN_ICONS: Record<string, string> = {
@@ -54,6 +58,15 @@ const DOMAIN_ICONS: Record<string, string> = {
   sensor: '📟',
   binary_sensor: '🔔',
   camera: '📷',
+  alarm_control_panel: '🚨',
+  valve: '🚰',
+  input_boolean: '🔘',
+  input_number: '🎚️',
+  input_select: '📋',
+  input_text: '✏️',
+  input_datetime: '📅',
+  timer: '⏲️',
+  counter: '🔢',
 };
 
 export function domainIcon(entityId: string): string {

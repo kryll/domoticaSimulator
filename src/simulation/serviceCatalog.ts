@@ -1,6 +1,7 @@
 // Metadatos de los servicios de Home Assistant que soporta la simulación (services.ts):
 // nombre en español y campos tipados para construir formularios.
-import type { EntityCapabilities, EntityDomain } from '../types';
+import type { EntityCapabilities, EntityDomain, HelperType } from '../types';
+import { ALARM_STATE_LABELS } from '../devices/labels';
 import { isDimmable, withDefaults } from '../devices/capabilities';
 import { HVAC_MODE_LABELS, PRESET_LABELS, labelOf } from '../devices/labels';
 import { NOTIFY_PERSISTENT } from './notify';
@@ -39,7 +40,7 @@ export interface ServiceInfo {
 }
 
 /** Dominios con servicios: los de entidad y el genérico homeassistant. */
-export type ServiceDomain = EntityDomain | 'homeassistant' | 'notify';
+export type ServiceDomain = EntityDomain | HelperType | 'homeassistant' | 'notify';
 
 const svc = (service: string, name: string, fields: ServiceField[] = []): ServiceInfo => ({ service, name, fields });
 
@@ -83,6 +84,10 @@ function climateServices(caps: EntityCapabilities): ServiceInfo[] {
     svc('climate.set_temperature', 'Fijar consigna', [temperature, { key: 'hvac_mode', label: 'Modo', type: 'select', options: modes }]),
     svc('climate.set_hvac_mode', 'Cambiar modo', [{ key: 'hvac_mode', label: 'Modo', type: 'select', options: modes, required: true }]),
   ];
+  const fans = caps.fanModes ?? [];
+  if (fans.length > 0) {
+    list.push(svc('climate.set_fan_mode', 'Cambiar ventilador', [{ key: 'fan_mode', label: 'Ventilador', type: 'select', options: options(fans, FAN_MODE_LABELS), required: true }]));
+  }
   const presets = caps.presetModes ?? [];
   if (presets.length > 0) {
     list.push(svc('climate.set_preset_mode', 'Cambiar preset', [{ key: 'preset_mode', label: 'Preset', type: 'select', options: options(presets, PRESET_LABELS), required: true }]));
@@ -118,6 +123,70 @@ function mediaServices(caps: EntityCapabilities): ServiceInfo[] {
     svc('media_player.select_source', 'Elegir fuente', [source]),
   ];
 }
+
+/** Tanda 3: modos del ventilador del aire acondicionado. */
+export const FAN_MODE_LABELS: Record<string, string> = { auto: 'Automático', low: 'Bajo', medium: 'Medio', high: 'Alto', quiet: 'Silencioso', turbo: 'Turbo' };
+
+const CODE: ServiceField = { key: 'code', label: 'Código', type: 'text' };
+const ARM_NAMES: Record<string, string> = {
+  armed_home: 'Armar en casa',
+  armed_away: 'Armar fuera',
+  armed_night: 'Armar noche',
+  armed_vacation: 'Armar vacaciones',
+  armed_custom_bypass: 'Armar personalizada',
+};
+
+function alarmServices(caps: EntityCapabilities): ServiceInfo[] {
+  const modes = caps.alarmModes ?? ['armed_home', 'armed_away', 'armed_night'];
+  const code: ServiceField = caps.codeArmRequired ? { ...CODE, required: true } : CODE;
+  return [
+    ...modes.map((m) => svc(`alarm_control_panel.alarm_arm_${m.replace(/^armed_/, '')}`, ARM_NAMES[m] ?? labelOf(ALARM_STATE_LABELS, m), [code])),
+    svc('alarm_control_panel.alarm_disarm', 'Desarmar', [{ ...CODE, required: true }]),
+    svc('alarm_control_panel.alarm_trigger', 'Disparar la alarma', [CODE]),
+  ];
+}
+
+const VALUE_NUMBER: ServiceField = { key: 'value', label: 'Valor', type: 'number', required: true };
+
+/** Tanda 3: servicios de los helpers. */
+function helperServices(domain: HelperType): ServiceInfo[] {
+  switch (domain) {
+    case 'input_boolean':
+      return ON_OFF('input_boolean');
+    case 'input_number':
+      return [svc('input_number.set_value', 'Fijar valor', [VALUE_NUMBER]), svc('input_number.increment', 'Subir un paso'), svc('input_number.decrement', 'Bajar un paso')];
+    case 'input_select':
+      return [
+        svc('input_select.select_option', 'Elegir opción', [{ key: 'option', label: 'Opción', type: 'text', required: true }]),
+        svc('input_select.select_next', 'Opción siguiente', [{ key: 'cycle', label: 'Volver al principio', type: 'boolean' }]),
+        svc('input_select.select_previous', 'Opción anterior', [{ key: 'cycle', label: 'Volver al final', type: 'boolean' }]),
+        svc('input_select.select_first', 'Primera opción'),
+        svc('input_select.select_last', 'Última opción'),
+      ];
+    case 'input_text':
+      return [svc('input_text.set_value', 'Fijar texto', [{ key: 'value', label: 'Texto', type: 'text', required: true }])];
+    case 'input_datetime':
+      return [
+        svc('input_datetime.set_datetime', 'Fijar fecha y hora', [
+          { key: 'date', label: 'Fecha (AAAA-MM-DD)', type: 'text' },
+          { key: 'time', label: 'Hora (HH:MM:SS)', type: 'text' },
+          { key: 'datetime', label: 'Fecha y hora', type: 'text' },
+        ]),
+      ];
+    case 'timer':
+      return [
+        svc('timer.start', 'Iniciar', [{ key: 'duration', label: 'Duración (HH:MM:SS)', type: 'text' }]),
+        svc('timer.pause', 'Pausar'),
+        svc('timer.cancel', 'Cancelar'),
+        svc('timer.finish', 'Terminar'),
+        svc('timer.change', 'Cambiar tiempo', [{ key: 'duration', label: 'Tiempo a sumar (HH:MM:SS)', type: 'text', required: true }]),
+      ];
+    case 'counter':
+      return [svc('counter.increment', 'Sumar'), svc('counter.decrement', 'Restar'), svc('counter.reset', 'Reiniciar'), svc('counter.set_value', 'Fijar valor', [VALUE_NUMBER])];
+  }
+}
+
+const HELPER_DOMAINS: HelperType[] = ['input_boolean', 'input_number', 'input_select', 'input_text', 'input_datetime', 'timer', 'counter'];
 
 const ON_OFF = (domain: string): ServiceInfo[] => [
   svc(`${domain}.turn_on`, 'Encender'),
@@ -174,6 +243,20 @@ export function servicesForDomain(domain: ServiceDomain | string, capabilities?:
       ];
     case 'button':
       return [svc('button.press', 'Pulsar')];
+    case 'alarm_control_panel':
+      return alarmServices(caps);
+    case 'valve':
+      return [svc('valve.open_valve', 'Abrir'), svc('valve.close_valve', 'Cerrar'), svc('valve.toggle', 'Alternar')];
+    case 'siren':
+      return ON_OFF('siren');
+    case 'input_boolean':
+    case 'input_number':
+    case 'input_select':
+    case 'input_text':
+    case 'input_datetime':
+    case 'timer':
+    case 'counter':
+      return helperServices(domain);
     case 'homeassistant':
       return ON_OFF('homeassistant');
     case 'notify':
@@ -188,7 +271,7 @@ export function servicesForDomain(domain: ServiceDomain | string, capabilities?:
   }
 }
 
-const ALL_DOMAINS: ServiceDomain[] = ['light', 'switch', 'fan', 'cover', 'lock', 'climate', 'media_player', 'vacuum', 'camera', 'button', 'homeassistant', 'notify'];
+const ALL_DOMAINS: ServiceDomain[] = ['light', 'switch', 'fan', 'cover', 'lock', 'climate', 'media_player', 'vacuum', 'camera', 'button', 'alarm_control_panel', 'valve', 'siren', ...HELPER_DOMAINS, 'homeassistant', 'notify'];
 
 /** Metadatos de un servicio completo ("light.turn_on"), si la simulación lo soporta. */
 export function serviceInfo(service: string): ServiceInfo | undefined {
@@ -196,6 +279,8 @@ export function serviceInfo(service: string): ServiceInfo | undefined {
   const full: EntityCapabilities = {
     colorModes: ['brightness', 'color_temp', 'rgb'],
     presetModes: ['eco'],
+    fanModes: ['auto'],
+    alarmModes: ['armed_home', 'armed_away', 'armed_night', 'armed_vacation', 'armed_custom_bypass'],
   };
   return servicesForDomain(domain, full).find((s) => s.service === service);
 }

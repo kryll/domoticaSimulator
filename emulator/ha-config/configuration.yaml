@@ -1,0 +1,13 @@
+# Home Assistant del laboratorio de HA Simulator (entorno de pruebas, nunca un hogar real).
+# Este archivo es la plantilla del repositorio; el resto de ha-config/ lo crea Home Assistant
+# y no se sube a git. Las automatizaciones del proyecto llegan como packages en
+# packages/hasim/ (las escribe el orquestador o scripts/sync-automations.mjs).
+default_config:
+
+homeassistant:
+  name: Laboratorio HA Simulator
+  packages: !include_dir_named packages
+
+# Sin envío de estadísticas: el laboratorio funciona sin conexión.
+logger:
+  default: warning

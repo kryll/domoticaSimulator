@@ -3,6 +3,8 @@
 import type { DeviceDefinition, Floor, Id, Project } from '../types';
 import { entitiesForDevice, entityDomain, slugify } from '../devices/entities';
 import { entityRoomMap } from '../devices/areas';
+import { allDefinitions } from '../devices/catalog';
+import { helperEntityId } from '../simulation/helpers';
 import { groupEntityId, personEntityId } from '../simulation/logic';
 import { toYaml, type YamlMap, type YamlValue } from '../export/yaml';
 
@@ -36,7 +38,10 @@ export interface Dashboard {
 }
 
 /** Dominios que se muestran como tarjeta tile (controlables). */
-const TILE_DOMAINS = new Set(['light', 'switch', 'cover', 'lock', 'fan', 'vacuum', 'button']);
+const TILE_DOMAINS = new Set(['light', 'switch', 'cover', 'lock', 'fan', 'vacuum', 'button', 'alarm_control_panel', 'valve']);
+
+/** Tanda 3: helpers que se muestran como tile (los de texto y fecha van en una tarjeta entities). */
+const HELPER_TILE_DOMAINS = new Set(['input_boolean', 'input_number', 'input_select', 'timer', 'counter']);
 
 interface EntityInfo {
   entityId: string;
@@ -84,7 +89,8 @@ function viewPath(floor: Floor, used: Set<string>): string {
  * «Sin sala» para los dispositivos sin sala y una sección «Personas» en la primera vista.
  * La infraestructura sin entidades no aparece.
  */
-export function generateDashboard(project: Project, defs: DeviceDefinition[]): Dashboard {
+export function generateDashboard(project: Project, baseDefs: DeviceDefinition[]): Dashboard {
+  const defs = allDefinitions(project, baseDefs);
   const roomOf = entityRoomMap(project, defs);
   const floors = [...project.floors].sort((a, b) => a.level - b.level);
   const usedPaths = new Set<string>();
@@ -115,6 +121,15 @@ export function generateDashboard(project: Project, defs: DeviceDefinition[]): D
   const groupsWithoutRoom = (project.groups ?? []).map(groupEntityId).filter((id) => roomOf[id] === undefined);
   if (first && groupsWithoutRoom.length > 0) {
     first.sections.push({ type: 'grid', cards: [{ type: 'heading', heading: 'Grupos' }, ...groupsWithoutRoom.map((id): DashboardCard => ({ type: 'tile', entity: id }))] });
+  }
+  // Tanda 3: sección «Ayudantes» con los helpers del proyecto.
+  const helperIds = (project.helpers ?? []).map(helperEntityId);
+  if (first && helperIds.length > 0) {
+    const tiles = helperIds.filter((id) => HELPER_TILE_DOMAINS.has(entityDomain(id))).map((id): DashboardCard => ({ type: 'tile', entity: id }));
+    const listed = helperIds.filter((id) => !HELPER_TILE_DOMAINS.has(entityDomain(id)));
+    const cards: DashboardCard[] = [{ type: 'heading', heading: 'Ayudantes' }, ...tiles];
+    if (listed.length > 0) cards.push({ type: 'entities', title: 'Ajustes', entities: listed });
+    first.sections.push({ type: 'grid', cards });
   }
   return { title: project.name, views };
 }

@@ -1,5 +1,6 @@
 import type { Device, EntityStateValue, Id, NetworkRole, Point, Trigger } from '../types';
-import { catalog, getDefinition } from '../devices/catalog';
+import { knownDefinitions } from './analysis';
+import { getDefinition } from '../devices/catalog';
 import { entitiesForDevice } from '../devices/entities';
 import { createDevice, uniqueDeviceName } from '../devices/factory';
 import { canConnect, explainUnconnected, suggestConnections } from '../network/connections';
@@ -18,7 +19,7 @@ export function activeFloorId(): Id | undefined {
 /** Crea un dispositivo del catálogo en la planta activa y lo selecciona. */
 export function addDeviceFromDefinition(definitionId: Id, position: Point): Device | null {
   const ui = useUiStore.getState();
-  const def = getDefinition(definitionId, catalog);
+  const def = getDefinition(definitionId, knownDefinitions());
   const floorId = activeFloorId();
   if (!def || !floorId) {
     ui.notify('No se pudo añadir el dispositivo', 'error');
@@ -34,7 +35,7 @@ export function addDeviceFromDefinition(definitionId: Id, position: Point): Devi
     def,
     { floorId, position: { x: Math.round(position.x), y: Math.round(position.y) }, name },
     store.project,
-    catalog,
+    knownDefinitions(),
   );
   store.addDevice(device);
   ui.select({ kind: 'device', id: device.id });
@@ -54,8 +55,8 @@ const ROLE_RANK: Record<NetworkRole, number> = {
 
 /** Ordena el par para que sourceId sea el hijo y targetId el padre (infraestructura). */
 export function orientConnection(a: Device, b: Device): { sourceId: Id; targetId: Id } {
-  const ra = ROLE_RANK[getDefinition(a.definitionId, catalog)?.role ?? 'end_device'];
-  const rb = ROLE_RANK[getDefinition(b.definitionId, catalog)?.role ?? 'end_device'];
+  const ra = ROLE_RANK[getDefinition(a.definitionId, knownDefinitions())?.role ?? 'end_device'];
+  const rb = ROLE_RANK[getDefinition(b.definitionId, knownDefinitions())?.role ?? 'end_device'];
   return ra > rb ? { sourceId: b.id, targetId: a.id } : { sourceId: a.id, targetId: b.id };
 }
 
@@ -66,7 +67,7 @@ export function connectDevices(sourceId: Id, targetId: Id): boolean {
   const a = store.project.devices.find((d) => d.id === sourceId);
   const b = store.project.devices.find((d) => d.id === targetId);
   if (!a || !b || a.id === b.id) return false;
-  const result = canConnect(a, b, catalog);
+  const result = canConnect(a, b, knownDefinitions());
   if (!result.ok) {
     ui.notify(`No se pueden conectar: ${result.reason}`, 'error');
     return false;
@@ -83,14 +84,14 @@ export function connectDevices(sourceId: Id, targetId: Id): boolean {
 /** Añade las conexiones sugeridas por el núcleo de red. */
 export function autoConnect(): number {
   const store = useProjectStore.getState();
-  const suggested = suggestConnections(store.project, catalog);
+  const suggested = suggestConnections(store.project, knownDefinitions());
   const added = store.addConnections(suggested);
   const ui = useUiStore.getState();
   if (added > 0) {
     ui.notify(added === 1 ? 'Se ha añadido 1 conexión' : `Se han añadido ${added} conexiones`, 'success');
     return added;
   }
-  const reasons = explainUnconnected(useProjectStore.getState().project, catalog).map((r) => r.reason);
+  const reasons = explainUnconnected(useProjectStore.getState().project, knownDefinitions()).map((r) => r.reason);
   ui.notify(
     reasons.length > 0 ? 'No se ha creado ninguna conexión:' : 'Todos los dispositivos ya están conectados',
     'info',
@@ -179,7 +180,7 @@ export function triggerEntityFor<T extends { definition: { key: string; domain: 
 export function createAutomationForDevice(deviceId: Id): Id | null {
   const store = useProjectStore.getState();
   const device = store.project.devices.find((d) => d.id === deviceId);
-  const def = device ? getDefinition(device.definitionId, catalog) : undefined;
+  const def = device ? getDefinition(device.definitionId, knownDefinitions()) : undefined;
   if (!device || !def) return null;
   const main = triggerEntityFor(entitiesForDevice(device, def));
   const trigger: Trigger = { type: 'state', entityId: main?.entityId ?? '' };

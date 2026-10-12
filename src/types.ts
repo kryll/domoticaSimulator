@@ -98,7 +98,8 @@ export type EntityDomain =
   | 'button'
   // Tanda 3: alarma y válvulas.
   | 'alarm_control_panel'
-  | 'valve';
+  | 'valve'
+  | 'siren';
 
 /** Papel del dispositivo dentro de la red. */
 export type NetworkRole =
@@ -543,7 +544,9 @@ export type SimTimer =
   // Fase 3 (B11): `for:` de un disparador de estado dentro de wait_for_trigger.
   | WaitForTimer
   // Tanda 3: fin de un helper timer.
-  | HelperTimerTimer;
+  | HelperTimerTimer
+  // Tanda 3: evento programado (día típico): movimiento, puerta, servicio, persona...
+  | TimelineEventTimer;
 
 export interface PendingAction {
   id: Id;
@@ -1088,6 +1091,33 @@ export type Helper =
 export interface HelperTimerTimer {
   kind: 'helper_timer';
   entityId: string;
+}
+
+/** Evento de una línea de tiempo programado como temporizador (día típico). */
+export interface TimelineEventTimer {
+  kind: 'timeline_event';
+  step: TimelineEventStep;
+  /** Texto para el registro («Ana entra en la cocina»). */
+  description?: string;
+}
+
+/** Día típico: eventos de entrada generados para un perfil de vida (src/dayplan). */
+export type DayProfile = 'teletrabajo' | 'oficina' | 'fin_de_semana';
+
+export interface DayPlanEvent {
+  /** Milisegundos desde las 00:00 del día. */
+  at: number;
+  /** Persona (índice) que lo provoca. */
+  person: number;
+  step: TimelineEventStep;
+  description: string;
+}
+
+export interface DayPlan {
+  profile: DayProfile;
+  people: number;
+  seed: number;
+  events: DayPlanEvent[];
 }
 
 /** Ramas de un `parallel` pendientes: la continuación se ejecuta cuando terminan todas. */

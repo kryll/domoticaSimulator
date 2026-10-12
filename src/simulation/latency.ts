@@ -1,7 +1,7 @@
 // Latencia y fiabilidad por protocolo e integración (B22). Funciones puras y deterministas.
 import type { DeviceDefinition, Integration, Project, Protocol } from '../types';
 import { findEntityOwner } from '../devices/capabilities';
-import { isCloud } from '../devices/catalog';
+import { isCloud, allDefinitions } from '../devices/catalog';
 import { effectiveIotClass } from '../devices/roles';
 
 /** Latencia base de una integración local (ms). */
@@ -46,7 +46,8 @@ export function nextRandom(state: number): [number, number] {
  * Latencia de una llamada a la entidad. `random` en [0, 1) sitúa la latencia de nube dentro de
  * su rango (1-3 s). Entidades sin dispositivo (grupos, personas): latencia 0, local.
  */
-export function latencyFor(project: Pick<Project, 'devices'>, defs: DeviceDefinition[], entityId: string, random = 0.5): LatencyInfo {
+export function latencyFor(project: Pick<Project, 'devices' | 'customDefinitions'>, defs: DeviceDefinition[], entityId: string, random = 0.5): LatencyInfo {
+  defs = allDefinitions(project, defs);
   const owner = findEntityOwner(project, entityId, defs);
   if (!owner) return { ms: 0, cloud: false };
   const cloud = isCloud(effectiveIotClass(owner.device, owner.def));

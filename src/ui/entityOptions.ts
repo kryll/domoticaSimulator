@@ -5,6 +5,8 @@ import { deviceIcon, formatNumber } from '../devices/presentation';
 import { foldText } from '../devices/text';
 import { disambiguate, entityLabel } from './entityLabel';
 import { entityStateText } from './stateText';
+import { helperEntityId } from '../simulation/helpers';
+import { HELPER_ICONS } from '../helpers/helperModel';
 
 export interface EntityFilter {
   /** Dominios admitidos (light, sensor...). */
@@ -38,6 +40,8 @@ export interface EntityGroup {
 }
 
 export const NO_ROOM = 'Sin sala';
+/** Grupo del selector con los helpers del proyecto. */
+export const HELPERS_GROUP = 'Ayudantes';
 
 export function isNumericValue(v: unknown): boolean {
   if (typeof v === 'number') return Number.isFinite(v);
@@ -102,6 +106,28 @@ export function entityGroups(
       roomName,
     });
   }
+  // Tanda 3: helpers (input_*, timer, counter) en su propio grupo, al final.
+  if (!filter.deviceClasses) {
+    for (const h of project.helpers ?? []) {
+      const entityId = helperEntityId(h);
+      if (filter.allowedIds && !filter.allowedIds.includes(entityId)) continue;
+      if (filter.domains && !filter.domains.includes(h.type)) continue;
+      if (filter.numericOnly && h.type !== 'input_number' && h.type !== 'counter') continue;
+      const st = states[entityId];
+      items.push({
+        entityId,
+        label: h.name,
+        icon: HELPER_ICONS[h.type],
+        stateText: formatEntityState(st, h.type === 'input_number' ? h.unit : undefined),
+        domain: h.type,
+        deviceId: '',
+        search: '',
+        group: HELPERS_GROUP,
+        floorLevel: Number.MAX_SAFE_INTEGER,
+        roomName: HELPERS_GROUP,
+      });
+    }
+  }
   const order = new Map<string, [number, string]>();
   const map = new Map<string, EntityOption[]>();
   for (const item of disambiguate(items)) {
@@ -117,6 +143,8 @@ export function entityGroups(
       const [la, ra] = order.get(a) ?? [0, a];
       const [lb, rb] = order.get(b) ?? [0, b];
       if (la !== lb) return la - lb;
+      if (ra === HELPERS_GROUP) return 1;
+      if (rb === HELPERS_GROUP) return -1;
       if (ra === NO_ROOM && rb !== NO_ROOM) return 1;
       if (rb === NO_ROOM && ra !== NO_ROOM) return -1;
       return ra.localeCompare(rb, 'es');

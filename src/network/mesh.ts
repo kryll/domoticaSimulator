@@ -3,6 +3,7 @@ import type { Device, DeviceDefinition, Id, Project } from '../types';
 import { isBleProxy, isInfra } from '../devices/roles';
 import { canConnect, isWiredLink } from './connections';
 import { isInRangeWithWalls } from './walls';
+import { allDefinitions } from '../devices/catalog';
 
 export interface MeshAnalysis {
   reachable: Set<Id>;
@@ -36,6 +37,7 @@ function linked(project: Project, defs: DeviceDefinition[], a: Device, b: Device
  * Solo propagan la señal la infraestructura, los routers de malla y los proxies BLE.
  */
 export function analyzeMesh(project: Project, defs: DeviceDefinition[]): MeshAnalysis {
+  defs = allDefinitions(project, defs);
   const defOf = new Map<Id, DeviceDefinition>();
   for (const d of project.devices) {
     const def = defs.find((x) => x.id === d.definitionId);

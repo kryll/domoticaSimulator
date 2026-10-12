@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { countLabel } from '../ui/plural';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
-import { catalog } from '../devices/catalog';
 import { projectToPackages } from '../export/packages';
 import { zipFiles } from '../export/zip';
 import { Modal } from '../ui/Modal';
@@ -21,7 +21,7 @@ function sizeLabel(text: string): string {
 /** Exportación a Home Assistant real: packages/ por área, areas.yaml y la guía de emparejamiento (B16). */
 export function PackagesDialog({ onClose }: { onClose: () => void }) {
   const project = useProjectStore((s) => s.project);
-  const files = useMemo(() => projectToPackages(project, catalog), [project]);
+  const files = useMemo(() => projectToPackages(project, knownDefinitions()), [project]);
   const [selected, setSelected] = useState(GUIDE);
   const current = files.find((f) => f.path === selected) ?? files[0];
 

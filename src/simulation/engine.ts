@@ -91,6 +91,7 @@ import { countLabel, plural } from '../ui/plural';
 import { allDefinitions } from '../devices/catalog';
 import { applyHelperService, findHelperByEntity, helperEntities, isHelperDomain, timerFinishedState } from './helpers';
 import { DEFAULT_ALARM_CODE } from './services';
+import { applyTimelineEvent } from './timeline';
 
 export { capturableEntities, captureSceneEntities, type CapturableEntities } from './scenes';
 export { sameState } from './stateUtils';
@@ -260,6 +261,8 @@ function renameTimer(timer: SimTimer, mapping: Record<string, string>): SimTimer
     case 'wait_for':
     case 'helper_timer':
       return { ...timer, entityId: ren(timer.entityId) };
+    case 'timeline_event':
+      return timer.step.entityId === undefined ? timer : { ...timer, step: { ...timer.step, entityId: ren(timer.step.entityId) } };
   }
 }
 
@@ -881,7 +884,7 @@ function callServiceCore(
   const caps = entityCapabilities(project, entityId);
   const owner = target === 'alarm_control_panel' ? findEntityOwner(project, entityId) : undefined;
   const res = applyService(target, service, current, data, { now: sim.now, capabilities: caps, code: owner?.device.alarmCode ?? DEFAULT_ALARM_CODE });
-  if (!res) return fatalOutcome(addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra), 'servicio no soportado en la simulación');
+  if (!res) return outcome(addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra), false, 'servicio no soportado en la simulación');
   const desc = describeServiceData(data);
   let next = addLog(sim, 'info', `Servicio ${name} → ${friendly(sim, entityId)}${desc ? ` (${desc})` : ''}`, logExtra);
   for (const w of res.warnings) next = addLog(next, 'warning', `${friendly(sim, entityId)}: ${w}`, logExtra);
@@ -912,7 +915,7 @@ function helperServiceCall(
   exec: Exec,
 ): Outcome {
   const res = applyHelperService(domain, entityId, service, current, data, sim.now, findHelperByEntity(project, entityId));
-  if (!res) return fatalOutcome(addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra), 'servicio no soportado en la simulación');
+  if (!res) return outcome(addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra), false, 'servicio no soportado en la simulación');
   const desc = describeServiceData(data);
   let next = addLog(sim, 'info', `Servicio ${name} → ${friendly(sim, entityId)}${desc ? ` (${desc})` : ''}`, logExtra);
   for (const w of res.warnings) next = addLog(next, 'warning', `${friendly(sim, entityId)}: ${w}`, logExtra);
@@ -1003,7 +1006,7 @@ function notifyService(sim: SimulationState, project: Project, service: string, 
 function notifyOffline(sim: SimulationState, project: Project, service: string, extra: LogExtra): Outcome | undefined {
   const f = sim.failures;
   if (!f || (!f.internet && !f.powerOutage) || !isCloudNotifyService(service) || internetAvailable(project, catalog, f)) return undefined;
-  return fatalOutcome(addLog(sim, 'error', `Notificación ${service} no enviada: necesita Internet`, extra), 'notificación en la nube sin Internet');
+  return outcome(addLog(sim, 'error', `Notificación ${service} no enviada: necesita Internet`, extra), false, 'notificación en la nube sin Internet');
 }
 
 /** Fase 3 (B19): servicio sobre un grupo → mismo servicio en cada miembro. */
@@ -1125,6 +1128,12 @@ function schedule(sim: SimulationState, rest: Step[], seconds: number, ctx: RunC
 export function nextTimedOccurrence(triggers: Trigger[], after: number, sun: SunSource): number | undefined {
   let best: number | undefined;
   for (const t of triggers) {
+    if (t.enabled === false) continue;
+    if (t.type === 'time_pattern') {
+      const next = timePatternOccurrences(t, after, after + 2 * DAY_MS, 1)[0];
+      if (next !== undefined && (best === undefined || next < best)) best = next;
+      continue;
+    }
     if (t.type !== 'time' && t.type !== 'sun') continue;
     for (let day = startOfDay(after) - DAY_MS; day <= startOfDay(after) + 2 * DAY_MS; day += DAY_MS) {
       const occ = triggerOffsetsMs(t, day, sun);
@@ -1470,6 +1479,11 @@ function collectTimedEvents(project: Project, from: number, to: number, sun: Sun
   const lastDay = Math.min(startOfDay(to) + DAY_MS, firstDay + MAX_TICK_DAYS * DAY_MS);
   for (const automation of project.automations) {
     for (const [triggerIndex, t] of automation.triggers.entries()) {
+      if (t.enabled === false) continue;
+      if (t.type === 'time_pattern') {
+        for (const at of timePatternOccurrences(t, from, to, MAX_TICK_EVENTS)) events.push({ at, reason: 'patrón de hora', automation, triggerIndex });
+        continue;
+      }
       if (t.type !== 'time' && t.type !== 'sun') continue;
       for (let day = firstDay; day <= lastDay; day += DAY_MS) {
         const occ = triggerOffsetsMs(t, day, sun);
@@ -1478,6 +1492,56 @@ function collectTimedEvents(project: Project, from: number, to: number, sun: Sun
     }
   }
   return events.sort((a, b) => a.at - b.at);
+}
+
+/** Valores (0..max-1) que cumplen un campo de time_pattern ("5", "*", "/5"); undefined si no es válido. */
+export function timePatternValues(field: string | undefined, max: number, fallback: 'any' | 'zero'): number[] | undefined {
+  const all = Array.from({ length: max }, (_, i) => i);
+  if (field === undefined) return fallback === 'any' ? all : [0];
+  const f = String(field).trim();
+  if (f === '*') return all;
+  const every = /^\/(\d+)$/.exec(f);
+  if (every) {
+    const n = Number(every[1]);
+    return n > 0 && n < max ? all.filter((v) => v % n === 0) : undefined;
+  }
+  if (/^\d+$/.test(f) && Number(f) < max) return [Number(f)];
+  return undefined;
+}
+
+/** Valores de horas, minutos y segundos de un time_pattern con los valores por defecto de HA. */
+export function timePatternSets(t: { hours?: string; minutes?: string; seconds?: string }): { hours: number[]; minutes: number[]; seconds: number[] } | undefined {
+  if (t.hours === undefined && t.minutes === undefined && t.seconds === undefined) return undefined;
+  // Como HA: si se indica una unidad mayor, las menores sin valor valen 0.
+  const hours = timePatternValues(t.hours, 24, 'any');
+  const minutes = timePatternValues(t.minutes, 60, t.hours !== undefined ? 'zero' : 'any');
+  const seconds = timePatternValues(t.seconds, 60, t.hours !== undefined || t.minutes !== undefined ? 'zero' : 'any');
+  return hours && minutes && seconds ? { hours, minutes, seconds } : undefined;
+}
+
+/** Horas (ms) en (from, to] en que se cumple un time_pattern, como mucho `limit`. */
+export function timePatternOccurrences(t: { hours?: string; minutes?: string; seconds?: string }, from: number, to: number, limit: number): number[] {
+  const sets = timePatternSets(t);
+  if (!sets) return [];
+  const out: number[] = [];
+  const lastDay = Math.min(startOfDay(to), startOfDay(from) + MAX_TICK_DAYS * DAY_MS);
+  for (let day = startOfDay(from); day <= lastDay; day += DAY_MS) {
+    for (const h of sets.hours) {
+      const hourStart = day + h * HOUR_MS;
+      if (hourStart + HOUR_MS <= from || hourStart > to) continue;
+      for (const m of sets.minutes) {
+        const minuteStart = hourStart + m * MINUTE_MS;
+        if (minuteStart + MINUTE_MS <= from || minuteStart > to) continue;
+        for (const sec of sets.seconds) {
+          const at = minuteStart + sec * SECOND_MS;
+          if (at <= from || at > to) continue;
+          out.push(at);
+          if (out.length >= limit) return out;
+        }
+      }
+    }
+  }
+  return out;
 }
 
 function earliestPending(sim: SimulationState, to: number): PendingAction | undefined {
@@ -1508,10 +1572,28 @@ function runTimer(sim: SimulationState, project: Project, timer: SimTimer): Simu
       const seconds = coverStepSeconds(coverPosition(step.state), timer.target, caps);
       return scheduleTimer(result, entityTimerKey(timer.entityId), result.now + seconds * SECOND_MS, timer);
     }
+    case 'timeline_event': {
+      const logged = timer.description ? addLog(sim, 'info', timer.description) : sim;
+      const r = applyTimelineEvent(logged, project, timer.step);
+      return typeof r === 'string' ? addLog(logged, 'warning', `Evento programado no aplicado: ${r}`) : r;
+    }
+    case 'helper_timer': {
+      const current = sim.entities[timer.entityId];
+      if (!current || current.state !== 'active') return sim;
+      const finished = applyChange(sim, project, timer.entityId, timerFinishedState(current, findHelperByEntity(project, timer.entityId)), ROOT, true);
+      return fireEventInternal(finished, project, 'timer.finished', { entity_id: timer.entityId }, ROOT);
+    }
     case 'state_for': {
       const a = project.automations.find((x) => x.id === timer.automationId);
       const t = a?.triggers[timer.triggerIndex];
       const current = sim.entities[timer.entityId];
+      if (a && current && t?.type === 'numeric_state' && t.entityId === timer.entityId && t.for) {
+        // Tanda 3: el valor lleva `for` segundos dentro del rango (si sale, el temporizador se cancela).
+        if (!inNumericRange(current.state, t.above, t.below)) return sim;
+        const reason = `${timer.entityId} lleva ${formatDuration(t.for)} ${t.above !== undefined ? `por encima de ${t.above}` : ''}${t.above !== undefined && t.below !== undefined ? ' y ' : ''}${t.below !== undefined ? `por debajo de ${t.below}` : ''}`.trim();
+        const variables = triggerVariables(t, timer.entityId, undefined, current.state, timer.triggerIndex);
+        return runAutomationInternal(sim, project, a, ROOT, reason, traceTrigger(t, timer.triggerIndex, sim), { variables });
+      }
       if (!a || !current || t?.type !== 'state' || t.entityId !== timer.entityId || !t.for) return sim;
       if (t.to !== undefined && !sameState(current.state, t.to)) return sim;
       if (current.lastChanged !== undefined && sim.now - current.lastChanged < t.for * SECOND_MS) return sim;
@@ -1697,7 +1779,7 @@ export interface TickOptions {
 export function tick(sim: SimulationState, project: Project, deltaMs: number, opts: TickOptions = {}): SimulationState {
   const advance = deltaMs * sim.speed;
   if (!(advance > 0)) return sim;
-  const defs = opts.defs ?? catalog;
+  const defs = allDefinitions(project, opts.defs ?? catalog);
   const to = sim.now + advance;
   const sun: SunSource = opts.sun ?? sunSourceOf(project);
   const timed = collectTimedEvents(project, sim.now, to, sun);

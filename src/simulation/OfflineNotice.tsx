@@ -1,13 +1,13 @@
 import { useId } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { useSimulationStore } from '../store/simulationStore';
 import { useProjectStore } from '../store/projectStore';
-import { catalog } from '../devices/catalog';
 import { offlineBlockReason } from './availability';
 
 /** Motivo por el que no se puede reconectar el dispositivo (null si se puede). */
 function useOfflineBlockReason(deviceId: string): string | null {
   const project = useProjectStore((s) => s.project);
-  return useSimulationStore((s) => offlineBlockReason(s.sim, project, catalog, deviceId));
+  return useSimulationStore((s) => offlineBlockReason(s.sim, project, knownDefinitions(), deviceId));
 }
 
 /** Aviso «No disponible» con el botón para reconectar un dispositivo simulado sin conexión. */

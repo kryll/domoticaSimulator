@@ -15,6 +15,10 @@ import {
 } from '../automations/walk';
 import { entityDomain } from './entities';
 import { groupEntityId, personEntityId } from '../simulation/logic';
+import { allDefinitions } from './catalog';
+
+/** Tanda 3: entity_id antiguo -> nuevo al renombrar un helper (úsalo con renameEntityRefs y renameEntities). */
+export { renameHelperMapping } from '../simulation/helpers';
 
 /**
  * entity_id antiguo -> nuevo al renombrar un dispositivo. Solo incluye los que cambian.
@@ -54,6 +58,7 @@ export function entityIdMappingForShowAs(device: Device, def: DeviceDefinition, 
  * escenas, grupos y líneas de tiempo. Función pura.
  */
 export function applyShowAs(project: Project, deviceId: Id, showAs: Device['showAs'], defs: DeviceDefinition[]): Project {
+  defs = allDefinitions(project, defs);
   const device = project.devices.find((d) => d.id === deviceId);
   const def = device ? defs.find((d) => d.id === device.definitionId) : undefined;
   if (!device || !def || device.showAs === showAs) return project;

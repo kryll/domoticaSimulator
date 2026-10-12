@@ -1,7 +1,7 @@
 // Acciones sobre la selección múltiple del lienzo: borrar, copiar, pegar, duplicar y acciones en lote.
 // Cada operación es un único paso de deshacer (un solo commit en projectStore).
 import type { Id, Integration } from '../types';
-import { catalog } from '../devices/catalog';
+import { knownDefinitions } from './analysis';
 import { useProjectStore } from '../store/projectStore';
 import { selectedDeviceIds, useUiStore } from '../store/uiStore';
 import { confirmDialog } from '../ui/confirm';
@@ -63,7 +63,7 @@ const KIND_WORDS: Record<ReferenceKind, [string, string]> = {
 
 /** «Se usan en 2 automatizaciones y 1 escena:» (o null si nada los usa). */
 export function referenceSummary(ids: Id[], count = ids.length): string | null {
-  const refs = deviceReferences(useProjectStore.getState().project, ids, catalog);
+  const refs = deviceReferences(useProjectStore.getState().project, ids, knownDefinitions());
   if (refs.length === 0) return null;
   const parts = (Object.keys(KIND_WORDS) as ReferenceKind[])
     .map((kind) => {
@@ -77,7 +77,7 @@ export function referenceSummary(ids: Id[], count = ids.length): string | null {
 
 /** Líneas para el diálogo de confirmación con los usos de los dispositivos (automatizaciones, escenas...). */
 export function referenceDetails(ids: Id[]): string[] {
-  return referencesTo(useProjectStore.getState().project, ids, catalog);
+  return referencesTo(useProjectStore.getState().project, ids, knownDefinitions());
 }
 
 /**
@@ -185,7 +185,7 @@ export function pastePayload(payload: ClipboardPayload): Id[] {
   // En la planta de origen cada pegado se desplaza; en otra, el primero va en el mismo sitio.
   const step = sameFloor ? count : count - 1;
   const offset = { x: PASTE_OFFSET * step, y: PASTE_OFFSET * step };
-  const result = pasteDevices(store.project, payload, { floorId, offset, defs: catalog });
+  const result = pasteDevices(store.project, payload, { floorId, offset, defs: knownDefinitions() });
   if (result.newIds.length === 0) return [];
   store.update(() => result.project);
   const ui = useUiStore.getState();
@@ -218,7 +218,7 @@ export async function pasteFromClipboard(): Promise<Id[]> {
 export function duplicateSelection(ids: Id[] = selectedDeviceIds(useUiStore.getState())): Id[] {
   if (ids.length === 0) return [];
   const store = useProjectStore.getState();
-  const result = duplicateDevices(store.project, ids, { defs: catalog, offset: { x: PASTE_OFFSET, y: PASTE_OFFSET } });
+  const result = duplicateDevices(store.project, ids, { defs: knownDefinitions(), offset: { x: PASTE_OFFSET, y: PASTE_OFFSET } });
   if (result.newIds.length === 0) return [];
   store.update(() => result.project);
   const ui = useUiStore.getState();

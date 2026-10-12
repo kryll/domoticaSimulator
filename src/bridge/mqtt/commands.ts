@@ -73,6 +73,16 @@ const VACUUM: Record<string, string> = {
   clean_spot: 'vacuum.clean_spot',
 };
 
+const ALARM: Record<string, string> = {
+  ARM_HOME: 'alarm_control_panel.alarm_arm_home',
+  ARM_AWAY: 'alarm_control_panel.alarm_arm_away',
+  ARM_NIGHT: 'alarm_control_panel.alarm_arm_night',
+  ARM_VACATION: 'alarm_control_panel.alarm_arm_vacation',
+  ARM_CUSTOM_BYPASS: 'alarm_control_panel.alarm_arm_custom_bypass',
+  DISARM: 'alarm_control_panel.alarm_disarm',
+  TRIGGER: 'alarm_control_panel.alarm_trigger',
+};
+
 /** Comando del perfil genérico para una entidad y un subtopic ('' = /set directo). */
 function genericCommand(e: BridgeEntity, sub: string, payload: string): BridgeCommand | null {
   const raw = payload.trim();
@@ -138,6 +148,25 @@ function genericCommand(e: BridgeEntity, sub: string, payload: string): BridgeCo
     }
     case 'button':
       return raw.toUpperCase() === 'PRESS' ? cmd(e.entityId, 'button.press') : null;
+    case 'siren': {
+      const s = onOffService('siren', raw);
+      return s ? cmd(e.entityId, s) : null;
+    }
+    case 'valve': {
+      const p = raw.toUpperCase();
+      if (p === 'OPEN') return cmd(e.entityId, 'valve.open_valve');
+      if (p === 'CLOSE') return cmd(e.entityId, 'valve.close_valve');
+      if (p === 'STOP') return cmd(e.entityId, 'valve.stop_valve');
+      return null;
+    }
+    case 'alarm_control_panel': {
+      const body = parseJson(raw) ?? { action: raw };
+      const action = typeof body.action === 'string' ? body.action.toUpperCase() : '';
+      const service = ALARM[action];
+      if (!service) return null;
+      const code = typeof body.code === 'string' && body.code !== '' && body.code !== 'None' ? body.code : undefined;
+      return cmd(e.entityId, service, code === undefined ? {} : { code });
+    }
     default:
       return null;
   }

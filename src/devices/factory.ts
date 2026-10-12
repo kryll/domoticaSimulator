@@ -1,5 +1,5 @@
 import type { Device, DeviceDefinition, Id, Integration, IotClass, Point, Project, Protocol } from '../types';
-import { catalog } from './catalog';
+import { catalog, allDefinitions } from './catalog';
 import { slugify } from './entities';
 import { INTEGRATION_IOT_CLASS } from './labels';
 import {
@@ -23,7 +23,8 @@ export interface DefaultIntegration {
   integration: Integration;
 }
 
-function projectDefs(project: Pick<Project, 'devices'>, defs: DeviceDefinition[]): { device: Device; def: DeviceDefinition }[] {
+function projectDefs(project: Pick<Project, 'devices' | 'customDefinitions'>, defs: DeviceDefinition[]): { device: Device; def: DeviceDefinition }[] {
+  defs = allDefinitions(project, defs);
   const result: { device: Device; def: DeviceDefinition }[] = [];
   for (const device of project.devices) {
     const def = defs.find((d) => d.id === device.definitionId);

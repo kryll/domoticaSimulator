@@ -2,8 +2,7 @@ import { useMemo } from 'react';
 import type { IssueSeverity, ValidationIssue } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
-import { analyzeProject } from '../canvas/analysis';
-import { catalog } from '../devices/catalog';
+import { analyzeProject, knownDefinitions } from '../canvas/analysis';
 import { issueTitle } from '../network/validator';
 import { quickFixesFor } from '../network/quickFixes';
 import { applyQuickFix } from '../ui/quickFixActions';
@@ -26,7 +25,7 @@ export interface ValidationPanelProps {
 export function ValidationPanel({ issues: given }: ValidationPanelProps) {
   const project = useProjectStore((s) => s.project);
   const issues = given ?? analyzeProject(project).issues;
-  const fixes = useMemo(() => new Map(issues.map((i) => [i.id, quickFixesFor(i, project, catalog)])), [issues, project]);
+  const fixes = useMemo(() => new Map(issues.map((i) => [i.id, quickFixesFor(i, project, knownDefinitions())])), [issues, project]);
 
   const focus = (issue: ValidationIssue) => {
     const ui = useUiStore.getState();

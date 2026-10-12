@@ -1,0 +1,8 @@
+**/node_modules
+dist
+coverage
+.git
+emulator/.env
+emulator/.secrets
+emulator/snapshots
+emulator/ha-config

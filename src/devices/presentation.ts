@@ -6,7 +6,7 @@ import { entitiesForDevice, type DeviceEntity } from './entities';
 import { isInfra } from './roles';
 import { callService, entityTimerKey, findTimer } from '../simulation/engine';
 import { jamLock, motionPulse, openDoor, pressButton, setLeak } from '../simulation/events';
-import { brightnessToPct, COVER_STEP, coverPosition, coverStepSeconds } from '../simulation/services';
+import { brightnessToPct, COVER_STEP, coverPosition, coverStepSeconds, DEFAULT_ALARM_CODE } from '../simulation/services';
 import { HVAC_ACTION_LABELS, HVAC_MODE_LABELS, labelOf, PRESET_LABELS } from './labels';
 import { stateLabel } from './stateLabels';
 
@@ -26,7 +26,10 @@ export type DeviceKind =
   | 'leak'
   | 'smoke'
   | 'infrastructure'
-  | 'generic';
+  | 'generic'
+  // Tanda 3
+  | 'alarm'
+  | 'valve';
 
 export interface DeviceViewEntity {
   entityId: string;
@@ -118,7 +121,7 @@ const CONTACT_CLASSES = ['door', 'window', 'opening', 'garage_door'];
 const SMOKE_CLASSES = ['smoke', 'gas', 'carbon_monoxide'];
 
 /** Prioridad de dominio para elegir la entidad principal. */
-const DOMAIN_PRIORITY = ['light', 'cover', 'climate', 'lock', 'media_player', 'vacuum', 'fan', 'switch', 'camera', 'binary_sensor'];
+const DOMAIN_PRIORITY = ['light', 'cover', 'climate', 'lock', 'alarm_control_panel', 'valve', 'media_player', 'vacuum', 'fan', 'switch', 'siren', 'camera', 'binary_sensor'];
 
 function primaryEntity(entities: DeviceEntity[]): DeviceEntity | undefined {
   for (const domain of DOMAIN_PRIORITY) {
@@ -141,7 +144,12 @@ function kindOf(def: DeviceDefinition, entity: DeviceEntity | undefined): Device
       return 'light';
     case 'switch':
     case 'fan':
+    case 'siren':
       return 'switch';
+    case 'alarm_control_panel':
+      return 'alarm';
+    case 'valve':
+      return 'valve';
     case 'cover':
       return 'cover';
     case 'climate':
@@ -339,6 +347,17 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
       if (batteryText) view.secondary = batteryText;
       return view;
     }
+    case 'alarm': {
+      const view: DeviceView = { ...base, active: s !== 'disarmed', summary: label('alarm_control_panel', s) };
+      const siren = sibling(entities, sim, (e) => e.definition.domain === 'siren');
+      if (siren?.state === 'on') view.secondary = 'Sirena sonando';
+      return view;
+    }
+    case 'valve': {
+      const view: DeviceView = { ...base, active: s === 'open', summary: label('valve', s) };
+      if (batteryText) view.secondary = batteryText;
+      return view;
+    }
     case 'remote': {
       const view: DeviceView = { ...base, summary: s === 'none' || s === '' ? 'En espera' : `Pulsado: ${label(primary.entityId, s)}` };
       if (batteryText) view.secondary = batteryText;
@@ -388,6 +407,12 @@ export function primaryAction(device: Device, def: DeviceDefinition, sim: Simula
       return svc(id, 'media_player.media_play_pause', s === 'playing' ? 'Pausar' : 'Reproducir');
     case 'vacuum':
       return s === 'cleaning' ? svc(id, 'vacuum.pause', 'Pausar limpieza') : svc(id, 'vacuum.start', 'Empezar a limpiar');
+    case 'alarm': {
+      const code = device.alarmCode ?? DEFAULT_ALARM_CODE;
+      return s === 'disarmed' ? svc(id, 'alarm_control_panel.alarm_arm_away', 'Armar fuera', { code }) : svc(id, 'alarm_control_panel.alarm_disarm', 'Desarmar', { code });
+    }
+    case 'valve':
+      return svc(id, 'valve.toggle', s === 'open' ? 'Cerrar válvula' : 'Abrir válvula');
     case 'motion':
       return { event: 'motion', entityId: id, label: 'Simular movimiento' };
     case 'contact':
@@ -516,7 +541,11 @@ const CLASS_ICONS: Record<string, string> = {
   moisture: '💧',
   smoke: '🔥',
   gas: '🔥',
-  carbon_monoxide: '🔥',
+  carbon_monoxide: '⚠️',
+  garage: '🚗',
+  water: '🚰',
+  pm25: '🌫️',
+  volatile_organic_compounds_parts: '🌫️',
   temperature: '🌡️',
   humidity: '🌡️',
   illuminance: '☀️',
@@ -547,6 +576,8 @@ export function deviceIcon(def: DeviceDefinition, entityDeviceClass?: string): s
   const cls = entityDeviceClass ?? primaryEntityDefinition(def)?.deviceClass;
   if (cls !== undefined && CLASS_ICONS[cls]) return CLASS_ICONS[cls];
   if (def.entities.some((e) => e.key === 'action')) return '🎛️';
+  if (def.entities.some((e) => e.domain === 'alarm_control_panel')) return '🚨';
+  if (def.entities.some((e) => e.domain === 'valve')) return '🚰';
   if (def.role === 'coordinator') return '📡';
   if (def.category === 'cover') return '🪟';
   if (def.category === 'switch' && def.entities.some((e) => e.domain === 'switch')) return '🎚️';

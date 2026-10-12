@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Action, EventTrigger, HomeAssistantTrigger, ParallelAction, StopAction, TimePatternTrigger } from '../../types';
+import { COMMON_EVENTS, describeTimePattern } from './timePattern';
 import { SelectField, TextField } from '../../ui/Field';
 import { dataToInput, parseDataInput } from '../../ui/formValues';
 import { ListEditor } from '../ListEditor';
@@ -8,19 +9,6 @@ import { useProjectStore } from '../../store/projectStore';
 
 function Header({ children }: { children: string }) {
   return <div className="mb-1 text-xs font-semibold text-slate-700">{children}</div>;
-}
-
-/** Texto legible de un patrón de hora («cada 5 minutos», «a las 7:00:00»...). */
-export function describeTimePattern(t: Pick<TimePatternTrigger, 'hours' | 'minutes' | 'seconds'>): string {
-  const part = (v: string | undefined, unit: [string, string]) => {
-    if (v === undefined || v === '' || v === '*') return null;
-    if (v.startsWith('/')) return `cada ${v.slice(1)} ${Number(v.slice(1)) === 1 ? unit[0] : unit[1]}`;
-    return `${unit[0]} ${v}`;
-  };
-  const bits = [part(t.hours, ['hora', 'horas']), part(t.minutes, ['minuto', 'minutos']), part(t.seconds, ['segundo', 'segundos'])].filter(
-    (b): b is string => b !== null,
-  );
-  return bits.length === 0 ? 'cada segundo' : bits.join(', ');
 }
 
 const PATTERN = /^(\*|\/?\d{1,2})?$/;
@@ -75,11 +63,8 @@ export function HomeAssistantTriggerEditor({ value, onChange }: { value: HomeAss
   );
 }
 
-/** Eventos habituales del bus de HA (sugerencias del campo). */
-export const COMMON_EVENTS = ['timer.finished', 'timer.started', 'timer.cancelled', 'zha_event', 'call_service', 'automation_triggered', 'mobile_app_notification_action'];
-
 export function EventTriggerEditor({ value, onChange }: { value: EventTrigger; onChange: (t: EventTrigger) => void }) {
-  const helpers = useProjectStore((s) => s.project.helpers ?? []);
+  const hasTimers = useProjectStore((s) => (s.project.helpers ?? []).some((h) => h.type === 'timer'));
   const [draft, setDraft] = useState(() => dataToInput(value.eventData));
   return (
     <div>
@@ -99,7 +84,7 @@ export function EventTriggerEditor({ value, onChange }: { value: EventTrigger; o
         </datalist>
         <TextField
           label="Datos del evento (clave=valor)"
-          placeholder={helpers.some((h) => h.type === 'timer') ? 'entity_id=timer.…' : 'entity_id=…'}
+          placeholder={hasTimers ? 'entity_id=timer.…' : 'entity_id=…'}
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);

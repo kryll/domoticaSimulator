@@ -1,10 +1,10 @@
 import { useState } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { countLabel } from '../ui/plural';
 import type { Timeline, TimelineStep } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
-import { catalog } from '../devices/catalog';
 import { recordTimeline, runTimeline, timelineStart, type TimelineRun } from '../simulation/timeline';
 import { formatSimTime, startOfDay } from '../simulation/clock';
 import { Button } from '../ui/Button';
@@ -26,7 +26,7 @@ export function TimelineRunner({ timeline, onRecorded }: { timeline: Timeline; o
     // Desde el inicio guardado en la prueba o, si no tiene, desde las 00:00 del día simulado.
     const start = timelineStart(timeline, startOfDay(useSimulationStore.getState().sim.now));
     try {
-      const result = runTimeline(project, catalog, timeline, start);
+      const result = runTimeline(project, knownDefinitions(), timeline, start);
       lastRuns.set(timeline.id, { run: result, steps: timeline.steps, startAt: timeline.startAt });
       force((n) => n + 1);
     } catch (err) {

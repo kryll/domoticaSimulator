@@ -6,6 +6,7 @@ import { HOUR_MS, formatSimDate, formatSimTime, startOfDay, sunTimes } from './c
 import { nextSunEvent, nextTimeOfDay } from '../ui/sunJump';
 import { Button } from '../ui/Button';
 import { inputClass } from '../ui/Field';
+import { isBridgeLive, useBridgeLive } from '../bridge/useBridge';
 
 /** Amanecer y atardecer del día simulado que contiene `dayStart`, según los ajustes del proyecto. */
 function useSunToday(dayStart: number): { sunrise: number; sunset: number } {
@@ -39,7 +40,10 @@ function JumpPopover({ onClose, onEscape, sun, today }: { onClose: () => void; o
     };
   }, [onClose, onEscape]);
 
+  // E1: en modo en vivo con el laboratorio el reloj es el real: no se puede saltar.
+  const live = useBridgeLive();
   const go = (target: number, label: string) => {
+    if (isBridgeLive()) return;
     useSimulationStore.getState().jumpTo(target);
     useUiStore.getState().notify(`Reloj adelantado ${label} (${formatSimTime(target)} del ${formatSimDate(target)})`, 'success');
     onClose();
@@ -68,6 +72,8 @@ function JumpPopover({ onClose, onEscape, sun, today }: { onClose: () => void; o
         Ir a…
       </h2>
       <p className="text-xs text-slate-500">La simulación avanza hasta esa hora y ejecuta lo que ocurra entre medias.</p>
+      {live && <p className="text-xs font-medium text-amber-800">Laboratorio en vivo: el reloj sigue la hora real y «Ir a…» está desactivado.</p>}
+      <fieldset disabled={live} className="contents">
       <form
         className="flex items-end gap-1"
         onSubmit={(e) => {
@@ -98,6 +104,7 @@ function JumpPopover({ onClose, onEscape, sun, today }: { onClose: () => void; o
           🌇 Próximo atardecer
         </Button>
       </div>
+      </fieldset>
     </div>
   );
 }

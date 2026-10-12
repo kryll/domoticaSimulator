@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
-import { catalog } from '../devices/catalog';
 import { failureImpact } from '../simulation/scenarios';
 import { NO_FAILURES, failureLabels, hasFailures } from '../ui/failures';
 import { automationDeviceIds, revealDevice } from '../ui/entityDevices';
@@ -97,7 +97,7 @@ export function ImpactPanel({ presentation = false }: { presentation?: boolean }
   const project = useProjectStore((s) => s.project);
   const failures = useSimulationStore((s) => s.sim.failures) ?? NO_FAILURES;
   const active = hasFailures(failures);
-  const report = useMemo(() => (active ? failureImpact(project, catalog, failures) : null), [active, project, failures]);
+  const report = useMemo(() => (active ? failureImpact(project, knownDefinitions(), failures) : null), [active, project, failures]);
 
   if (!active || !report) {
     return (
