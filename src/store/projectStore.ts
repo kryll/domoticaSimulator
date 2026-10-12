@@ -7,10 +7,12 @@ import type {
   Id,
   Point,
   Project,
+  ProjectSettings,
   Room,
   Scene,
   Script,
 } from '../types';
+import { projectSettings } from '../simulation/energy';
 import { createEmptyProject, saveProject } from './persistence';
 import { reassignRooms, resolveRoomId, translatePolygon } from '../canvas/geometry';
 import { newId } from '../ui/ids';
@@ -42,6 +44,10 @@ export interface ProjectState {
   markSaved: (at: string) => void;
 
   renameProject: (name: string) => void;
+  /** Cambia los ajustes del proyecto (ubicación, precios...). Con deshacer. */
+  updateSettings: (patch: Partial<ProjectSettings>) => void;
+  /** Precio unitario propio de una definición (undefined = el del catálogo). Con deshacer. */
+  setPrice: (definitionId: Id, price: number | undefined) => void;
 
   addFloor: (name: string) => Floor;
   updateFloor: (id: Id, patch: Patch<Floor>) => void;
@@ -133,6 +139,17 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
     markSaved: (at) => set({ dirty: false, lastSavedAt: at }),
 
     renameProject: (name) => commit((p) => (p.name === name ? p : { ...p, name })),
+    updateSettings: (patch) =>
+      commit((p) => ({ ...p, settings: { ...projectSettings(p), ...patch } }), 'settings'),
+    setPrice: (definitionId, price) =>
+      commit((p) => {
+        const settings = projectSettings(p);
+        const prices = { ...settings.prices };
+        if (prices[definitionId] === price) return p;
+        if (price === undefined) delete prices[definitionId];
+        else prices[definitionId] = price;
+        return { ...p, settings: { ...settings, prices } };
+      }, `price:${definitionId}`),
 
     addFloor: (name) => {
       const level = get().project.floors.reduce((max, f) => Math.max(max, f.level + 1), 0);
@@ -311,6 +328,9 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
     removeScript: (id) => commit((p) => ({ ...p, scripts: p.scripts.filter((s) => s.id !== id) })),
   };
 });
+
+/** Ajustes del proyecto con los valores por defecto para lo que falte. */
+export { projectSettings };
 
 /** Atajo para leer el proyecto fuera de React. */
 export function getProject(): Project {

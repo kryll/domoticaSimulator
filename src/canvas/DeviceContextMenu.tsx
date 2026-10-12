@@ -6,6 +6,7 @@ import { isDeviceOffline } from '../simulation/events';
 import { capturableEntities } from '../simulation/scenes';
 import { primaryAction, stepAction } from '../devices/presentation';
 import { ContextMenu, type MenuEntry } from '../ui/ContextMenu';
+import { isInfra } from '../devices/roles';
 import { definitionOf, entitiesOfDevice } from './analysis';
 import { createAutomationForDevice, duplicateDevice } from './actions';
 import { SCENE_DOMAINS } from '../scenes/sceneEntities';
@@ -40,6 +41,7 @@ function DeviceMenuBody({ deviceId, x, y }: { deviceId: string; x: number; y: nu
   entries.push({ kind: 'item', id: 'popover', label: 'Control completo…', hint: 'Doble clic', onSelect: () => ui.openPopover(device.id) });
   entries.push({ kind: 'separator' });
   entries.push({ kind: 'item', id: 'automation', label: 'Crear automatización con este dispositivo', onSelect: () => createAutomationForDevice(device.id) });
+  entries.push({ kind: 'item', id: 'templates', label: 'Plantillas con este dispositivo…', onSelect: () => ui.openTemplates({ deviceId: device.id }) });
   const sceneIds = capturableEntities(
     sim,
     entitiesOfDevice(device)
@@ -58,6 +60,20 @@ function DeviceMenuBody({ deviceId, x, y }: { deviceId: string; x: number; y: nu
     id: 'offline', label: offline ? 'Reconectar' : 'Simular sin conexión',
     onSelect: () => store.setDeviceOffline(device.id, !offline),
   });
+  if (def && isInfra(def) && def.role !== 'ha_server') {
+    const down = (sim.failures?.devicesDown ?? []).includes(device.id);
+    entries.push({
+      kind: 'item',
+      id: 'failure',
+      label: down ? 'Restaurar tras la caída' : 'Simular caída',
+      hint: 'Escenario',
+      onSelect: () => {
+        const current = useSimulationStore.getState().sim.failures?.devicesDown ?? [];
+        store.setFailures({ devicesDown: down ? current.filter((id) => id !== device.id) : [...current, device.id] });
+        if (!down) ui.setBottomTab('impact');
+      },
+    });
+  }
   entries.push({ kind: 'separator' });
   entries.push({ kind: 'item', id: 'duplicate', label: 'Duplicar', onSelect: () => duplicateDevice(device.id) });
   entries.push({

@@ -17,7 +17,8 @@ import {
   type OnNodeDrag,
   type EdgeMouseHandler,
 } from '@xyflow/react';
-import type { IssueSeverity, Project, SimulationState } from '../types';
+import type { Device, DeviceDefinition, IssueSeverity, Project, SimulationState } from '../types';
+import { devicePowerWatts, loadWatts } from '../simulation/energy';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore, type CanvasMode, type Selection } from '../store/uiStore';
@@ -37,6 +38,7 @@ import { roomLabelPosition } from './roomLabel';
 import { PlanNodeView } from './PlanNodeView';
 import { ProtocolEdgeView } from './ProtocolEdgeView';
 import { CanvasToolbar } from './CanvasToolbar';
+import { NightMode } from './NightMode';
 import { Legend } from './Legend';
 import { CoverageLayer } from './CoverageLayer';
 import { RoomDrawOverlay } from './RoomDrawOverlay';
@@ -59,6 +61,19 @@ function lastLogByEntity(log: SimulationState['log']): Map<string, string> {
     if (entry?.entityId && !map.has(entry.entityId)) map.set(entry.entityId, entry.id);
   }
   return map;
+}
+
+/** Potencia con carga activa y nivel de batería para el nodo (no dependen del reloj). */
+function powerBadges(device: Device, def: DeviceDefinition, sim: SimulationState): { watts?: number; batteryPct?: number } {
+  if (def.power === 'battery') {
+    const battery = entitiesOfDevice(device).find((r) => r.definition.deviceClass === 'battery');
+    const raw = battery ? sim.entities[battery.entityId]?.state : undefined;
+    const level = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
+    return Number.isFinite(level) ? { batteryPct: Math.round(level) } : {};
+  }
+  if (loadWatts(device, def, sim.entities) <= 0) return {};
+  const watts = devicePowerWatts(device, def, sim);
+  return watts > 0 ? { watts: Math.round(watts) } : {};
 }
 
 interface BuildOptions {
@@ -161,6 +176,7 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
     for (const issue of issues) {
       if (!severity || severityRank[issue.severity] > severityRank[severity]) severity = issue.severity;
     }
+    const power = definition ? powerBadges(device, definition, sim) : {};
     const node: DeviceNode = {
       id: device.id,
       type: 'device',
@@ -182,6 +198,7 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
         highlighted: highlightSet.has(device.id),
         connectMode,
         crossFloorLinks: crossLinks.get(device.id) ?? [],
+        ...power,
       },
       selected: isSelected(selection, 'device', device.id),
       ariaLabel: `${device.name}: ${view?.unavailable ? 'no disponible' : [view?.summary, view?.secondary].filter(Boolean).join(', ')}`,
@@ -211,7 +228,14 @@ export function Canvas() {
   const focusRequest = useUiStore((s) => s.focusRequest);
   // Sin `now`: el lienzo solo se recalcula cuando cambian estados, temporizadores o fallos.
   const simParts = useSimulationStore(
-    useShallow((s) => ({ entities: s.sim.entities, pending: s.sim.pending, offline: s.sim.offline, log: s.sim.log })),
+    useShallow((s) => ({
+      entities: s.sim.entities,
+      pending: s.sim.pending,
+      offline: s.sim.offline,
+      log: s.sim.log,
+      failures: s.sim.failures,
+      failureOffline: s.sim.failureOffline,
+    })),
   );
   const popoverDeviceId = useUiStore((s) => s.popoverDeviceId);
   const connectFromId = useUiStore((s) => s.connectFromId);
@@ -416,6 +440,7 @@ export function Canvas() {
         maxZoom={3}
       >
         <Background gap={20} size={1} color="#cbd5e1" />
+        <NightMode containerId="ha-canvas" />
         {showCoverage && floor && <CoverageLayer devices={floorDevices} floor={floor} />}
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable className="!hidden md:!block" />

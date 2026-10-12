@@ -10,7 +10,9 @@ import {
   parseHHMM,
   simNowFromLocalDate,
   startOfDay,
+  fixedSunTimes,
   sunTimes,
+  timeZoneOffsetMinutes,
 } from './clock';
 
 const T0 = Date.UTC(2026, 9, 12, 0, 0, 0); // 12/10/2026 00:00 (hora simulada)
@@ -42,9 +44,49 @@ describe('reloj', () => {
     expect(startOfDay(T0 - 1)).toBe(T0 - DAY_MS);
   });
 
-  it('sunTimes por defecto y configurable', () => {
-    expect(sunTimes(T0 + 12 * HOUR_MS)).toEqual({ sunrise: T0 + 7.5 * HOUR_MS, sunset: T0 + 20 * HOUR_MS });
-    expect(sunTimes(T0, { sunrise: '06:00', sunset: '21:30' })).toEqual({ sunrise: T0 + 6 * HOUR_MS, sunset: T0 + 21.5 * HOUR_MS });
+  it('fixedSunTimes por defecto y configurable', () => {
+    expect(fixedSunTimes(T0 + 12 * HOUR_MS)).toEqual({ sunrise: T0 + 7.5 * HOUR_MS, sunset: T0 + 20 * HOUR_MS });
+    expect(fixedSunTimes(T0, { sunrise: '06:00', sunset: '21:30' })).toEqual({ sunrise: T0 + 6 * HOUR_MS, sunset: T0 + 21.5 * HOUR_MS });
+  });
+
+  describe('sunTimes (NOAA)', () => {
+    const MADRID = { lat: 40.4168, lon: -3.7038 };
+    const minutes = (ms: number): number => minutesOfDay(ms);
+    const near = (ms: number, hhmm: string): void => {
+      expect(Math.abs(minutes(ms) - parseHHMM(hhmm))).toBeLessThanOrEqual(3);
+    };
+
+    it('Madrid en el solsticio de verano (hora local, CEST)', () => {
+      const { sunrise, sunset } = sunTimes(Date.UTC(2025, 5, 21, 12), MADRID.lat, MADRID.lon, 'Europe/Madrid');
+      near(sunrise, '06:44');
+      near(sunset, '21:48');
+    });
+
+    it('Madrid en el solsticio de invierno (hora local, CET)', () => {
+      const { sunrise, sunset } = sunTimes(Date.UTC(2025, 11, 21, 3), MADRID.lat, MADRID.lon, 'Europe/Madrid');
+      near(sunrise, '08:33');
+      near(sunset, '17:51');
+    });
+
+    it('sin zona horaria devuelve UTC', () => {
+      const { sunrise, sunset } = sunTimes(Date.UTC(2025, 5, 21), MADRID.lat, MADRID.lon);
+      near(sunrise, '04:44');
+      near(sunset, '19:48');
+      expect(startOfDay(sunrise)).toBe(Date.UTC(2025, 5, 21));
+    });
+
+    it('día y noche polares', () => {
+      const polarDay = sunTimes(Date.UTC(2025, 5, 21), 78, 15);
+      expect(polarDay.sunset - polarDay.sunrise).toBe(DAY_MS);
+      const polarNight = sunTimes(Date.UTC(2025, 11, 21), 78, 15);
+      expect(polarNight.sunset).toBe(polarNight.sunrise);
+    });
+
+    it('desfase de la zona horaria', () => {
+      expect(timeZoneOffsetMinutes(Date.UTC(2025, 5, 21), 'Europe/Madrid')).toBe(120);
+      expect(timeZoneOffsetMinutes(Date.UTC(2025, 0, 21), 'Europe/Madrid')).toBe(60);
+      expect(timeZoneOffsetMinutes(Date.UTC(2025, 0, 21), 'Zona/Inventada')).toBe(0);
+    });
   });
 
   it('simNowFromLocalDate conserva la hora de pared local', () => {

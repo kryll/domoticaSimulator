@@ -1,5 +1,5 @@
 // Parser YAML mínimo (bloques, escalares, comillas, flujo simple) y conversión a Automation.
-import type { Action, Automation, Condition, EntityStateValue, Trigger } from '../types';
+import type { Action, Automation, Condition, EntityStateValue, SunEvent, Trigger } from '../types';
 import { isYamlMap, type YamlContext, type YamlMap, type YamlValue } from '../export/yaml';
 import { findScene, findScript } from '../simulation/engine';
 import { parseHHMM } from '../simulation/clock';
@@ -276,6 +276,13 @@ function offsetMinutes(v: YamlValue, where: string): number {
   return m[1] === '-' ? -total : total;
 }
 
+function sunEvent(v: YamlValue, where: string): SunEvent {
+  const event = str(v, where);
+  if (event !== 'sunrise' && event !== 'sunset') throw new Error(`Evento solar no válido en ${where}: "${event}" (sunrise o sunset)`);
+  return event;
+}
+
+/** Acepta la sintaxis actual (`trigger: state`) y la antigua (`platform: state`). */
 export function parseTrigger(v: YamlValue, i = 0): Trigger {
   const where = `el disparador ${i + 1}`;
   const m = asMap(v, where);
@@ -300,9 +307,7 @@ export function parseTrigger(v: YamlValue, i = 0): Trigger {
     case 'time':
       return { type: 'time', at: hhmm(req(m, 'at', where), where) };
     case 'sun': {
-      const event = str(req(m, 'event', where), where);
-      if (event !== 'sunrise' && event !== 'sunset') throw new Error(`Evento solar no válido en ${where}: "${event}"`);
-      const t: Trigger = { type: 'sun', event };
+      const t: Trigger = { type: 'sun', event: sunEvent(req(m, 'event', where), where) };
       if (m.offset !== undefined && m.offset !== null) t.offsetMinutes = offsetMinutes(m.offset, where);
       return t;
     }
@@ -334,6 +339,19 @@ export function parseCondition(v: YamlValue, i = 0): Condition {
       const c: Condition = { type: 'time' };
       if (m.after !== undefined && m.after !== null) c.after = hhmm(m.after, where);
       if (m.before !== undefined && m.before !== null) c.before = hhmm(m.before, where);
+      return c;
+    }
+    case 'sun': {
+      const c: Condition = { type: 'sun' };
+      if (m.after !== undefined && m.after !== null) {
+        c.after = sunEvent(m.after, where);
+        if (m.after_offset !== undefined && m.after_offset !== null) c.afterOffsetMinutes = offsetMinutes(m.after_offset, where);
+      }
+      if (m.before !== undefined && m.before !== null) {
+        c.before = sunEvent(m.before, where);
+        if (m.before_offset !== undefined && m.before_offset !== null) c.beforeOffsetMinutes = offsetMinutes(m.before_offset, where);
+      }
+      if (c.after === undefined && c.before === undefined) throw new Error(`La condición de sol de ${where} necesita "after" o "before"`);
       return c;
     }
     case 'and':
@@ -391,6 +409,7 @@ function resolveScript(entityId: string, ctx: Ctx | undefined, where: string): s
   return script.id;
 }
 
+/** Acepta la sintaxis actual (`action: light.turn_on`) y la antigua (`service: light.turn_on`). */
 export function parseAction(v: YamlValue, i = 0, ctx?: Ctx): Action {
   const where = `la acción ${i + 1}`;
   const m = asMap(v, where);
@@ -413,7 +432,7 @@ function objectToAutomation(m: YamlMap, ctx: Ctx | undefined, fallbackId: string
   const mode = m.mode === undefined || m.mode === null ? 'single' : str(m.mode, 'mode');
   const validMode = MODES.find((x) => x === mode);
   if (!validMode) throw new Error(`Modo no válido: "${mode}" (single, restart, queued o parallel)`);
-  const triggers = list(m.trigger ?? m.triggers).map(parseTrigger);
+  const triggers = list(m.triggers ?? m.trigger).map(parseTrigger);
   if (triggers.length === 0) throw new Error('La automatización necesita al menos un disparador ("trigger")');
   return {
     id: m.id === undefined || m.id === null ? fallbackId : str(m.id, 'id'),
@@ -421,8 +440,8 @@ function objectToAutomation(m: YamlMap, ctx: Ctx | undefined, fallbackId: string
     enabled: m.initial_state !== false,
     mode: validMode,
     triggers,
-    conditions: list(m.condition ?? m.conditions).map(parseCondition),
-    actions: list(m.action ?? m.actions).map((a, i) => parseAction(a, i, ctx)),
+    conditions: list(m.conditions ?? m.condition).map(parseCondition),
+    actions: list(m.actions ?? m.action).map((a, i) => parseAction(a, i, ctx)),
   };
 }
 

@@ -1,6 +1,6 @@
 // Persistencia de proyectos en IndexedDB (idb-keyval) e importación/exportación JSON.
 import { createStore, del, entries, get, set, type UseStore } from 'idb-keyval';
-import type { Project } from '../types';
+import { defaultSettings, type Project } from '../types';
 import { parseProject } from './projectSchema';
 
 export { createDemoProject } from './demoProject';
@@ -34,6 +34,7 @@ export function createEmptyProject(name: string): Project {
     automations: [],
     scenes: [],
     scripts: [],
+    settings: defaultSettings(),
   };
 }
 

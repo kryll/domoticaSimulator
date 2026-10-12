@@ -1,5 +1,5 @@
 // Atajos para simular eventos físicos desde la interfaz o los tests.
-import type { EntityState, Id, Project, SimulationState } from '../types';
+import type { DeviceDefinition, EntityState, Id, Project, SimulationState } from '../types';
 import { catalog } from '../devices/catalog';
 import { entityCapabilities } from '../devices/capabilities';
 import { entitiesForDevice } from '../devices/entities';
@@ -103,9 +103,15 @@ function recovered(entityId: string, st: EntityState): EntityState {
  * Simula que un dispositivo se desconecta (offline = true): sus entidades pasan a 'unavailable'
  * y se cancelan sus temporizadores. Al recuperarse vuelven a su estado anterior.
  */
-export function setDeviceOffline(sim: SimulationState, project: Project, deviceId: Id, offline: boolean): SimulationState {
+export function setDeviceOffline(
+  sim: SimulationState,
+  project: Project,
+  deviceId: Id,
+  offline: boolean,
+  defs: DeviceDefinition[] = catalog,
+): SimulationState {
   const device = project.devices.find((d) => d.id === deviceId);
-  const def = device ? catalog.find((d) => d.id === device.definitionId) : undefined;
+  const def = device ? defs.find((d) => d.id === device.definitionId) : undefined;
   if (!device || !def) return warn(sim, `Dispositivo desconocido: ${deviceId}`);
   const ids = entitiesForDevice(device, def)
     .map((e) => e.entityId)

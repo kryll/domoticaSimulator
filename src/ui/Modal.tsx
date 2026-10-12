@@ -7,25 +7,30 @@ export interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Ancho máximo: md (por defecto) o lg. */
+  size?: 'md' | 'lg';
 }
 
-export function Modal({ open, title, onClose, children, footer }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, size = 'md' }: ModalProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  // onClose en una ref: si el padre pasa una función nueva en cada render, el foco no salta.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     dialogRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
       previous?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (
@@ -41,7 +46,7 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg bg-white shadow-xl focus:outline-none"
+        className={`flex max-h-[85vh] w-full ${size === 'lg' ? 'max-w-2xl' : 'max-w-lg'} flex-col rounded-lg bg-white shadow-xl focus:outline-none`}
       >
         <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 id={titleId} className="text-base font-semibold text-slate-800">

@@ -168,6 +168,11 @@ export function parseDefinition(raw: unknown, index = 0): DeviceDefinition {
   }
   const icon = optString(raw, 'icon', where);
   if (icon !== undefined) def.icon = icon;
+  if (raw.priceEur !== undefined) {
+    const price = raw.priceEur;
+    if (typeof price !== 'number' || !Number.isFinite(price) || price < 0) fail(where, '"priceEur" debe ser un número no negativo');
+    def.priceEur = price;
+  }
   return def;
 }
 

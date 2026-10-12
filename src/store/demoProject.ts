@@ -1,5 +1,5 @@
 // Proyecto de ejemplo: casa de dos plantas lista para simular.
-import type { Automation, Device, Floor, Integration, Point, Project, Room, Scene, Script } from '../types';
+import { defaultSettings, type Automation, type Device, type Floor, type Integration, type Point, type Project, type Room, type Scene, type Script } from '../types';
 import { catalog, getDefinition } from '../devices/catalog';
 import { suggestConnections } from '../network/connections';
 
@@ -34,11 +34,15 @@ interface Spec {
   room: string;
   at: Point;
   integration?: Integration;
+  /** Carga conectada (enchufes y relés), en vatios. */
+  loadWatts?: number;
+  /** Conectado a un SAI. */
+  ups?: boolean;
 }
 
 // Rejilla de 200 × 100 px: los nodos (~180 × 70 px) no se solapan dentro de cada planta.
 const SPECS: Spec[] = [
-  { id: 'demo-servidor', def: 'ha-green', name: 'Home Assistant', floor: PB, room: 'demo-salon', at: { x: 20, y: 20 } },
+  { id: 'demo-servidor', def: 'ha-green', name: 'Home Assistant', floor: PB, room: 'demo-salon', at: { x: 20, y: 20 }, ups: true },
   { id: 'demo-router', def: 'tplink-deco-x50', name: 'Router Wi-Fi', floor: PB, room: 'demo-salon', at: { x: 220, y: 20 } },
   { id: 'demo-coordinador', def: 'sonoff-zbdongle-p', name: 'Coordinador Zigbee', floor: PB, room: 'demo-salon', at: { x: 420, y: 20 } },
   { id: 'demo-puente-hue', def: 'hue-bridge-v2', name: 'Puente Hue', floor: PB, room: 'demo-salon', at: { x: 20, y: 120 } },
@@ -48,8 +52,8 @@ const SPECS: Spec[] = [
   { id: 'demo-altavoz', def: 'sonos-era-100', name: 'Altavoz salón', floor: PB, room: 'demo-salon', at: { x: 220, y: 220 } },
   { id: 'demo-mando', def: 'aqara-wireless-mini-switch', name: 'Mando salón', floor: PB, room: 'demo-salon', at: { x: 420, y: 220 }, integration: 'zha' },
   { id: 'demo-nest-hub', def: 'google-nest-hub-2', name: 'Nest Hub cocina', floor: PB, room: 'demo-cocina', at: { x: 640, y: 20 } },
-  { id: 'demo-luz-cocina', def: 'shelly-1pm-gen3', name: 'Luz cocina', floor: PB, room: 'demo-cocina', at: { x: 840, y: 20 } },
-  { id: 'demo-cafetera', def: 'sonoff-s26r2', name: 'Cafetera', floor: PB, room: 'demo-cocina', at: { x: 640, y: 120 } },
+  { id: 'demo-luz-cocina', def: 'shelly-1pm-gen3', name: 'Luz cocina', floor: PB, room: 'demo-cocina', at: { x: 840, y: 20 }, loadWatts: 36 },
+  { id: 'demo-cafetera', def: 'sonoff-s26r2', name: 'Cafetera', floor: PB, room: 'demo-cocina', at: { x: 640, y: 120 }, loadWatts: 1200 },
   { id: 'demo-puerta', def: 'aqara-door-window', name: 'Puerta entrada', floor: PB, room: 'demo-entrada', at: { x: 20, y: 420 }, integration: 'zha' },
   { id: 'demo-cerradura', def: 'aqara-u200', name: 'Cerradura entrada', floor: PB, room: 'demo-entrada', at: { x: 220, y: 420 } },
   { id: 'demo-camara', def: 'reolink-rlc-810a', name: 'Cámara entrada', floor: PB, room: 'demo-entrada', at: { x: 20, y: 520 } },
@@ -57,9 +61,9 @@ const SPECS: Spec[] = [
   { id: 'demo-luz-pasillo', def: 'ikea-tradfri-e27-ws', name: 'Luz pasillo', floor: PB, room: 'demo-pasillo', at: { x: 640, y: 420 }, integration: 'zha' },
   { id: 'demo-clima-dormitorio', def: 'aqara-temp-hum', name: 'Clima dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 20, y: 20 }, integration: 'zha' },
   { id: 'demo-luz-dormitorio', def: 'hue-white-e27', name: 'Luz dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 220, y: 120 } },
-  { id: 'demo-enchufe-dormitorio', def: 'sonoff-s26r2zb', name: 'Ventilador dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 420, y: 120 } },
+  { id: 'demo-enchufe-dormitorio', def: 'sonoff-s26r2zb', name: 'Ventilador dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 420, y: 120 }, loadWatts: 45 },
   { id: 'demo-persiana', def: 'shelly-2pm-gen3-cover', name: 'Persiana dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 20, y: 220 } },
-  { id: 'demo-enchufe-bano', def: 'shelly-plug-s-gen3', name: 'Enchufe baño', floor: P1, room: 'demo-bano', at: { x: 640, y: 20 } },
+  { id: 'demo-enchufe-bano', def: 'shelly-plug-s-gen3', name: 'Enchufe baño', floor: P1, room: 'demo-bano', at: { x: 640, y: 20 }, loadWatts: 1500 },
   { id: 'demo-sensor-bano', def: 'xiaomi-lywsd03mmc', name: 'Sensor baño', floor: P1, room: 'demo-bano', at: { x: 840, y: 20 } },
   { id: 'demo-fuga-bano', def: 'aqara-water-leak', name: 'Fuga baño', floor: P1, room: 'demo-bano', at: { x: 640, y: 120 }, integration: 'zha' },
   { id: 'demo-aspiradora', def: 'xiaomi-robot-vacuum-s10', name: 'Aspiradora', floor: P1, room: 'demo-despacho', at: { x: 640, y: 320 } },
@@ -70,7 +74,10 @@ function buildDevice(spec: Spec): Device {
   const protocol = def?.protocols[0];
   const integration = spec.integration ?? def?.integrations[0];
   if (!protocol || !integration) throw new Error(`Proyecto de ejemplo: definición desconocida "${spec.def}"`);
-  return { id: spec.id, definitionId: spec.def, name: spec.name, floorId: spec.floor, roomId: spec.room, position: { ...spec.at }, protocol, integration };
+  const device: Device = { id: spec.id, definitionId: spec.def, name: spec.name, floorId: spec.floor, roomId: spec.room, position: { ...spec.at }, protocol, integration };
+  if (spec.loadWatts !== undefined) device.loadWatts = spec.loadWatts;
+  if (spec.ups) device.ups = true;
+  return device;
 }
 
 const AUTOMATIONS: Automation[] = [
@@ -212,6 +219,7 @@ export function createDemoProject(): Project {
     automations: clone(AUTOMATIONS),
     scenes: clone(SCENES),
     scripts: clone(SCRIPTS),
+    settings: defaultSettings(),
   };
   return { ...base, connections: suggestConnections(base, catalog) };
 }

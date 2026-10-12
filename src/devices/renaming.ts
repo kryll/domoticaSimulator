@@ -31,6 +31,7 @@ function mapCondition(c: Condition, map: Mapper): Condition {
     case 'or':
       return { ...c, conditions: c.conditions.map((x) => mapCondition(x, map)) };
     case 'time':
+    case 'sun':
       return c;
   }
 }
@@ -83,7 +84,7 @@ export interface EntityReference {
 
 function conditionRefs(c: Condition): string[] {
   if (c.type === 'and' || c.type === 'or') return c.conditions.flatMap(conditionRefs);
-  return c.type === 'time' ? [] : [c.entityId];
+  return c.type === 'time' || c.type === 'sun' ? [] : [c.entityId];
 }
 
 function actionRefs(a: Action): string[] {

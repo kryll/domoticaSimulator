@@ -66,3 +66,39 @@ html, body, #root { height: 100%; }
   .ha-eq > span { transform: scaleY(0.7); }
   .ha-flash { box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.8); }
 }
+
+/* ---------- Día y noche ---------- */
+
+/* Velo nocturno: oscurece el fondo y el plano (salas e imagen), no los dispositivos. */
+.ha-night-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: rgb(15 23 42 / 0.45);
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+.ha-night-veil.is-on { opacity: 1; }
+#ha-canvas .react-flow__node-room,
+#ha-canvas .react-flow__node-plan,
+#ha-canvas .react-flow__node-roomLabel {
+  transition: filter 1.2s ease;
+}
+#ha-canvas.ha-night .react-flow__node-room,
+#ha-canvas.ha-night .react-flow__node-plan,
+#ha-canvas.ha-night .react-flow__node-roomLabel {
+  filter: brightness(0.62) saturate(0.75);
+}
+
+/* Deslizador de temperatura de color (cálido a frío). */
+.ha-kelvin-range { accent-color: #f59e0b; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ha-night-veil,
+  #ha-canvas .react-flow__node-room,
+  #ha-canvas .react-flow__node-plan,
+  #ha-canvas .react-flow__node-roomLabel {
+    transition: none;
+  }
+}

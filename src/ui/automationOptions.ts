@@ -19,6 +19,7 @@ export const CONDITION_LABELS: Record<Condition['type'], string> = {
   state: 'Estado',
   numeric_state: 'Valor numérico',
   time: 'Franja horaria',
+  sun: 'Sol (día/noche)',
   and: 'Todas (Y)',
   or: 'Alguna (O)',
 };
@@ -27,6 +28,7 @@ export const conditionFactories: Array<{ label: string; create: () => Condition 
   { label: CONDITION_LABELS.state, create: () => ({ type: 'state', entityId: '', state: 'on' }) },
   { label: CONDITION_LABELS.numeric_state, create: () => ({ type: 'numeric_state', entityId: '' }) },
   { label: CONDITION_LABELS.time, create: () => ({ type: 'time', after: '08:00', before: '22:00' }) },
+  { label: CONDITION_LABELS.sun, create: () => ({ type: 'sun', after: 'sunset', before: 'sunrise' }) },
   { label: CONDITION_LABELS.and, create: () => ({ type: 'and', conditions: [] }) },
   { label: CONDITION_LABELS.or, create: () => ({ type: 'or', conditions: [] }) },
 ];

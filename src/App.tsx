@@ -6,6 +6,7 @@ import { Toast } from './ui/Toast';
 import { CatalogPanel } from './catalog/CatalogPanel';
 import { Canvas } from './canvas/Canvas';
 import { FloorBar } from './canvas/FloorBar';
+import { FailureBanner } from './simulation/FailureBanner';
 import { PropertiesPanel } from './canvas/PropertiesPanel';
 import { startAutosave, useProjectStore } from './store/projectStore';
 import { startInteractAutoplay, startSimulationSync, stopSimulationLoop } from './store/simulationStore';
@@ -38,14 +39,22 @@ function useShortcuts() {
 // Diálogos poco frecuentes: se cargan bajo demanda.
 const ShortcutsHelp = lazy(() => import('./ui/ShortcutsHelp').then((m) => ({ default: m.ShortcutsHelp })));
 const AddToSceneDialog = lazy(() => import('./scenes/AddToSceneDialog').then((m) => ({ default: m.AddToSceneDialog })));
+const ProjectSettingsDialog = lazy(() =>
+  import('./settings/ProjectSettingsDialog').then((m) => ({ default: m.ProjectSettingsDialog })),
+);
+const TemplateGallery = lazy(() => import('./automations/TemplateGallery').then((m) => ({ default: m.TemplateGallery })));
 
 function LazyDialogs() {
   const help = useUiStore((s) => s.shortcutsOpen);
   const addToScene = useUiStore((s) => s.addToScene !== null);
+  const settings = useUiStore((s) => s.settingsOpen);
+  const templates = useUiStore((s) => s.templateGallery !== null);
   return (
     <Suspense fallback={null}>
       {help && <ShortcutsHelp />}
       {addToScene && <AddToSceneDialog />}
+      {settings && <ProjectSettingsDialog />}
+      {templates && <TemplateGallery />}
     </Suspense>
   );
 }
@@ -91,6 +100,7 @@ export function App({ autoLoad = true }: AppProps) {
           </div>
           <main className="relative flex min-w-0 flex-1 flex-col" aria-label="Plano">
             <FloorBar />
+            <FailureBanner />
             <div className="min-h-0 flex-1">
               <Canvas />
             </div>

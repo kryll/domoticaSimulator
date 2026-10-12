@@ -8,12 +8,16 @@ import { LogbookPanel } from '../simulation/LogbookPanel';
 import { Tabs } from './Tabs';
 import { Button } from './Button';
 import { tabPanelId } from './ids';
+import { hasFailures } from './failures';
 
 const PREFIX = 'bottom';
 
 // Paneles pesados cargados bajo demanda para aligerar el bundle inicial.
 const AutomationsPanel = lazy(() => import('../automations/AutomationsPanel').then((m) => ({ default: m.AutomationsPanel })));
 const ScenesPanel = lazy(() => import('../scenes/ScenesPanel').then((m) => ({ default: m.ScenesPanel })));
+const ImpactPanel = lazy(() => import('../reports/ImpactPanel').then((m) => ({ default: m.ImpactPanel })));
+const BudgetPanel = lazy(() => import('../reports/BudgetPanel').then((m) => ({ default: m.BudgetPanel })));
+const EnergyPanel = lazy(() => import('../reports/EnergyPanel').then((m) => ({ default: m.EnergyPanel })));
 
 function Loading() {
   return <p className="px-3 py-6 text-center text-sm text-slate-500">Cargando…</p>;
@@ -90,13 +94,27 @@ export function BottomPanel() {
   const setMaximized = useUiStore((s) => s.setBottomMaximized);
   const project = useProjectStore((s) => s.project);
   const logCount = useSimulationStore((s) => s.sim.log.length);
+  const failing = useSimulationStore((s) => hasFailures(s.sim.failures));
   const issues = analyzeProject(project).issues;
   const problems = issues.filter((i) => i.severity !== 'info').length;
 
   const tabs: Array<{ key: BottomTab; label: ReactNode }> = [
     { key: 'validation', label: <>Validación<Count n={problems} tone="red" /></> },
+    {
+      key: 'impact',
+      label: (
+        <>
+          Impacto
+          {failing && (
+            <span className="ml-1 inline-block h-2 w-2 rounded-full bg-red-600 align-middle" role="img" aria-label="(fallos activos)" />
+          )}
+        </>
+      ),
+    },
     { key: 'automations', label: <>Automatizaciones<Count n={project.automations.length} tone="slate" /></> },
     { key: 'scenes', label: <>Escenas y scripts<Count n={project.scenes.length + project.scripts.length} tone="slate" /></> },
+    { key: 'budget', label: 'Presupuesto' },
+    { key: 'energy', label: 'Energía' },
     { key: 'logbook', label: <>Registro<Count n={logCount} tone="slate" /></> },
   ];
 
@@ -146,6 +164,9 @@ export function BottomPanel() {
           <Suspense fallback={<Loading />}>
             {tab === 'automations' && <AutomationsPanel />}
             {tab === 'scenes' && <ScenesPanel />}
+            {tab === 'impact' && <ImpactPanel />}
+            {tab === 'budget' && <BudgetPanel />}
+            {tab === 'energy' && <EnergyPanel />}
           </Suspense>
           {tab === 'logbook' && <LogbookPanel />}
         </div>

@@ -19,6 +19,7 @@ const full: Automation = {
   ],
   conditions: [
     { type: 'state', entityId: 'light.salon', state: 'off' },
+    { type: 'sun', after: 'sunset', afterOffsetMinutes: -30, before: 'sunrise' },
     { type: 'and', conditions: [{ type: 'time', after: '20:00' }, { type: 'or', conditions: [{ type: 'numeric_state', entityId: 'sensor.t', below: 3 }] }] },
   ],
   actions: [
@@ -221,5 +222,69 @@ describe('for: y datos de luz (fase 1)', () => {
 
   it('parseScalar admite mapas en línea simples', () => {
     expect(parseScalar('{minutes: 5, seconds: "10"}')).toEqual({ minutes: 5, seconds: '10' });
+  });
+});
+
+describe('sintaxis de HA (C13)', () => {
+  it('exporta la sintaxis actual: triggers/trigger, conditions/condition, actions/action', () => {
+    const yaml = automationToYaml(full, { scenes, scripts });
+    expect(yaml).toContain('triggers:\n  - trigger: state\n');
+    expect(yaml).toContain('conditions:\n  - condition: state\n');
+    expect(yaml).toContain('actions:\n  - action: light.turn_on\n    target:\n      entity_id: light.salon\n    data:\n');
+    expect(yaml).toContain('  - condition: sun\n    after: sunset\n    after_offset: "-00:30:00"\n    before: sunrise\n');
+    expect(yaml).not.toMatch(/platform:|service:|^trigger:|^condition:|^action:/m);
+  });
+
+  it('el parser acepta la sintaxis antigua y la nueva con el mismo resultado', () => {
+    const old = `
+alias: Antigua
+trigger:
+  - platform: state
+    entity_id: binary_sensor.puerta_door
+    to: "on"
+  - platform: sun
+    event: sunset
+    offset: "-00:15:00"
+condition:
+  - condition: sun
+    before: sunrise
+    before_offset: "01:00:00"
+action:
+  - service: light.turn_on
+    target:
+      entity_id: light.salon
+    data:
+      brightness_pct: 50
+`;
+    const modern = `
+alias: Antigua
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.puerta_door
+    to: "on"
+  - trigger: sun
+    event: sunset
+    offset: "-00:15:00"
+conditions:
+  - condition: sun
+    before: sunrise
+    before_offset: "01:00:00"
+actions:
+  - action: light.turn_on
+    target:
+      entity_id: light.salon
+    data:
+      brightness_pct: 50
+`;
+    const a = parseAutomationYaml(old);
+    const b = parseAutomationYaml(modern);
+    expect({ ...a, id: 'x' }).toEqual({ ...b, id: 'x' });
+    expect(b.triggers[1]).toEqual({ type: 'sun', event: 'sunset', offsetMinutes: -15 });
+    expect(b.conditions[0]).toEqual({ type: 'sun', before: 'sunrise', beforeOffsetMinutes: 60 });
+    expect(b.actions[0]).toEqual({ type: 'service', service: 'light.turn_on', entityId: 'light.salon', data: { brightness_pct: 50 } });
+  });
+
+  it('una condición de sol sin after ni before es un error', () => {
+    expect(() => parseAutomationYaml('triggers:\n  - trigger: time\n    at: "07:00"\nconditions:\n  - condition: sun\n')).toThrow(/after.*before/);
   });
 });

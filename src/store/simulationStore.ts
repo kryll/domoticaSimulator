@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { EntityState, EntityStateValue, Id, Project, ServiceData, SimulationState } from '../types';
+import type { EntityState, EntityStateValue, Failures, Id, Project, ServiceData, SimulationState } from '../types';
+import { setFailures } from '../simulation/availability';
 import { entitiesForDevice, initialEntityStates } from '../devices/entities';
 import { catalog, getDefinition } from '../devices/catalog';
 import { applyQuickAction, primaryAction, setLevelAction, stepAction, type QuickAction } from '../devices/presentation';
@@ -11,8 +12,10 @@ import {
   createSimulationState,
   renameEntities,
   runAutomation,
+  jumpTo,
   runScript,
   setEntityState,
+  testTrigger,
   tick,
 } from '../simulation/engine';
 import { useProjectStore } from './projectStore';
@@ -51,6 +54,12 @@ export interface SimulationStoreState {
   setLevel: (deviceId: Id, pct: number) => boolean;
   /** Ejecuta una automatización a mano (opcionalmente sin comprobar condiciones). */
   runAutomation: (automationId: Id, skipConditions?: boolean) => void;
+  /** Activa o desactiva fallos simulados (Internet, corte de luz, HA reiniciando, equipos caídos). */
+  setFailures: (patch: Partial<Failures>) => void;
+  /** Prueba un disparador: ejecuta la automatización evaluando sus condiciones (deja traza). */
+  testTrigger: (automationId: Id, triggerIndex: number) => void;
+  /** Avanza el reloj hasta `targetMs` (hora simulada) procesando lo que ocurra entre medias. */
+  jumpTo: (targetMs: number) => void;
   /** Simula que un dispositivo pierde (o recupera) la conexión. */
   setDeviceOffline: (deviceId: Id, offline: boolean) => void;
   /** Movimiento detectado con autoapagado según el modelo. */
@@ -121,6 +130,12 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     applyDeviceAction(deviceId, (device, def, sim) => setLevelAction(device, def, sim, Math.max(0, Math.min(100, pct)))),
   runAutomation: (automationId, skipConditions = false) =>
     set((s) => ({ sim: runAutomation(s.sim, project(), automationId, { skipConditions }) })),
+  setFailures: (patch) => set((s) => ({ sim: setFailures(s.sim, project(), catalog, patch) })),
+  testTrigger: (automationId, triggerIndex) => set((s) => ({ sim: testTrigger(s.sim, project(), automationId, triggerIndex) })),
+  jumpTo: (targetMs) => {
+    lastTick = performance.now();
+    set((s) => ({ sim: jumpTo(s.sim, project(), catalog, targetMs) }));
+  },
   setDeviceOffline: (deviceId, offline) => set((s) => ({ sim: setDeviceOffline(s.sim, project(), deviceId, offline) })),
   motionPulse: (entityId, seconds) => set((s) => ({ sim: motionPulse(s.sim, project(), entityId, seconds) })),
   setBinary: (entityId, on) => set((s) => ({ sim: openDoor(s.sim, project(), entityId, on) })),

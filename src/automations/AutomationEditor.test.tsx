@@ -3,7 +3,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AutomationEditor } from './AutomationEditor';
 import { useProjectStore } from '../store/projectStore';
+import { useUiStore } from '../store/uiStore';
 import { makeDevice, makeProject } from '../test/fixtures';
+import { pickEntity } from '../test/pickEntity';
 import type { Action, Automation } from '../types';
 import { ActionListEditor } from './ActionEditor';
 
@@ -36,6 +38,7 @@ function Harness() {
 describe('AutomationEditor', () => {
   beforeEach(() => {
     latest = base;
+    useUiStore.getState().reset();
     useProjectStore.getState().loadProject(
       makeProject({
         devices: [makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz salón'), makeDevice('aqara-motion-p1', 'd2', 0, 0, 'Sensor')],
@@ -47,14 +50,14 @@ describe('AutomationEditor', () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole('button', { name: '+ Cambio de estado' }));
     expect(latest.triggers).toHaveLength(1);
-    await userEvent.selectOptions(screen.getByLabelText('Entidad'), 'binary_sensor.sensor_motion');
+    await pickEntity('Entidad', 'binary_sensor.sensor_motion');
     expect(latest.triggers[0]).toMatchObject({ type: 'state', entityId: 'binary_sensor.sensor_motion', to: 'on' });
   });
 
   it('añade una acción de servicio y propone el servicio del dominio', async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole('button', { name: '+ Llamar a servicio' }));
-    await userEvent.selectOptions(screen.getByLabelText('Entidad'), 'light.luz_salon');
+    await pickEntity('Entidad', 'light.luz_salon');
     expect(latest.actions[0]).toMatchObject({ type: 'service', entityId: 'light.luz_salon', service: 'light.turn_on' });
   });
 

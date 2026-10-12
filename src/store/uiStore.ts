@@ -3,7 +3,10 @@ import type { Id } from '../types';
 
 /** select = edición; interact = uso (clic = acción principal). */
 export type CanvasMode = 'select' | 'room' | 'connect' | 'interact';
-export type BottomTab = 'validation' | 'automations' | 'scenes' | 'logbook';
+export type BottomTab = 'validation' | 'impact' | 'automations' | 'scenes' | 'budget' | 'energy' | 'logbook';
+
+/** Pestaña del editor de una automatización. */
+export type AutomationView = 'visual' | 'yaml' | 'traces';
 
 export type Selection =
   | { kind: 'device'; id: Id }
@@ -73,6 +76,12 @@ export interface UiState {
   shortcutsOpen: boolean;
   /** Ya se ofreció pasar a modo Uso al pulsar Simular. */
   interactOffered: boolean;
+  /** Diálogo «Ajustes del proyecto». */
+  settingsOpen: boolean;
+  /** Galería de plantillas abierta (opcionalmente centrada en un dispositivo). */
+  templateGallery: { deviceId?: Id } | null;
+  /** Pestaña activa del editor de automatizaciones. */
+  automationView: AutomationView;
 
   setActiveFloor: (id: Id | null) => void;
   select: (selection: Selection | null) => void;
@@ -93,6 +102,11 @@ export interface UiState {
   setAddToScene: (entityIds: string[] | null) => void;
   setShortcutsOpen: (open: boolean) => void;
   setInteractOffered: (offered: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
+  openTemplates: (opts: { deviceId?: Id } | null) => void;
+  setAutomationView: (view: AutomationView) => void;
+  /** Abre una automatización en el panel inferior (opcionalmente en una pestaña). */
+  showAutomation: (id: Id, view?: AutomationView) => void;
   reset: () => void;
 }
 
@@ -118,13 +132,21 @@ const initial = {
   addToScene: null,
   shortcutsOpen: false,
   interactOffered: false,
+  settingsOpen: false,
+  templateGallery: null,
+  automationView: 'visual' as AutomationView,
 };
 
 export const useUiStore = create<UiState>()((set) => ({
   ...initial,
   setActiveFloor: (id) => set({ activeFloorId: id, selection: null, popoverDeviceId: null, contextMenu: null }),
   select: (selection) => set({ selection }),
-  setHighlighted: (ids) => set({ highlightedDeviceIds: ids }),
+  setHighlighted: (ids) =>
+    set((s) =>
+      s.highlightedDeviceIds.length === ids.length && s.highlightedDeviceIds.every((id, i) => id === ids[i])
+        ? s
+        : { highlightedDeviceIds: ids },
+    ),
   setCanvasMode: (mode) =>
     set((s) => ({ canvasMode: mode, connectFromId: mode === 'connect' ? s.connectFromId : null, contextMenu: null })),
   setBottomTab: (tab) => set({ bottomTab: tab, bottomOpen: true }),
@@ -151,5 +173,10 @@ export const useUiStore = create<UiState>()((set) => ({
   setAddToScene: (entityIds) => set({ addToScene: entityIds }),
   setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
   setInteractOffered: (offered) => set({ interactOffered: offered }),
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
+  openTemplates: (opts) => set({ templateGallery: opts, contextMenu: null }),
+  setAutomationView: (view) => set({ automationView: view }),
+  showAutomation: (id, view) =>
+    set((s) => ({ selectedAutomationId: id, bottomTab: 'automations', bottomOpen: true, automationView: view ?? s.automationView })),
   reset: () => set({ ...initial }),
 }));

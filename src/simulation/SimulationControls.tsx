@@ -1,6 +1,6 @@
 import { useSimulationStore, SPEEDS, type Speed } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
-import { formatSimDate, formatSimTime } from './clock';
+import { SimClock } from './SimClock';
 import { userWaits } from './engine';
 import { Button } from '../ui/Button';
 
@@ -8,7 +8,6 @@ import { Button } from '../ui/Button';
 export function SimulationControls() {
   const running = useSimulationStore((s) => s.running);
   const speed = useSimulationStore((s) => s.speed);
-  const now = useSimulationStore((s) => s.sim.now);
   const start = useSimulationStore((s) => s.start);
   const pause = useSimulationStore((s) => s.pause);
   const reset = useSimulationStore((s) => s.reset);
@@ -71,14 +70,7 @@ export function SimulationControls() {
           </option>
         ))}
       </select>
-      <div
-        className="ml-1 flex flex-col items-end rounded-md bg-slate-800 px-2 py-0.5 font-mono leading-tight text-white"
-        aria-label="Hora simulada"
-        aria-live="off"
-      >
-        <span className="text-sm">{formatSimTime(now, { seconds: true })}</span>
-        <span className="text-[10px] text-slate-300">{formatSimDate(now)}</span>
-      </div>
+      <SimClock />
     </div>
   );
 }

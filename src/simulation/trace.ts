@@ -1,0 +1,334 @@
+// Trazas de ejecución de automatizaciones: descripciones legibles en español de disparadores,
+// condiciones y acciones, evaluación explicada de condiciones y gestión inmutable de las trazas.
+import type {
+  Action,
+  Automation,
+  AutomationTrace,
+  Condition,
+  EntityStateValue,
+  Id,
+  Project,
+  SimulationState,
+  SunEvent,
+  TraceAction,
+  TraceCondition,
+  TraceTrigger,
+  Trigger,
+} from '../types';
+import { HVAC_MODE_LABELS, labelOf } from '../devices/labels';
+import { formatSimTime, isTimeBetween, MINUTE_MS, SECOND_MS, sunTimesAt, type SunConfig, type SunLocation } from './clock';
+import { friendlyName, inNumericRange, normalizeState, sameState, toNumber } from './stateUtils';
+import { describeServiceData } from './services';
+import { serviceName } from './serviceCatalog';
+
+/** Trazas que se conservan por automatización (las más recientes). */
+export const MAX_TRACES_PER_AUTOMATION = 50;
+
+// ---------- Etiquetas de estado ----------
+
+const BINARY_LABELS: Record<string, [string, string]> = {
+  motion: ['Movimiento detectado', 'Sin movimiento'],
+  occupancy: ['Ocupado', 'Libre'],
+  presence: ['Presencia', 'Sin presencia'],
+  door: ['Abierta', 'Cerrada'],
+  window: ['Abierta', 'Cerrada'],
+  opening: ['Abierta', 'Cerrada'],
+  garage_door: ['Abierta', 'Cerrada'],
+  moisture: ['Fuga detectada', 'Seco'],
+  smoke: ['Humo detectado', 'Sin humo'],
+};
+
+const DOMAIN_LABELS: Record<string, Record<string, string>> = {
+  light: { on: 'Encendida', off: 'Apagada' },
+  switch: { on: 'Encendido', off: 'Apagado' },
+  fan: { on: 'Encendido', off: 'Apagado' },
+  cover: { open: 'Abierta', closed: 'Cerrada', opening: 'Abriéndose', closing: 'Cerrándose' },
+  lock: { locked: 'Cerrada con llave', unlocked: 'Abierta', open: 'Puerta abierta', jammed: 'Atascada', locking: 'Cerrando', unlocking: 'Abriendo' },
+  media_player: { on: 'Encendido', off: 'Apagado', playing: 'Reproduciendo', paused: 'En pausa', idle: 'Inactivo' },
+  vacuum: { cleaning: 'Limpiando', docked: 'En la base', returning: 'Volviendo a la base', paused: 'En pausa', idle: 'Parada' },
+  camera: { idle: 'En reposo', recording: 'Grabando', streaming: 'Emitiendo', off: 'Apagada' },
+  climate: HVAC_MODE_LABELS,
+};
+
+/** Etiqueta legible de un estado ("on" de una luz → "Encendida"). */
+export function stateLabel(entityId: string, value: EntityStateValue, deviceClass?: string): string {
+  const s = normalizeState(value);
+  if (s === 'unavailable') return 'No disponible';
+  if (s === 'unknown') return 'Desconocido';
+  const domain = entityId.split('.')[0] ?? '';
+  if (domain === 'binary_sensor') {
+    const pair = BINARY_LABELS[deviceClass ?? ''];
+    if (pair && (s === 'on' || s === 'off')) return s === 'on' ? pair[0] : pair[1];
+    if (s === 'on') return 'Activado';
+    if (s === 'off') return 'Desactivado';
+  }
+  const table = DOMAIN_LABELS[domain];
+  return table ? labelOf(table, s) : s;
+}
+
+function deviceClassOf(sim: SimulationState, entityId: string): string | undefined {
+  const dc = sim.entities[entityId]?.attributes?.device_class;
+  return dc === undefined ? undefined : String(dc);
+}
+
+function label(sim: SimulationState, entityId: string, value: EntityStateValue): string {
+  return stateLabel(entityId, value, deviceClassOf(sim, entityId));
+}
+
+const fmtNumber = (n: number): string => String(Math.round(n * 100) / 100).replace('.', ',');
+
+function unitOf(sim: SimulationState, entityId: string): string {
+  const u = sim.entities[entityId]?.attributes?.unit_of_measurement;
+  return u === undefined ? '' : ` ${String(u)}`;
+}
+
+/** "2 min", "1 h 5 min", "30 s"... */
+export function formatSeconds(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const parts: string[] = [];
+  if (h) parts.push(`${h} h`);
+  if (m) parts.push(`${m} min`);
+  if (sec || parts.length === 0) parts.push(`${sec} s`);
+  return parts.join(' ');
+}
+
+function rangeText(above: number | undefined, below: number | undefined, unit: string): string {
+  if (above !== undefined && below !== undefined) return `entre ${fmtNumber(above)} y ${fmtNumber(below)}${unit}`;
+  if (above !== undefined) return `por encima de ${fmtNumber(above)}${unit}`;
+  if (below !== undefined) return `por debajo de ${fmtNumber(below)}${unit}`;
+  return 'con cualquier valor';
+}
+
+function sunEventText(event: SunEvent, offsetMinutes = 0): string {
+  const name = event === 'sunrise' ? 'amanecer' : 'atardecer';
+  if (!offsetMinutes) return name;
+  const abs = formatSeconds(Math.abs(offsetMinutes) * 60);
+  return `${name} ${offsetMinutes < 0 ? `(${abs} antes)` : `(${abs} después)`}`;
+}
+
+const capitalize = (s: string): string => (s === '' ? s : s[0]?.toUpperCase() + s.slice(1));
+
+// ---------- Disparadores ----------
+
+/** «Luz salón cambió a Encendida», «Son las 07:30», «Atardecer (15 min antes)»... */
+export function describeTrigger(t: Trigger, sim: SimulationState): string {
+  switch (t.type) {
+    case 'state': {
+      const name = friendlyName(sim, t.entityId);
+      let text = `${name} cambió`;
+      if (t.from !== undefined) text += ` de ${label(sim, t.entityId, t.from)}`;
+      if (t.to !== undefined) text += ` a ${label(sim, t.entityId, t.to)}`;
+      if (t.from === undefined && t.to === undefined) text += ' de estado';
+      if (t.for) text += ` durante ${formatSeconds(t.for)}`;
+      return text;
+    }
+    case 'numeric_state':
+      return `${friendlyName(sim, t.entityId)} pasa a estar ${rangeText(t.above, t.below, unitOf(sim, t.entityId))}`;
+    case 'time':
+      return `Son las ${t.at}`;
+    case 'sun':
+      return capitalize(sunEventText(t.event, t.offsetMinutes));
+  }
+}
+
+// ---------- Condiciones ----------
+
+export interface ConditionExplanation {
+  result: boolean;
+  description: string;
+  detail: string;
+}
+
+/** Dónde calcular el sol: ubicación real o (tests) horas fijas. */
+export type SunSource = SunLocation | SunConfig;
+
+function sunBoundary(event: SunEvent, offsetMinutes: number | undefined, now: number, where: SunSource): number {
+  const times = sunTimesAt(now, where);
+  return (event === 'sunrise' ? times.sunrise : times.sunset) + (offsetMinutes ?? 0) * MINUTE_MS;
+}
+
+/** Evalúa una condición `sun` (después de / antes de amanecer o atardecer, con desplazamiento). */
+export function evaluateSunCondition(c: Extract<Condition, { type: 'sun' }>, now: number, where: SunSource): boolean {
+  const after = c.after === undefined ? undefined : sunBoundary(c.after, c.afterOffsetMinutes, now, where);
+  const before = c.before === undefined ? undefined : sunBoundary(c.before, c.beforeOffsetMinutes, now, where);
+  if (after !== undefined && before !== undefined) {
+    return after <= before ? now >= after && now < before : now >= after || now < before;
+  }
+  if (after !== undefined) return now >= after;
+  if (before !== undefined) return now < before;
+  return true;
+}
+
+function describeSunCondition(c: Extract<Condition, { type: 'sun' }>): string {
+  const parts: string[] = [];
+  if (c.after) parts.push(`después del ${sunEventText(c.after, c.afterOffsetMinutes)}`);
+  if (c.before) parts.push(`antes del ${sunEventText(c.before, c.beforeOffsetMinutes)}`);
+  return parts.length === 0 ? 'Sol (sin límites)' : capitalize(parts.join(' y '));
+}
+
+function timeRangeText(after?: string, before?: string): string {
+  if (after !== undefined && before !== undefined) return `Hora entre ${after} y ${before}`;
+  if (after !== undefined) return `Hora a partir de las ${after}`;
+  if (before !== undefined) return `Hora antes de las ${before}`;
+  return 'Cualquier hora';
+}
+
+function since(sim: SimulationState, entityId: string): number | undefined {
+  return sim.entities[entityId]?.lastChanged ?? sim.startedAt;
+}
+
+/**
+ * Evalúa una condición y explica el resultado: descripción («Hora entre 20:00 y 07:30»),
+ * resultado y detalle («son las 15:12»).
+ */
+export function explainCondition(c: Condition, sim: SimulationState, where: SunSource): ConditionExplanation {
+  switch (c.type) {
+    case 'state': {
+      const current = sim.entities[c.entityId];
+      const name = friendlyName(sim, c.entityId);
+      let description = `${name} está ${label(sim, c.entityId, c.state)}`;
+      if (c.for) description += ` desde hace al menos ${formatSeconds(c.for)}`;
+      if (!current) return { result: false, description, detail: 'la entidad no existe' };
+      if (!sameState(current.state, c.state)) return { result: false, description, detail: `está ${label(sim, c.entityId, current.state)}` };
+      if (!c.for) return { result: true, description, detail: `está ${label(sim, c.entityId, current.state)}` };
+      const from = since(sim, c.entityId);
+      const elapsed = from === undefined ? Number.POSITIVE_INFINITY : (sim.now - from) / SECOND_MS;
+      const enough = elapsed >= c.for;
+      const detail = Number.isFinite(elapsed) ? `lleva ${formatSeconds(elapsed)}` : 'desde el inicio';
+      return { result: enough, description, detail };
+    }
+    case 'numeric_state': {
+      const unit = unitOf(sim, c.entityId);
+      const description = `${friendlyName(sim, c.entityId)} ${rangeText(c.above, c.below, unit)}`;
+      const value = sim.entities[c.entityId]?.state;
+      const n = toNumber(value);
+      if (n === undefined) {
+        return { result: false, description, detail: value === undefined ? 'la entidad no existe' : `no es un número (${label(sim, c.entityId, value)})` };
+      }
+      return { result: inNumericRange(value, c.above, c.below), description, detail: `vale ${fmtNumber(n)}${unit}` };
+    }
+    case 'time': {
+      const description = timeRangeText(c.after, c.before);
+      const detail = `son las ${formatSimTime(sim.now)}`;
+      try {
+        return { result: isTimeBetween(sim.now, c.after, c.before), description, detail };
+      } catch {
+        return { result: false, description, detail: 'hora no válida' };
+      }
+    }
+    case 'sun': {
+      const times = sunTimesAt(sim.now, where);
+      const detail = `son las ${formatSimTime(sim.now)}; amanecer ${formatSimTime(times.sunrise)}, atardecer ${formatSimTime(times.sunset)}`;
+      return { result: evaluateSunCondition(c, sim.now, where), description: describeSunCondition(c), detail };
+    }
+    case 'and':
+    case 'or': {
+      const parts = c.conditions.map((x) => explainCondition(x, sim, where));
+      const ok = parts.filter((p) => p.result).length;
+      const result = c.type === 'and' ? parts.every((p) => p.result) : parts.some((p) => p.result);
+      const joined = parts.map((p) => p.description).join(c.type === 'and' ? ' y ' : ' o ');
+      const description = c.type === 'and' ? `Todas: ${joined || '(ninguna)'}` : `Alguna: ${joined || '(ninguna)'}`;
+      return { result, description, detail: `se cumplen ${ok} de ${parts.length}` };
+    }
+  }
+}
+
+/** «Hora entre 20:00 y 07:30 → no (son las 15:12)». */
+export function formatTraceCondition(c: Pick<TraceCondition, 'description' | 'result' | 'detail'>): string {
+  return `${c.description} → ${c.result ? 'sí' : 'no'} (${c.detail})`;
+}
+
+// ---------- Acciones ----------
+
+/** «Encender Luz salón (brillo 47 %)», «Esperar 2 min», «Activar escena Cine»... */
+export function describeAction(a: Action, sim: SimulationState, project: Pick<Project, 'scenes' | 'scripts'>): string {
+  switch (a.type) {
+    case 'service': {
+      const data = describeServiceData(a.data);
+      const target = a.service.startsWith('script.') && a.service !== 'script.turn_on' ? '' : ` ${friendlyName(sim, a.entityId)}`;
+      return `${serviceName(a.service)}${target}${data ? ` (${data})` : ''}`;
+    }
+    case 'scene': {
+      const scene = project.scenes.find((s) => s.id === a.sceneId);
+      return `Activar escena ${scene ? scene.name : a.sceneId}`;
+    }
+    case 'script': {
+      const script = project.scripts.find((s) => s.id === a.scriptId);
+      return `Ejecutar script ${script ? script.name : a.scriptId}`;
+    }
+    case 'delay':
+      return `Esperar ${formatSeconds(a.seconds)}`;
+  }
+}
+
+// ---------- Gestión de trazas ----------
+
+/** Crea una traza nueva con las acciones de la automatización en estado 'skipped'. */
+export function newTrace(
+  sim: SimulationState,
+  project: Pick<Project, 'scenes' | 'scripts'>,
+  a: Automation,
+  trigger: TraceTrigger,
+  conditions: TraceCondition[],
+  result: AutomationTrace['result'],
+): AutomationTrace {
+  const seq = (sim.traces ?? []).reduce((max, t) => Math.max(max, Number(t.id.replace(/^trace-/, '')) || 0), 0) + 1;
+  const actions: TraceAction[] = a.actions.map((x, index) => ({ index, description: describeAction(x, sim, project), status: 'skipped' }));
+  return { id: `trace-${seq}`, automationId: a.id, startedAt: sim.now, trigger, conditions, actions, result };
+}
+
+/** Añade una traza conservando como mucho MAX_TRACES_PER_AUTOMATION por automatización. */
+export function addTrace(sim: SimulationState, trace: AutomationTrace): SimulationState {
+  const all = [...(sim.traces ?? []), trace];
+  const same = all.filter((t) => t.automationId === trace.automationId);
+  const drop = new Set(same.slice(0, Math.max(0, same.length - MAX_TRACES_PER_AUTOMATION)).map((t) => t.id));
+  return { ...sim, traces: drop.size === 0 ? all : all.filter((t) => !drop.has(t.id)) };
+}
+
+export function updateTrace(sim: SimulationState, traceId: Id, fn: (t: AutomationTrace) => AutomationTrace): SimulationState {
+  if (!sim.traces?.some((t) => t.id === traceId)) return sim;
+  return { ...sim, traces: sim.traces.map((t) => (t.id === traceId ? fn(t) : t)) };
+}
+
+/** Actualiza el paso `index` de una traza. */
+export function setTraceAction(sim: SimulationState, traceId: Id, index: number, patch: Partial<Omit<TraceAction, 'index'>>): SimulationState {
+  return updateTrace(sim, traceId, (t) => ({
+    ...t,
+    actions: t.actions.map((x) => {
+      if (x.index !== index) return x;
+      const next: TraceAction = { ...x, ...patch };
+      if (patch.detail === undefined && 'detail' in patch) delete next.detail;
+      return next;
+    }),
+  }));
+}
+
+/** Trazas de una automatización, de la más reciente a la más antigua. */
+export function tracesFor(sim: SimulationState, automationId: Id): AutomationTrace[] {
+  return (sim.traces ?? []).filter((t) => t.automationId === automationId).reverse();
+}
+
+/** Última traza de una automatización, si la hay. */
+export function lastTrace(sim: SimulationState, automationId: Id): AutomationTrace | undefined {
+  return tracesFor(sim, automationId)[0];
+}
+
+/** Resultado de la traza en español, para la interfaz. */
+export const TRACE_RESULT_LABELS: Record<AutomationTrace['result'], string> = {
+  ran: 'Ejecutada',
+  conditions_failed: 'Condiciones no cumplidas',
+  skipped_single: 'Ignorada (ya en ejecución)',
+  queued: 'En cola',
+  error: 'Error',
+  ha_unavailable: 'Home Assistant no disponible',
+};
+
+export const TRACE_ACTION_STATUS_LABELS: Record<TraceAction['status'], string> = {
+  done: 'Hecho',
+  waiting: 'Esperando',
+  skipped: 'No ejecutado',
+  error: 'Error',
+};

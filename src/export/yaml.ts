@@ -1,4 +1,5 @@
-// Serializador YAML propio (sin dependencias) y exportación al formato de Home Assistant.
+// Serializador YAML propio (sin dependencias) y exportación al formato de Home Assistant
+// (sintaxis actual: triggers:/- trigger:, conditions:/- condition:, actions:/- action:).
 import type { Action, Automation, Condition, EntityStateValue, Project, Scene, Script, Trigger } from '../types';
 import { slugify } from '../devices/entities';
 import { sceneEntityState } from '../simulation/scenes';
@@ -145,22 +146,22 @@ function dataToYaml(data: Record<string, EntityStateValue>): YamlMap {
 export function triggerToYaml(t: Trigger): YamlMap {
   switch (t.type) {
     case 'state': {
-      const m: YamlMap = { platform: 'state', entity_id: t.entityId };
+      const m: YamlMap = { trigger: 'state', entity_id: t.entityId };
       if (t.from !== undefined) m.from = stateToYaml(t.from);
       if (t.to !== undefined) m.to = stateToYaml(t.to);
       if (t.for !== undefined && t.for > 0) m.for = formatHms(t.for);
       return m;
     }
     case 'numeric_state': {
-      const m: YamlMap = { platform: 'numeric_state', entity_id: t.entityId };
+      const m: YamlMap = { trigger: 'numeric_state', entity_id: t.entityId };
       if (t.above !== undefined) m.above = t.above;
       if (t.below !== undefined) m.below = t.below;
       return m;
     }
     case 'time':
-      return { platform: 'time', at: t.at };
+      return { trigger: 'time', at: t.at };
     case 'sun': {
-      const m: YamlMap = { platform: 'sun', event: t.event };
+      const m: YamlMap = { trigger: 'sun', event: t.event };
       if (t.offsetMinutes) m.offset = formatOffset(t.offsetMinutes);
       return m;
     }
@@ -186,6 +187,14 @@ export function conditionToYaml(c: Condition): YamlMap {
       if (c.before !== undefined) m.before = c.before;
       return m;
     }
+    case 'sun': {
+      const m: YamlMap = { condition: 'sun' };
+      if (c.after !== undefined) m.after = c.after;
+      if (c.afterOffsetMinutes) m.after_offset = formatOffset(c.afterOffsetMinutes);
+      if (c.before !== undefined) m.before = c.before;
+      if (c.beforeOffsetMinutes) m.before_offset = formatOffset(c.beforeOffsetMinutes);
+      return m;
+    }
     case 'and':
     case 'or':
       return { condition: c.type, conditions: c.conditions.map(conditionToYaml) };
@@ -195,14 +204,14 @@ export function conditionToYaml(c: Condition): YamlMap {
 export function actionToYaml(a: Action, ctx: YamlContext = {}): YamlMap {
   switch (a.type) {
     case 'service': {
-      const m: YamlMap = { service: a.service, target: { entity_id: a.entityId } };
+      const m: YamlMap = { action: a.service, target: { entity_id: a.entityId } };
       if (a.data && Object.keys(a.data).length > 0) m.data = dataToYaml(a.data);
       return m;
     }
     case 'scene':
-      return { service: 'scene.turn_on', target: { entity_id: sceneEntity(a.sceneId, ctx) } };
+      return { action: 'scene.turn_on', target: { entity_id: sceneEntity(a.sceneId, ctx) } };
     case 'script':
-      return { service: 'script.turn_on', target: { entity_id: scriptEntity(a.scriptId, ctx) } };
+      return { action: 'script.turn_on', target: { entity_id: scriptEntity(a.scriptId, ctx) } };
     case 'delay':
       return { delay: { seconds: a.seconds } };
   }
@@ -211,9 +220,9 @@ export function actionToYaml(a: Action, ctx: YamlContext = {}): YamlMap {
 export function automationToObject(a: Automation, ctx: YamlContext = {}): YamlMap {
   const m: YamlMap = { id: a.id, alias: a.name, mode: a.mode };
   if (!a.enabled) m.initial_state = false;
-  m.trigger = a.triggers.map(triggerToYaml);
-  m.condition = a.conditions.map(conditionToYaml);
-  m.action = a.actions.map((x) => actionToYaml(x, ctx));
+  m.triggers = a.triggers.map(triggerToYaml);
+  m.conditions = a.conditions.map(conditionToYaml);
+  m.actions = a.actions.map((x) => actionToYaml(x, ctx));
   return m;
 }
 

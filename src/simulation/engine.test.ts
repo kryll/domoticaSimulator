@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { catalog } from '../devices/catalog';
 import { dev, project } from '../devices/testUtils';
 import type { Action, Automation, Project, SimulationState } from '../types';
-import { HOUR_MS, MINUTE_MS } from './clock';
+import { DEFAULT_SUN, HOUR_MS, MINUTE_MS } from './clock';
 import {
   activateScene,
   createSimulationState,
@@ -339,10 +339,11 @@ describe('tick', () => {
     const p = home({
       automations: [auto('sol', { triggers: [{ type: 'sun', event: 'sunset', offsetMinutes: -30 }], actions: [{ type: 'service', service: 'cover.close_cover', entityId: 'cover.persiana_cover' }] })],
     });
-    const open = tick(runActions(start(p, at(19)), p, [{ type: 'service', service: 'cover.open_cover', entityId: 'cover.persiana_cover' }]), p, 20_000);
-    expect(state(tick(open, p, 29 * MINUTE_MS), 'cover.persiana_cover')).toBe('open');
-    expect(state(tick(open, p, 29 * MINUTE_MS + 50_000), 'cover.persiana_cover')).toBe('closing');
-    expect(state(tick(open, p, 30 * MINUTE_MS), 'cover.persiana_cover')).toBe('closed');
+    const fixed = { sun: DEFAULT_SUN };
+    const open = tick(runActions(start(p, at(19)), p, [{ type: 'service', service: 'cover.open_cover', entityId: 'cover.persiana_cover' }]), p, 20_000, fixed);
+    expect(state(tick(open, p, 29 * MINUTE_MS, fixed), 'cover.persiana_cover')).toBe('open');
+    expect(state(tick(open, p, 29 * MINUTE_MS + 50_000, fixed), 'cover.persiana_cover')).toBe('closing');
+    expect(state(tick(open, p, 30 * MINUTE_MS, fixed), 'cover.persiana_cover')).toBe('closed');
     expect(state(tick(open, p, 30 * MINUTE_MS, { sun: { sunrise: '07:00', sunset: '21:00' } }), 'cover.persiana_cover')).toBe('open');
   });
 

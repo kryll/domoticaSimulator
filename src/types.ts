@@ -153,6 +153,8 @@ export interface DeviceDefinition {
   rangeMeters?: number;
   entities: EntityDefinition[];
   icon?: string;
+  /** Precio orientativo (PVP en España, 2025-26) en euros. */
+  priceEur?: number;
 }
 
 export type DeviceCategory =
@@ -206,6 +208,10 @@ export interface Device {
   /** Protocolo elegido cuando el dispositivo soporta varios. */
   protocol: Protocol;
   integration: Integration;
+  /** Alimentado por un SAI: sigue funcionando durante un corte de luz. */
+  ups?: boolean;
+  /** Carga conectada (enchufes y relés) en vatios, para el cálculo de energía. */
+  loadWatts?: number;
 }
 
 export interface Connection {
@@ -222,13 +228,26 @@ export type Trigger =
   | { type: 'state'; entityId: string; to?: EntityStateValue; from?: EntityStateValue; for?: number }
   | { type: 'numeric_state'; entityId: string; above?: number; below?: number }
   | { type: 'time'; at: string } // "HH:MM"
-  | { type: 'sun'; event: 'sunrise' | 'sunset'; offsetMinutes?: number };
+  | { type: 'sun'; event: SunEvent; offsetMinutes?: number };
+
+export type SunEvent = 'sunrise' | 'sunset';
 
 export type Condition =
   /** `for`: segundos mínimos que la entidad lleva en ese estado. */
   | { type: 'state'; entityId: string; state: EntityStateValue; for?: number }
   | { type: 'numeric_state'; entityId: string; above?: number; below?: number }
   | { type: 'time'; after?: string; before?: string }
+  /**
+   * Posición del sol (como `condition: sun` de HA). Si after es posterior a before en el mismo
+   * día (p. ej. after: sunset, before: sunrise) se interpreta como franja que cruza la medianoche.
+   */
+  | {
+      type: 'sun';
+      after?: SunEvent;
+      afterOffsetMinutes?: number;
+      before?: SunEvent;
+      beforeOffsetMinutes?: number;
+    }
   | { type: 'and'; conditions: Condition[] }
   | { type: 'or'; conditions: Condition[] };
 
@@ -261,6 +280,33 @@ export interface Script {
   sequence: Action[];
 }
 
+/** Ajustes del proyecto: ubicación (sol real), precios y energía. */
+export interface ProjectSettings {
+  latitude: number;
+  longitude: number;
+  /** Zona horaria IANA (p. ej. "Europe/Madrid") para pasar el amanecer/atardecer a hora local. */
+  timeZone?: string;
+  /** Precio de la electricidad en €/kWh. */
+  electricityPriceEurKwh: number;
+  currency?: 'EUR';
+  /** Precios propios por definitionId; tienen prioridad sobre los del catálogo. */
+  prices?: Record<Id, number>;
+  /** Factor de aceleración de la descarga de las baterías (1 = realista). */
+  batteryAcceleration?: number;
+}
+
+/** Ajustes por defecto: Madrid, 0,15 €/kWh. */
+export function defaultSettings(): ProjectSettings {
+  return {
+    latitude: 40.4168,
+    longitude: -3.7038,
+    timeZone: 'Europe/Madrid',
+    electricityPriceEurKwh: 0.15,
+    currency: 'EUR',
+    batteryAcceleration: 1,
+  };
+}
+
 export interface Project {
   id: Id;
   name: string;
@@ -274,6 +320,7 @@ export interface Project {
   automations: Automation[];
   scenes: Scene[];
   scripts: Script[];
+  settings?: ProjectSettings;
 }
 
 // ---------- Simulación ----------
@@ -315,6 +362,62 @@ export interface SimulationState {
   offline?: Record<Id, Record<string, EntityState>>;
   /** Hora simulada de creación: last_changed por defecto de las entidades que no han cambiado. */
   startedAt?: number;
+  /** Fallos simulados (Internet, corte de luz, HA reiniciando, dispositivos caídos). */
+  failures?: Failures;
+  /** Dispositivos que están offline por los fallos (no a mano): setFailures los restaura. */
+  failureOffline?: Id[];
+  /** Trazas de las últimas ejecuciones (como mucho 50 por automatización). */
+  traces?: AutomationTrace[];
+  /** Energía acumulada desde `since` (hora simulada). */
+  energy?: EnergyState;
+  /** Nivel de batería (0-100, con decimales) por dispositivo a pilas. */
+  batteries?: Record<Id, number>;
+}
+
+export interface Failures {
+  internet: boolean;
+  powerOutage: boolean;
+  haRestarting: boolean;
+  devicesDown: Id[];
+}
+
+export interface EnergyState {
+  kwhByDevice: Record<Id, number>;
+  since: number;
+}
+
+// ---------- Trazas ----------
+
+export type TraceTrigger = { index: number; description: string } | { manual: true };
+
+export interface TraceCondition {
+  index: number;
+  description: string;
+  result: boolean;
+  detail: string;
+}
+
+export type TraceActionStatus = 'done' | 'waiting' | 'skipped' | 'error';
+
+export interface TraceAction {
+  index: number;
+  description: string;
+  status: TraceActionStatus;
+  /** Hora simulada en que se ejecutó (o se ejecutará, si espera). */
+  at?: number;
+  detail?: string;
+}
+
+export type TraceResult = 'ran' | 'conditions_failed' | 'skipped_single' | 'queued' | 'error' | 'ha_unavailable';
+
+export interface AutomationTrace {
+  id: Id;
+  automationId: Id;
+  startedAt: number;
+  trigger: TraceTrigger;
+  conditions: TraceCondition[];
+  actions: TraceAction[];
+  result: TraceResult;
 }
 
 /** Temporizador interno del motor (no es una espera de una automatización). */
@@ -336,6 +439,9 @@ export interface PendingAction {
   timer?: SimTimer;
   /** Clave única del temporizador: uno nuevo con la misma clave sustituye al anterior. */
   key?: string;
+  /** Traza a la que pertenecen estas acciones y posición de la primera en la automatización. */
+  traceId?: Id;
+  traceOffset?: number;
 }
 
 export type LogLevel = 'info' | 'warning' | 'error';
