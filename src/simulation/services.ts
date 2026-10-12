@@ -14,6 +14,8 @@ export interface ServiceContext {
   now: number;
   /** Capacidades efectivas de la entidad (sin ellas, las por defecto del dominio). */
   capabilities?: EntityCapabilities;
+  /** Tanda 3: código de la alarma (alarm_control_panel). */
+  code?: string;
 }
 
 export interface ServiceResult {
@@ -351,6 +353,13 @@ function climateService(service: string, current: EntityState, data: ServiceData
       else warnings.push(preset === undefined ? 'Falta "preset_mode"' : `Preset no admitido: ${preset} (admite ${allowed.join(', ') || 'ninguno'})`);
       return climateResult(current, current.state, attrs, warnings);
     }
+    case 'set_fan_mode': {
+      const fan = data.fan_mode === undefined ? undefined : String(data.fan_mode);
+      const allowed = caps.fanModes ?? [];
+      if (fan !== undefined && allowed.includes(fan)) attrs.fan_mode = fan;
+      else warnings.push(fan === undefined ? 'Falta "fan_mode"' : `Modo de ventilador no admitido: ${fan} (admite ${allowed.join(', ') || 'ninguno'})`);
+      return climateResult(current, current.state, attrs, warnings);
+    }
     case 'turn_on':
       return climateResult(current, current.state === 'off' ? onMode(current, caps) : current.state, attrs);
     case 'turn_off':
@@ -454,11 +463,68 @@ function cameraService(service: string, current: EntityState): ServiceResult | u
   return undefined;
 }
 
+// ---------- Tanda 3: alarm_control_panel / valve ----------
+
+/** Código por defecto de la alarma simulada si el dispositivo no tiene uno. */
+export const DEFAULT_ALARM_CODE = '1234';
+/** Modos de armado por defecto. */
+export const DEFAULT_ALARM_MODES = ['armed_home', 'armed_away', 'armed_night'];
+
+const ARM_SERVICES: Record<string, string> = {
+  alarm_arm_home: 'armed_home',
+  alarm_arm_away: 'armed_away',
+  alarm_arm_night: 'armed_night',
+  alarm_arm_vacation: 'armed_vacation',
+  alarm_arm_custom_bypass: 'armed_custom_bypass',
+};
+
+function alarmService(service: string, current: EntityState, data: ServiceData, caps: EntityCapabilities, code: string): ServiceResult | undefined {
+  const attrs = attrsOf(current);
+  const given = data.code === undefined ? undefined : String(data.code);
+  const codeOk = given === code;
+  const target = ARM_SERVICES[service];
+  if (target !== undefined) {
+    const modes = caps.alarmModes ?? DEFAULT_ALARM_MODES;
+    if (!modes.includes(target)) return result(current, current.state, attrs, [`Modo de armado no admitido: ${target} (admite ${modes.join(', ')})`]);
+    if (caps.codeArmRequired && !codeOk) return result(current, current.state, attrs, [given === undefined ? 'Falta el código para armar la alarma' : 'Código incorrecto: la alarma no se arma']);
+    return result(current, target, { ...attrs, changed_by: 'Home Assistant' });
+  }
+  if (service === 'alarm_disarm') {
+    if (!codeOk) return result(current, current.state, attrs, [given === undefined ? 'Falta el código para desarmar la alarma' : 'Código incorrecto: la alarma sigue armada']);
+    const next = without(attrs, 'previous_state');
+    return result(current, 'disarmed', { ...next, changed_by: 'Home Assistant' });
+  }
+  if (service === 'alarm_trigger') {
+    if (current.state === 'triggered') return result(current, 'triggered', attrs);
+    return result(current, 'triggered', { ...attrs, previous_state: String(current.state) });
+  }
+  return undefined;
+}
+
+function valveService(service: string, current: EntityState): ServiceResult | undefined {
+  const attrs = attrsOf(current);
+  switch (service) {
+    case 'open_valve':
+    case 'open':
+      return result(current, 'open', attrs);
+    case 'close_valve':
+    case 'close':
+      return result(current, 'closed', attrs);
+    case 'stop_valve':
+      return result(current, current.state === 'opening' ? 'open' : current.state === 'closing' ? 'closed' : current.state, attrs);
+    case 'toggle':
+      return result(current, current.state === 'closed' ? 'open' : 'closed', attrs);
+    default:
+      return undefined;
+  }
+}
+
 /** Equivalencia de homeassistant.turn_on/turn_off/toggle en dominios sin esos servicios. */
 const GENERIC: Record<string, Record<string, string>> = {
   cover: { turn_on: 'open_cover', turn_off: 'close_cover' },
   lock: { turn_on: 'lock', turn_off: 'unlock' },
   vacuum: { turn_on: 'start', turn_off: 'return_to_base', toggle: 'start_pause' },
+  valve: { turn_on: 'open_valve', turn_off: 'close_valve' },
 };
 
 /**
@@ -495,6 +561,10 @@ export function applyService(
       return cameraService(svc, current);
     case 'button':
       return svc === 'press' ? result(current, new Date(ctx.now).toISOString(), attrsOf(current)) : undefined;
+    case 'alarm_control_panel':
+      return alarmService(svc, current, data, caps, ctx.code ?? DEFAULT_ALARM_CODE);
+    case 'valve':
+      return valveService(svc, current);
     default:
       return undefined;
   }
@@ -536,6 +606,10 @@ function describeEntry(key: string, v: ServiceDataValue): string {
       return `fuente ${String(v)}`;
     case 'percentage':
       return `velocidad ${String(v)} %`;
+    case 'code':
+      return 'con código';
+    case 'fan_mode':
+      return `ventilador ${String(v)}`;
     default:
       return `${key}: ${Array.isArray(v) ? `[${v.join(', ')}]` : String(v)}`;
   }
@@ -606,6 +680,15 @@ export function sceneServiceCalls(entityId: string, target: EntityState): Servic
     }
     case 'vacuum':
       return st === 'cleaning' ? [call('vacuum.start')] : st === 'docked' || st === 'returning' ? [call('vacuum.return_to_base')] : undefined;
+    case 'valve':
+      return st === 'open' ? [call('valve.open_valve')] : st === 'closed' ? [call('valve.close_valve')] : undefined;
+    case 'input_boolean':
+      return st === 'on' || st === 'off' ? [call(`input_boolean.turn_${st}`)] : undefined;
+    case 'input_select':
+      return [call('input_select.select_option', { option: st })];
+    case 'input_number':
+    case 'input_text':
+      return [call(`${domain}.set_value`, { value: target.state })];
     default:
       return undefined;
   }

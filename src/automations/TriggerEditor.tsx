@@ -6,6 +6,8 @@ import { parseNumberInput } from '../ui/formValues';
 import { StateSelect } from './StateSelect';
 import { DurationField } from './DurationField';
 import { DeviceActionTriggerEditor, ZoneTriggerEditor } from './advanced/AdvancedTriggerEditor';
+import { StepShell } from './tanda3/StepFlags';
+import { EventTriggerEditor, HomeAssistantTriggerEditor, TimePatternTriggerEditor } from './tanda3/Tanda3Editors';
 
 function withFor<T extends { for?: number }>(value: T, seconds: number | undefined): T {
   const next = { ...value };
@@ -45,7 +47,7 @@ function TriggerFields({ value, onChange }: { value: Trigger; onChange: (t: Trig
       return (
         <div>
           {header}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
             <EntityPicker
               label="Entidad"
               value={value.entityId}
@@ -64,6 +66,7 @@ function TriggerFields({ value, onChange }: { value: Trigger; onChange: (t: Trig
               value={value.below ?? ''}
               onChange={(e) => onChange({ ...value, below: parseNumberInput(e.target.value) })}
             />
+            <DurationField value={value.for} onChange={(sec) => onChange(withFor(value, sec))} />
           </div>
         </div>
       );
@@ -101,12 +104,19 @@ function TriggerFields({ value, onChange }: { value: Trigger; onChange: (t: Trig
       return <ZoneTriggerEditor value={value} onChange={onChange} />;
     case 'device_action':
       return <DeviceActionTriggerEditor value={value} onChange={onChange} />;
+    case 'time_pattern':
+      return <TimePatternTriggerEditor value={value} onChange={onChange} />;
+    case 'homeassistant':
+      return <HomeAssistantTriggerEditor value={value} onChange={onChange} />;
+    case 'event':
+      return <EventTriggerEditor value={value} onChange={onChange} />;
   }
 }
 
 /** Disparador con su «ID del disparador» opcional (`id:` de HA, para la condición «Disparado por»). */
 export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (t: Trigger) => void }) {
   return (
+    <StepShell value={value} onChange={onChange} kind="disparador">
     <div className="flex flex-col gap-2">
       <TriggerFields value={value} onChange={onChange} />
       <div className="max-w-xs">
@@ -124,5 +134,6 @@ export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (
         />
       </div>
     </div>
+    </StepShell>
   );
 }

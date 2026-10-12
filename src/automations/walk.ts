@@ -10,9 +10,17 @@ export function mapTriggerEntities(t: Trigger, map: EntityMapper): Trigger {
     case 'numeric_state':
     case 'device_action':
       return { ...t, entityId: map(t.entityId) };
+    case 'event': {
+      // Tanda 3: entity_id en los datos del evento (timer.finished de un helper).
+      const id = t.eventData?.entity_id;
+      if (typeof id !== 'string' || map(id) === id) return t;
+      return { ...t, eventData: { ...t.eventData, entity_id: map(id) } };
+    }
     case 'time':
     case 'sun':
     case 'zone':
+    case 'time_pattern':
+    case 'homeassistant':
       return t;
   }
 }
@@ -117,15 +125,22 @@ export function mapActionEntities(a: Action, map: EntityMapper): Action {
     }
     case 'variables':
       return { ...a, variables: mapDataTemplates(a.variables, map) };
+    case 'parallel':
+      return { ...a, branches: a.branches.map(seq) };
     case 'scene':
     case 'script':
     case 'delay':
+    case 'stop':
       return a;
   }
 }
 
 /** entity_id que lee un disparador. */
 export function triggerEntityIds(t: Trigger): string[] {
+  if (t.type === 'event') {
+    const id = t.eventData?.entity_id;
+    return typeof id === 'string' && id.includes('.') ? [id] : [];
+  }
   return t.type === 'state' || t.type === 'numeric_state' || t.type === 'device_action' ? [t.entityId] : [];
 }
 
@@ -156,6 +171,8 @@ export function childActions(a: Action): Action[] {
       return [...a.then, ...(a.else ?? [])];
     case 'repeat':
       return a.sequence;
+    case 'parallel':
+      return a.branches.flat();
     default:
       return [];
   }
@@ -210,4 +227,9 @@ export function serviceAreaIds(a: ServiceAction): Id[] {
 /** ids de los disparadores de una automatización: el suyo o, como en HA, su posición ("0", "1"...). */
 export function triggerIdOf(t: Trigger, index: number): string {
   return t.id ?? String(index);
+}
+
+/** Tanda 3: ¿está activo el paso? (`enabled: false` lo desactiva). */
+export function isStepEnabled(x: { enabled?: boolean }): boolean {
+  return x.enabled !== false;
 }

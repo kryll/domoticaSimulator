@@ -15,6 +15,7 @@ import type {
   TraceCondition,
   TraceTrigger,
   Trigger,
+  Weekday,
 } from '../types';
 import { stateLabel } from '../devices/stateLabels';
 import { formatSimTime, isTimeBetween, MINUTE_MS, SECOND_MS, sunTimesAt, type SunConfig, type SunLocation } from './clock';
@@ -106,6 +107,7 @@ function personInZone(sim: SimulationState, personId: Id, zoneId: Id): boolean {
 
 /** «Luz salón cambió a Encendida», «Son las 07:30», «Atardecer (15 min antes)»... */
 export function describeTrigger(t: Trigger, sim: SimulationState): string {
+  if (t.enabled === false) return `(desactivado) ${describeTrigger({ ...t, enabled: true }, sim)}`;
   switch (t.type) {
     case 'state': {
       const name = friendlyName(sim, t.entityId);
@@ -126,7 +128,41 @@ export function describeTrigger(t: Trigger, sim: SimulationState): string {
       return `${personName(sim, t.personId)} ${t.event === 'enter' ? 'llega a' : 'sale de'} ${zoneName(sim, t.zoneId)}`;
     case 'device_action':
       return `${friendlyName(sim, t.entityId)}: acción «${t.action}»`;
+    case 'time_pattern':
+      return describeTimePattern(t);
+    case 'homeassistant':
+      return t.event === 'start' ? 'Home Assistant arranca' : 'Home Assistant se detiene';
+    case 'event': {
+      const id = t.eventData?.entity_id;
+      const who = typeof id === 'string' ? ` de ${friendlyName(sim, id)}` : '';
+      const rest = Object.entries(t.eventData ?? {}).filter(([k]) => k !== 'entity_id');
+      const data = rest.length > 0 ? ` (${rest.map(([k, v]) => `${k}: ${String(v)}`).join(', ')})` : '';
+      return `Evento ${t.eventType}${who}${data}`;
+    }
   }
+}
+
+/** Tanda 3: «Cada 5 min», «A los 30 min de cada hora», «Cada 2 h»... */
+export function describeTimePattern(t: { hours?: string; minutes?: string; seconds?: string }): string {
+  const part = (v: string | undefined, unit: string, every: (n: string) => string): string | undefined => {
+    if (v === undefined || v === '*') return undefined;
+    return v.startsWith('/') ? every(v.slice(1)) : `${unit} ${v}`;
+  };
+  const items = [
+    part(t.hours, 'hora', (n) => `cada ${n} h`),
+    part(t.minutes, 'minuto', (n) => `cada ${n} min`),
+    part(t.seconds, 'segundo', (n) => `cada ${n} s`),
+  ].filter((x): x is string => x !== undefined);
+  return items.length === 0 ? 'Patrón de hora: cada segundo' : `Patrón de hora: ${items.join(', ')}`;
+}
+
+/** Nombres cortos de los días (lunes primero). */
+export const WEEKDAY_LABELS: Record<Weekday, string> = { mon: 'lunes', tue: 'martes', wed: 'miércoles', thu: 'jueves', fri: 'viernes', sat: 'sábado', sun: 'domingo' };
+const WEEKDAY_ORDER: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+/** Día de la semana de la hora simulada (hora de pared en UTC). */
+export function weekdayOf(ms: number): Weekday {
+  return WEEKDAY_ORDER[new Date(ms).getUTCDay()] ?? 'mon';
 }
 
 // ---------- Condiciones ----------
@@ -182,6 +218,11 @@ function since(sim: SimulationState, entityId: string): number | undefined {
  * resultado y detalle («son las 15:12»).
  */
 export function explainCondition(c: Condition, sim: SimulationState, where: SunSource, vars?: Record<string, EntityStateValue>): ConditionExplanation {
+  if (c.enabled === false) {
+    // Tanda 3: una condición desactivada se ignora (cuenta como cumplida), como en HA.
+    const inner = explainCondition({ ...c, enabled: true }, sim, where, vars);
+    return { result: true, description: inner.description, detail: 'desactivada: se ignora' };
+  }
   switch (c.type) {
     case 'state': {
       const current = sim.entities[c.entityId];
@@ -208,10 +249,13 @@ export function explainCondition(c: Condition, sim: SimulationState, where: SunS
       return { result: inNumericRange(value, c.above, c.below), description, detail: `vale ${fmtNumber(n)}${unit}` };
     }
     case 'time': {
-      const description = timeRangeText(c.after, c.before);
-      const detail = `son las ${formatSimTime(sim.now)}`;
+      const days = c.weekday ?? [];
+      const dayText = days.length > 0 ? `${c.after === undefined && c.before === undefined ? 'Días' : ', días'}: ${days.map((d) => WEEKDAY_LABELS[d]).join(', ')}` : '';
+      const description = c.after === undefined && c.before === undefined && days.length > 0 ? dayText : timeRangeText(c.after, c.before) + dayText;
+      const today = weekdayOf(sim.now);
+      const detail = `son las ${formatSimTime(sim.now)}${days.length > 0 ? ` del ${WEEKDAY_LABELS[today]}` : ''}`;
       try {
-        return { result: isTimeBetween(sim.now, c.after, c.before), description, detail };
+        return { result: isTimeBetween(sim.now, c.after, c.before) && (days.length === 0 || days.includes(today)), description, detail };
       } catch {
         return { result: false, description, detail: 'hora no válida' };
       }
@@ -283,6 +327,7 @@ function describeTargets(a: ServiceAction, sim: SimulationState, project: Partia
 
 /** «Encender Luz salón (brillo 47 %)», «Esperar 2 min», «Activar escena Cine»... */
 export function describeAction(a: Action, sim: SimulationState, project: Pick<Project, 'scenes' | 'scripts'> & Partial<Pick<Project, 'rooms'>>): string {
+  if (a.enabled === false) return `(desactivada) ${describeAction({ ...a, enabled: true }, sim, project)}`;
   switch (a.type) {
     case 'service': {
       if (isNotifyService(a.service)) {
@@ -323,6 +368,10 @@ export function describeAction(a: Action, sim: SimulationState, project: Pick<Pr
       return `Notificar: ${a.title ? `${a.title} — ` : ''}${a.message}`;
     case 'variables':
       return `Variables: ${Object.keys(a.variables).join(', ') || '(ninguna)'}`;
+    case 'stop':
+      return `${a.error ? 'Detener con error' : 'Detener'}: ${a.message || '(sin motivo)'}`;
+    case 'parallel':
+      return `En paralelo: ${a.branches.length} ${plural(a.branches.length, 'rama', 'ramas')}`;
   }
 }
 

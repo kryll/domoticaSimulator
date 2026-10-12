@@ -14,6 +14,9 @@ export const TRIGGER_LABELS: Record<Trigger['type'], string> = {
   sun: 'Sol',
   zone: 'Zona (persona)',
   device_action: 'Acción de mando',
+  time_pattern: 'Patrón de hora',
+  homeassistant: 'Home Assistant (arranque/parada)',
+  event: 'Evento',
 };
 
 export const triggerFactories: Array<{ label: string; create: () => Trigger }> = [
@@ -22,6 +25,9 @@ export const triggerFactories: Array<{ label: string; create: () => Trigger }> =
   { label: TRIGGER_LABELS.time, create: () => ({ type: 'time', at: '07:00' }) },
   { label: TRIGGER_LABELS.sun, create: () => ({ type: 'sun', event: 'sunset' }) },
   ...advancedTriggerFactories,
+  { label: TRIGGER_LABELS.time_pattern, create: () => ({ type: 'time_pattern', minutes: '/5' }) },
+  { label: TRIGGER_LABELS.homeassistant, create: () => ({ type: 'homeassistant', event: 'start' }) },
+  { label: TRIGGER_LABELS.event, create: () => ({ type: 'event', eventType: '' }) },
 ];
 
 export const CONDITION_LABELS: Record<Condition['type'], string> = {
@@ -58,6 +64,8 @@ export const ACTION_LABELS: Record<Action['type'], string> = {
   repeat: 'Repetir',
   notify: 'Notificación',
   variables: 'Variables',
+  stop: 'Detener',
+  parallel: 'En paralelo',
 };
 
 export const actionFactories: Array<{ label: string; create: () => Action }> = [
@@ -69,4 +77,6 @@ export const actionFactories: Array<{ label: string; create: () => Action }> = [
   { label: ACTION_LABELS.script, create: () => ({ type: 'script', scriptId: '' }) },
   { label: ACTION_LABELS.delay, create: () => ({ type: 'delay', seconds: 5 }) },
   ...advancedActionFactories,
+  { label: ACTION_LABELS.parallel, create: () => ({ type: 'parallel', branches: [[], []] }) },
+  { label: ACTION_LABELS.stop, create: () => ({ type: 'stop', message: '' }) },
 ];

@@ -1,3 +1,5 @@
+import { useIsDesktop } from '../ui/breakpoints';
+import { DrawerButtons } from '../ui/MobileDrawers';
 import { useRef, useState } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
@@ -120,10 +122,13 @@ export function FloorBar() {
   const [editing, setEditing] = useState<string | null>(null);
   const sorted = [...floors].sort((a, b) => a.level - b.level);
   const current = floors.find((f) => f.id === activeFloorId) ?? floors[0];
+  const desktop = useIsDesktop();
 
   return (
     <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1" role="toolbar" aria-label="Plantas">
-      <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Plantas</span>
+      {!desktop && <DrawerButtons which="catalog" />}
+      <span className="mr-1 hidden text-xs font-semibold uppercase tracking-wide text-slate-500 md:inline">Plantas</span>
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
       {sorted.map((f) => (
         <button
           key={f.id}
@@ -143,6 +148,7 @@ export function FloorBar() {
           {f.name}
         </button>
       ))}
+      </div>
       <Button
         size="sm"
         variant="ghost"
@@ -153,14 +159,16 @@ export function FloorBar() {
         aria-label="Añadir planta"
         title="Añadir planta"
       >
-        + Planta
+        +<span className="hidden md:inline"> Planta</span>
       </Button>
       {current && (
-        <Button size="sm" variant="ghost" onClick={() => setEditing(current.id)} title="Renombrar, escala y plano de fondo">
-          Editar planta
+        <Button size="sm" variant="ghost" onClick={() => setEditing(current.id)} title="Renombrar, escala y plano de fondo" aria-label="Editar planta">
+          <span aria-hidden="true" className="md:hidden">✎</span>
+          <span className="hidden md:inline">Editar planta</span>
         </Button>
       )}
       <CenterViewSwitch />
+      {!desktop && <DrawerButtons which="properties" />}
       {editing && <FloorDialog floorId={editing} onClose={() => setEditing(null)} />}
     </div>
   );

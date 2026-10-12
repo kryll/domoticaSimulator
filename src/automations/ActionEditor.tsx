@@ -15,6 +15,8 @@ import { entityDomain } from '../devices/entities';
 import { ServiceDataFields } from './ServiceDataFields';
 import { isNotifyService, notifyAction } from '../simulation/notify';
 import { withRequiredDefaults } from '../ui/serviceFields';
+import { StepShell } from './tanda3/StepFlags';
+import { ParallelActionEditor, StopActionEditor } from './tanda3/Tanda3Editors';
 
 type ActionData = Extract<Action, { type: 'service' }>['data'];
 
@@ -281,7 +283,7 @@ function ServiceTextField({ value, services, onChange }: { value: string; servic
   );
 }
 
-export function ActionEditor({ value, onChange }: { value: Action; onChange: (a: Action) => void }) {
+function ActionFields({ value, onChange }: { value: Action; onChange: (a: Action) => void }) {
   const scenes = useProjectStore((s) => s.project.scenes);
   const scripts = useProjectStore((s) => s.project.scripts);
   const header = <div className="mb-1 text-xs font-semibold text-slate-700">{ACTION_LABELS[value.type]}</div>;
@@ -333,9 +335,22 @@ export function ActionEditor({ value, onChange }: { value: Action; onChange: (a:
           />
         </div>
       );
+    case 'stop':
+      return <StopActionEditor value={value} onChange={onChange} />;
+    case 'parallel':
+      return <ParallelActionEditor value={value} onChange={onChange} />;
     default:
       return <AdvancedActionEditor value={value} onChange={onChange} />;
   }
+}
+
+/** Acción con sus interruptores «Activado» y «Seguir si falla». */
+export function ActionEditor({ value, onChange }: { value: Action; onChange: (a: Action) => void }) {
+  return (
+    <StepShell value={value} onChange={onChange} kind="acción">
+      <ActionFields value={value} onChange={onChange} />
+    </StepShell>
+  );
 }
 
 export function ActionListEditor({

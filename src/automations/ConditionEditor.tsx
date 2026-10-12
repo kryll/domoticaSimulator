@@ -8,8 +8,18 @@ import { StateSelect } from './StateSelect';
 import { DurationField } from './DurationField';
 import { NotConditionEditor, ZoneConditionEditor } from './advanced/ConditionListEditor';
 import { TriggerConditionEditor } from './TriggerConditionEditor';
+import { StepShell, WeekdayChips } from './tanda3/StepFlags';
 
+/** Condición con su interruptor «Activado». */
 export function ConditionEditor({ value, onChange }: { value: Condition; onChange: (c: Condition) => void }) {
+  return (
+    <StepShell value={value} onChange={onChange} kind="condición">
+      <ConditionFields value={value} onChange={onChange} />
+    </StepShell>
+  );
+}
+
+function ConditionFields({ value, onChange }: { value: Condition; onChange: (c: Condition) => void }) {
   const header = <div className="mb-1 text-xs font-semibold text-slate-700">{CONDITION_LABELS[value.type]}</div>;
   switch (value.type) {
     case 'state':
@@ -79,6 +89,17 @@ export function ConditionEditor({ value, onChange }: { value: Condition; onChang
               type="time"
               value={value.before ?? ''}
               onChange={(e) => onChange({ ...value, before: e.target.value || undefined })}
+            />
+          </div>
+          <div className="mt-2">
+            <WeekdayChips
+              value={value.weekday}
+              onChange={(weekday) => {
+                const next = { ...value };
+                if (weekday) next.weekday = weekday;
+                else delete next.weekday;
+                onChange(next);
+              }}
             />
           </div>
         </div>

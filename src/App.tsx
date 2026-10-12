@@ -22,6 +22,11 @@ import { WelcomeDialog } from './onboarding/WelcomeDialog';
 import { PresentationView } from './presentation/PresentationView';
 import { hasSharedPresentation, openSharedPresentation } from './presentation/sharedPresentation';
 import { SkipLinks } from './ui/SkipLinks';
+import { TABLET_QUERY, useIsDesktop } from './ui/breakpoints';
+import { useLayoutStore } from './store/layoutStore';
+import { MobileDrawers } from './ui/MobileDrawers';
+import { UpdatePrompt } from './pwa/UpdatePrompt';
+import { Tanda3Dialogs } from './ui/Tanda3Dialogs';
 
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -31,8 +36,16 @@ function isEditable(target: EventTarget | null): boolean {
 function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || isEditable(e.target) || useViewStore.getState().presentation) return;
+      if (!(e.ctrlKey || e.metaKey) || useViewStore.getState().presentation) return;
       const key = e.key.toLowerCase();
+      // Ctrl/Cmd+K: búsqueda global (también desde un campo de texto).
+      if (key === 'k' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        const layout = useLayoutStore.getState();
+        layout.setPaletteOpen(!layout.paletteOpen);
+        return;
+      }
+      if (isEditable(e.target)) return;
       if (key === 'z' && !e.shiftKey) {
         e.preventDefault();
         useProjectStore.getState().undo();
@@ -105,6 +118,7 @@ export function App({ autoLoad = true }: AppProps) {
   useShortcuts();
   useAutomationsWorkspace();
   const presentation = useViewStore((s) => s.presentation);
+  const desktop = useIsDesktop();
 
   useEffect(() => {
     const stopSync = startSimulationSync();
@@ -116,6 +130,8 @@ export function App({ autoLoad = true }: AppProps) {
           useUiStore.getState().notify('Modo Uso: la simulación se ha puesto en marcha para que avancen los temporizadores', 'info');
       },
     );
+    // En el móvil el panel inferior ocupa toda la pantalla: se empieza plegado para ver el plano.
+    if (typeof window.matchMedia === 'function' && !window.matchMedia(TABLET_QUERY).matches) useUiStore.getState().setBottomOpen(false);
     let stopAutosave: (() => void) | undefined;
     let cancelled = false;
     const boot = autoLoad ? loadInitialProject() : Promise.resolve({ firstRun: false });
@@ -143,6 +159,8 @@ export function App({ autoLoad = true }: AppProps) {
       <ReactFlowProvider>
         <PresentationView />
         <Toast />
+        <UpdatePrompt />
+        <Tanda3Dialogs />
         <LazyDialogs />
         <ConfirmDialog />
         <SaveConflictDialog />
@@ -152,24 +170,29 @@ export function App({ autoLoad = true }: AppProps) {
 
   return (
     <ReactFlowProvider>
-      <div className="flex h-full flex-col bg-slate-100 text-slate-800">
+      <div className="flex h-full w-full flex-col overflow-hidden bg-slate-100 text-slate-800">
         <SkipLinks />
         <TopBar />
         <SaveErrorBanner />
         <div className="flex min-h-0 flex-1">
-          <div className="hidden w-72 shrink-0 border-r border-slate-200 md:block" data-tour="catalog">
-            <CatalogPanel />
-          </div>
+          {desktop && (
+            <div className="w-72 shrink-0 border-r border-slate-200" data-tour="catalog">
+              <CatalogPanel />
+            </div>
+          )}
           <main className="relative flex min-w-0 flex-1 flex-col" aria-label="Plano">
             <FloorBar />
             <FailureBanner />
             <CenterArea />
             <BottomPanel />
           </main>
-          <div id="panel-propiedades" tabIndex={-1} className="hidden w-80 shrink-0 border-l border-slate-200 focus:outline-none lg:block" data-tour="properties">
-            <PropertiesPanel />
-          </div>
+          {desktop && (
+            <div id="panel-propiedades" tabIndex={-1} className="w-80 shrink-0 border-l border-slate-200 focus:outline-none" data-tour="properties">
+              <PropertiesPanel />
+            </div>
+          )}
         </div>
+        {!desktop && <MobileDrawers />}
         <Toast />
         <LazyDialogs />
         <ExtraDialogs />
@@ -177,6 +200,8 @@ export function App({ autoLoad = true }: AppProps) {
         <SaveConflictDialog />
         <WelcomeDialog />
         <Tour />
+        <UpdatePrompt />
+        <Tanda3Dialogs />
       </div>
     </ReactFlowProvider>
   );

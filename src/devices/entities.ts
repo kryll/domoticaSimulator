@@ -108,6 +108,15 @@ function initialAttributes(entity: DeviceEntity, siblings: DeviceEntity[]): Reco
     if (caps.minTemp !== undefined) attrs.min_temp = caps.minTemp;
     if (caps.maxTemp !== undefined) attrs.max_temp = caps.maxTemp;
     if (caps.tempStep !== undefined) attrs.target_temp_step = caps.tempStep;
+    // Tanda 3: aire acondicionado con modos de ventilador.
+    if (caps.fanModes !== undefined && caps.fanModes.length > 0) {
+      attrs.fan_modes = caps.fanModes.join(', ');
+      attrs.fan_mode = caps.fanModes[0] ?? 'auto';
+    }
+  }
+  if (domain === 'alarm_control_panel') {
+    attrs.code_format = 'number';
+    attrs.code_arm_required = caps.codeArmRequired === true;
   }
   if (domain === 'cover') attrs.current_position = initialState === 'open' ? 100 : 0;
   if (domain === 'media_player') {

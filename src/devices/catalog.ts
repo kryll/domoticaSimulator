@@ -9,6 +9,7 @@ import type {
   EntityDefinition,
   Id,
   IotClass,
+  Project,
   Protocol,
 } from '../types';
 import {
@@ -74,8 +75,9 @@ function isStateValue(v: unknown): v is string | number | boolean {
 
 const COLOR_MODES: readonly ColorMode[] = ['onoff', 'brightness', 'color_temp', 'rgb'];
 const CAPABILITY_NUMBERS = ['minKelvin', 'maxKelvin', 'minTemp', 'maxTemp', 'tempStep', 'travelSeconds', 'motionTimeoutSeconds', 'powerWatts'] as const;
-const CAPABILITY_LISTS = ['hvacModes', 'presetModes', 'sources', 'buttonActions'] as const;
-const CAPABILITY_KEYS: readonly string[] = ['colorModes', ...CAPABILITY_NUMBERS, ...CAPABILITY_LISTS];
+const CAPABILITY_LISTS = ['hvacModes', 'presetModes', 'sources', 'buttonActions', 'fanModes', 'alarmModes'] as const;
+const CAPABILITY_BOOLEANS = ['codeArmRequired'] as const;
+const CAPABILITY_KEYS: readonly string[] = ['colorModes', ...CAPABILITY_NUMBERS, ...CAPABILITY_LISTS, ...CAPABILITY_BOOLEANS];
 
 function stringList(v: unknown, key: string, where: string): string[] {
   if (!Array.isArray(v) || v.some((x) => typeof x !== 'string' || x === '')) fail(where, `"capabilities.${key}" debe ser una lista de textos`);
@@ -100,6 +102,12 @@ export function parseCapabilities(raw: unknown, where: string): EntityCapabiliti
   }
   for (const key of CAPABILITY_LISTS) {
     if (raw[key] !== undefined) caps[key] = stringList(raw[key], key, where);
+  }
+  for (const key of CAPABILITY_BOOLEANS) {
+    const v = raw[key];
+    if (v === undefined) continue;
+    if (typeof v !== 'boolean') fail(where, `"capabilities.${key}" debe ser verdadero o falso`);
+    caps[key] = v;
   }
   if (caps.minKelvin !== undefined && caps.maxKelvin !== undefined && caps.minKelvin > caps.maxKelvin) {
     fail(where, '"capabilities.minKelvin" no puede ser mayor que maxKelvin');
@@ -226,4 +234,81 @@ function matchesFilter(def: DeviceDefinition, f: CatalogFilter): boolean {
 
 export function filterCatalog(defs: DeviceDefinition[], filter: CatalogFilter): DeviceDefinition[] {
   return defs.filter((d) => matchesFilter(d, filter));
+}
+
+// ---------- Tanda 3: dispositivos personalizados ----------
+
+/** Prefijo de los ids de las definiciones propias del proyecto. */
+export const CUSTOM_PREFIX = 'custom:';
+
+export function isCustomDefinitionId(id: Id): boolean {
+  return id.startsWith(CUSTOM_PREFIX);
+}
+
+const mergedCache = new WeakMap<DeviceDefinition[], WeakMap<DeviceDefinition[], DeviceDefinition[]>>();
+
+/**
+ * Catálogo + definiciones personalizadas del proyecto (las de `base` tienen prioridad si se
+ * repite un id). Sin personalizadas devuelve `base` tal cual. Memoriza el resultado por pareja
+ * de listas, así que se puede llamar en cada render o en cada paso del motor.
+ */
+export function allDefinitions(project: Pick<Project, 'customDefinitions'>, base: DeviceDefinition[] = catalog): DeviceDefinition[] {
+  const custom = project.customDefinitions;
+  if (!custom || custom.length === 0) return base;
+  let byBase = mergedCache.get(base);
+  const cached = byBase?.get(custom);
+  if (cached) return cached;
+  const ids = new Set(base.map((d) => d.id));
+  const extra = custom.filter((d) => !ids.has(d.id));
+  const merged = extra.length === 0 ? base : [...base, ...extra];
+  if (!byBase) {
+    byBase = new WeakMap();
+    mergedCache.set(base, byBase);
+  }
+  byBase.set(custom, merged);
+  return merged;
+}
+
+function slugId(text: string): string {
+  return foldText(text).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'dispositivo';
+}
+
+/**
+ * Copia de una definición como dispositivo personalizado: entidades copiadas en profundidad,
+ * id con el prefijo «custom:» (por defecto «custom:<id original>-copia») y los cambios de
+ * `overrides` aplicados encima.
+ */
+export function cloneDefinition(def: DeviceDefinition, overrides: Partial<DeviceDefinition> = {}): DeviceDefinition {
+  const copy = JSON.parse(JSON.stringify(def)) as DeviceDefinition;
+  const merged: DeviceDefinition = { ...copy, ...overrides };
+  if (overrides.entities) merged.entities = JSON.parse(JSON.stringify(overrides.entities)) as DeviceDefinition['entities'];
+  const rawId = overrides.id ?? `${def.id.replace(CUSTOM_PREFIX, '')}-copia`;
+  merged.id = isCustomDefinitionId(rawId) ? rawId : `${CUSTOM_PREFIX}${slugId(rawId)}`;
+  if (overrides.name === undefined) merged.name = `${def.name} (copia)`;
+  return merged;
+}
+
+/**
+ * Errores de una definición personalizada, en español (vacío si es válida): las mismas reglas
+ * que el catálogo, el prefijo «custom:», que no choque con un id del catálogo y que tenga
+ * entidades (salvo la infraestructura).
+ */
+export function validateDefinition(def: DeviceDefinition, base: DeviceDefinition[] = catalog): string[] {
+  const errors: string[] = [];
+  try {
+    parseDefinition(JSON.parse(JSON.stringify(def)) as unknown);
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message.replace(/^Catálogo de dispositivos inválido /, 'Definición no válida ') : String(e));
+  }
+  if (!isCustomDefinitionId(def.id)) errors.push(`El id «${def.id}» debe empezar por «${CUSTOM_PREFIX}»`);
+  if (base.some((d) => d.id === def.id)) errors.push(`El id «${def.id}» ya existe en el catálogo`);
+  const infra = ['coordinator', 'hub', 'border_router', 'access_point', 'ha_server'];
+  if (def.entities.length === 0 && !infra.includes(def.role)) errors.push('El dispositivo necesita al menos una entidad');
+  if (def.integrations.length > 0 && def.protocols.length === 0) errors.push('Indica al menos un protocolo');
+  for (const e of def.entities) {
+    if (e.domain === 'sensor' && e.unit !== undefined && typeof e.initialState !== 'number' && e.key !== 'action') {
+      errors.push(`La entidad «${e.name}» tiene unidad (${e.unit}) pero su estado inicial no es un número`);
+    }
+  }
+  return errors;
 }

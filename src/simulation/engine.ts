@@ -87,6 +87,9 @@ import {
   updateClimateCurrentTemperature,
 } from './services';
 import { countLabel, plural } from '../ui/plural';
+import { allDefinitions } from '../devices/catalog';
+import { applyHelperService, findHelperByEntity, helperEntities, isHelperDomain, timerFinishedState } from './helpers';
+import { DEFAULT_ALARM_CODE } from './services';
 
 export { capturableEntities, captureSceneEntities, type CapturableEntities } from './scenes';
 export { sameState } from './stateUtils';
@@ -111,6 +114,8 @@ interface RunCtx {
    * espera dentro de un choose/if/repeat); `nestedIndex`: paso cuyas acciones son hijas.
    */
   trace?: { id: Id; offset: number; indexes?: number[]; nestedIndex?: number };
+  /** Tanda 3: rama de un `parallel` (id de la unión). */
+  join?: Id;
 }
 
 /** Contexto interno de ejecución: profundidad y cadena de automatizaciones/scripts activos. */
@@ -245,6 +250,7 @@ function renameTimer(timer: SimTimer, mapping: Record<string, string>): SimTimer
     case 'state_for':
     case 'service_call':
     case 'wait_for':
+    case 'helper_timer':
       return { ...timer, entityId: ren(timer.entityId) };
   }
 }
@@ -282,6 +288,7 @@ export function renameEntities(sim: SimulationState, mapping: Record<string, str
     pending: sim.pending.map((p) => renamePending(p, map)),
   };
   if (sim.queue) next.queue = sim.queue.map((p) => renamePending(p, map));
+  if (sim.joins) next.joins = Object.fromEntries(Object.entries(sim.joins).map(([id, j]) => [id, { ...j, cont: renamePending(j.cont, map) }]));
   if (sim.history) {
     // Series de estado y de atributos («entity#atributo») con el entity_id nuevo.
     const history: NonNullable<SimulationState['history']> = {};
@@ -303,8 +310,8 @@ export function renameEntities(sim: SimulationState, mapping: Record<string, str
 // ---------- Creación ----------
 
 export function createSimulationState(project: Project, defs: DeviceDefinition[], now: number): SimulationState {
-  const devices = initialEntityStates(project, defs);
-  const entities = { ...devices, ...peopleEntities(project), ...groupEntities(project, devices) };
+  const devices = initialEntityStates(project, allDefinitions(project, defs));
+  const entities = { ...devices, ...helperEntities(project), ...peopleEntities(project), ...groupEntities(project, devices) };
   const sim: SimulationState = {
     running: false,
     now,

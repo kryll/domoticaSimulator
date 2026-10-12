@@ -23,13 +23,16 @@ import { devicesToCsv } from '../export/csv';
 import { confirmDialog } from './confirm';
 import { useViewStore } from '../store/viewStore';
 import { enterPresentation } from '../presentation/presentationMode';
+import { cx } from './cx';
+import { TABLET_QUERY } from './breakpoints';
+import { useLayoutStore } from '../store/layoutStore';
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
 
-function ProjectName() {
+function ProjectName({ compact = false }: { compact?: boolean }) {
   const name = useProjectStore((s) => s.project.name);
   const rename = useProjectStore((s) => s.renameProject);
   const [draft, setDraft] = useState(name);
@@ -49,7 +52,7 @@ function ProjectName() {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
         if (e.key === 'Escape') setDraft(name);
       }}
-      className="w-48 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-slate-800 hover:border-slate-300 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-200"
+      className={`${compact ? 'w-0 min-w-[5rem] flex-1' : 'w-48'} rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-slate-800 hover:border-slate-300 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-200`}
     />
   );
 }
@@ -191,6 +194,8 @@ export function TopBar() {
   // Por debajo de 1440 px, Archivo, Exportar y Escenarios se agrupan en «☰ Proyecto».
   const wide = useMediaQuery('(min-width: 1440px)');
   const failing = useSimulationStore((st) => hasFailures(st.sim.failures));
+  // Por debajo de 768 px: cabecera compacta en dos filas (proyecto y menús; simulación).
+  const compact = !useMediaQuery(TABLET_QUERY);
 
   const safely = (fn: () => void | Promise<void>, ok?: string) => {
     Promise.resolve()
@@ -218,6 +223,7 @@ export function TopBar() {
       <MenuItem onClick={() => useUiStore.getState().setVersionsOpen(true)}>Historial de versiones…</MenuItem>
       <MenuItem onClick={() => safely(() => openAsNewProject(createDemoProject()).then(() => undefined))}>Cargar proyecto de demo</MenuItem>
       <MenuItem onClick={() => fileRef.current?.click()}>Importar JSON…</MenuItem>
+      <MenuItem onClick={() => useLayoutStore.getState().setImportHaOpen(true)}>Importar desde Home Assistant…</MenuItem>
       <MenuItem onClick={() => useExtrasStore.getState().openDialog('share')}>Compartir enlace…</MenuItem>
       <MenuItem onClick={() => enterPresentation()}>Modo presentación</MenuItem>
     </>
@@ -255,11 +261,18 @@ export function TopBar() {
   );
 
   return (
-    <header className="flex flex-nowrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5">
+    <header
+      className={cx(
+        'flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5',
+        compact ? 'flex-wrap gap-y-1 px-2' : 'flex-nowrap',
+      )}
+      data-compact={compact ? 'true' : undefined}
+    >
       <h1 className="mr-1 flex shrink-0 items-center gap-1.5 whitespace-nowrap text-base font-bold text-slate-800">
-        <span aria-hidden="true">🏠</span>HA Simulator
+        <span aria-hidden="true">🏠</span>
+        <span className={compact ? 'sr-only' : undefined}>HA Simulator</span>
       </h1>
-      <ProjectName />
+      <ProjectName compact={compact} />
       <SaveIndicator />
 
       <nav className="flex items-center gap-1" aria-label="Menús del proyecto">
@@ -276,7 +289,8 @@ export function TopBar() {
               ariaLabel={failing ? 'Proyecto (fallos activos)' : 'Proyecto'}
               label={
                 <>
-                  <span aria-hidden="true">☰</span> Proyecto
+                  <span aria-hidden="true">☰</span>
+                  {!compact && ' Proyecto'}
                   {failing && <span className="h-2 w-2 rounded-full bg-red-600" aria-hidden="true" />}
                 </>
               }
@@ -293,8 +307,26 @@ export function TopBar() {
             <ScenariosMenu showTrigger={false} />
           </div>
         )}
-        <Button size="sm" variant="ghost" onClick={() => useUiStore.getState().setSettingsOpen(true)} title="Ajustes del proyecto y de la simulación">
-          <span aria-hidden="true">⚙</span> Ajustes
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => useUiStore.getState().setSettingsOpen(true)}
+          title="Ajustes del proyecto y de la simulación"
+          aria-label={compact ? 'Ajustes' : undefined}
+        >
+          <span aria-hidden="true">⚙</span>
+          {!compact && ' Ajustes'}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => useLayoutStore.getState().setPaletteOpen(true)}
+          aria-label="Buscar"
+          aria-keyshortcuts="Control+K Meta+K"
+          title="Buscar dispositivos, automatizaciones y acciones (Ctrl+K)"
+        >
+          <span aria-hidden="true">🔍</span>
+          {!compact && <kbd className="hidden font-mono text-[10px] text-slate-500 xl:inline">Ctrl K</kbd>}
         </Button>
         <input
           ref={fileRef}
@@ -326,7 +358,7 @@ export function TopBar() {
         </Button>
       </div>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className={cx('flex items-center gap-1', compact ? 'w-full justify-between' : 'ml-auto')}>
         <TopBarExtras />
         <SimulationControls />
       </div>

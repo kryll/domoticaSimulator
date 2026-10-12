@@ -1,6 +1,6 @@
 // Lógica pura de climatización compartida por el motor y la presentación.
 
-export type HvacAction = 'heating' | 'cooling' | 'idle' | 'off';
+export type HvacAction = 'heating' | 'cooling' | 'drying' | 'fan' | 'idle' | 'off';
 
 /** Margen (°C) para considerar alcanzada la consigna. */
 export const HVAC_TOLERANCE = 0.2;
@@ -11,6 +11,9 @@ export const HVAC_TOLERANCE = 0.2;
  */
 export function hvacAction(mode: string, current: number | undefined, target: number | undefined): HvacAction {
   if (mode === 'off' || mode === 'unavailable') return 'off';
+  // Tanda 3: aire acondicionado en deshumidificación o solo ventilador.
+  if (mode === 'dry') return 'drying';
+  if (mode === 'fan_only') return 'fan';
   if (current === undefined || target === undefined) return 'idle';
   const heats = mode === 'heat' || mode === 'auto' || mode === 'heat_cool';
   const cools = mode === 'cool' || mode === 'heat_cool';
