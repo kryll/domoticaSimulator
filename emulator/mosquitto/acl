@@ -6,6 +6,7 @@ topic readwrite hasim/#
 topic readwrite hasim-z2m/#
 topic readwrite homeassistant/#
 
-# Home Assistant: todo.
+# Home Assistant: todo. «#» no incluye los topics $SYS, que usa el healthcheck.
 user homeassistant
 topic readwrite #
+topic read $SYS/#
