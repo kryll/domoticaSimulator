@@ -40,6 +40,8 @@ Parar: `emulator/scripts/stop.sh` (conserva todo). Volver a arrancar: `emulator/
 
 Los contenedores llevan `restart: "no"`: el laboratorio se arranca y se para a voluntad y no vuelve solo al reiniciar el PC.
 
+Lista de pruebas manuales: [docs/PRUEBAS_E1.md](../docs/PRUEBAS_E1.md).
+
 ## Servicios y puertos (`docker-compose.yml`)
 
 | Servicio | Imagen | Red | Escucha en |
