@@ -33,3 +33,25 @@ Resultado de la revisión de producto (recorrido real de la app en navegador). L
 - B9 personas y zonas; B11 más lógica (`not`, sol, `choose`/`if`, `wait_for_trigger`, `repeat`, `notify`); B13 modelo térmico por sala; B14 línea de tiempo con aserciones.
 - B15 dashboard tipo Lovelace; B16 exportar `packages/` a HA real; B17 variantes del proyecto y comparación; B18 plantillas de casa; B19 grupos y áreas.
 - B20 compartir por URL; B21 cobertura con paredes y mapa RSSI; B22 latencia y fiabilidad por protocolo; B23 historial y gráficas.
+
+## Siguientes tandas (revisión de uso, octubre 2026)
+
+Resultado de recorrer la app como novato, instalador y usuario avanzado de HA, en escritorio, tableta y móvil. El rendimiento no es un problema: con 150 dispositivos en 3 plantas, la carga tarda unos 340 ms, la simulación a 600x va a unos 60 fps y la memoria ronda los 20 MB.
+
+**Tanda 1: confianza y datos**
+- Sincronización entre pestañas, guardado al cerrar u ocultar la pestaña y aviso si falla el guardado.
+- Copias automáticas e historial de versiones del proyecto.
+- YAML sin pérdida de datos: aviso de claves ignoradas, varias entidades y `area_id` por acción, `id` del disparador y condición `trigger`.
+- Selección múltiple real con copiar, pegar y duplicar y acciones en lote. Diálogo de confirmación propio con Deshacer.
+
+**Tanda 2: primera experiencia y entrega**
+- Estado vacío guiado y tour; arreglos rápidos desde la validación; colocación inteligente al añadir dispositivos.
+- Selector de estados traducido en disparadores y condiciones; editor de automatizaciones a pantalla completa.
+- Modo presentación de solo lectura para el cliente; informe PDF con presupuesto por partidas (mano de obra, margen, IVA).
+- Pasada de textos (plurales, estados traducidos, sin códigos internos) y de accesibilidad (contraste, menús, enlaces de salto).
+
+**Tanda 3: paridad con HA y alcance**
+- Helpers (`input_*`, `timer`, `counter`), `time_pattern`, arranque de HA, día de la semana, `stop` y `parallel`.
+- Importar desde un HA real (`automations.yaml`, `scenes.yaml`, `core.device_registry`, `core.area_registry`).
+- Dispositivos personalizados y catálogo ampliado (humo y CO, alarma, aire acondicionado, energía, válvula, garaje, ESPHome).
+- Generador de «día típico», búsqueda global (Ctrl+K), diseño responsive y táctil, y PWA.
