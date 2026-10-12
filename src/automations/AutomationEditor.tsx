@@ -1,4 +1,5 @@
 import { useId, useMemo } from 'react';
+import { knownDefinitions } from '../canvas/analysis';
 import type { Automation, Condition, Trigger } from '../types';
 import { Tabs } from '../ui/Tabs';
 import { tabPanelId } from '../ui/ids';
@@ -25,7 +26,7 @@ export interface AutomationEditorProps {
 /** Editor visual + YAML de una automatización. */
 export function AutomationEditor({ automation, onChange: emit }: AutomationEditorProps) {
   const project = useProjectStore((s) => s.project);
-  const description = useMemo(() => describeAutomation(automation, project), [automation, project]);
+  const description = useMemo(() => describeAutomation(automation, project, knownDefinitions()), [automation, project]);
   const suggestion = useMemo(() => suggestAutomationName(description), [description]);
   // Mientras el nombre sea provisional o el propuesto, se va actualizando con la descripción.
   const autoNamed = isPlaceholderName(automation.name) || automation.name === suggestion;
@@ -34,7 +35,7 @@ export function AutomationEditor({ automation, onChange: emit }: AutomationEdito
       emit(next);
       return;
     }
-    const nextSuggestion = suggestAutomationName(describeAutomation(next, project));
+    const nextSuggestion = suggestAutomationName(describeAutomation(next, project, knownDefinitions()));
     emit(next.triggers.length > 0 || next.actions.length > 0 ? { ...next, name: nextSuggestion } : next);
   };
   const prefix = `auto-${useId().replace(/:/g, '')}`;

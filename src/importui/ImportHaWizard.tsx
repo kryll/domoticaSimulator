@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef, useState, type DragEvent } from 'react';
 import { applyImportPlan, type ImportInput, type ImportPlan } from '../import/haImport';
-import { catalog } from '../devices/catalog';
+import { knownDefinitions } from '../canvas/analysis';
 import { useProjectStore } from '../store/projectStore';
 import { useLayoutStore } from '../store/layoutStore';
 import { useUiStore } from '../store/uiStore';
@@ -137,7 +137,7 @@ function ReviewStep({
   originals: Map<string, { manufacturer?: string; model?: string }>;
   existingRooms: Set<string>;
 }) {
-  const defs = useMemo(() => [...catalog].sort((a, b) => `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`, 'es')), []);
+  const defs = useMemo(() => [...knownDefinitions()].sort((a, b) => `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`, 'es')), []);
   const roomName = new Map(plan.rooms.map((r) => [r.id, r.name]));
   const autoWarnings = (i: number) => plan.warnings.filter((w) => w.path.startsWith(`automations.yaml[${i}]`));
   const otherWarnings = plan.warnings.filter((w) => !/^automations\.yaml\[\d+\]/.test(w.path));

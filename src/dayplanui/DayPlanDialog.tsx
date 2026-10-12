@@ -7,6 +7,7 @@ import { useLayoutStore } from '../store/layoutStore';
 import { useUiStore } from '../store/uiStore';
 import { knownDefinitions } from '../canvas/analysis';
 import { Modal } from '../ui/Modal';
+import { useBridgeLive } from '../bridge/useBridge';
 import { Button } from '../ui/Button';
 import { SelectField, TextField } from '../ui/Field';
 import { countLabel } from '../ui/plural';
@@ -51,9 +52,11 @@ export function DayPlanDialog() {
   const plan = useMemo(() => generateDayPlan(project, knownDefinitions(), { people, profile, seed }), [project, people, profile, seed]);
   const counts = useMemo(() => eventsPerHour(plan), [plan]);
   const active = useSimulationStore((s) => pendingPlanEvents(s.sim.pending) > 0);
+  // E1: con el laboratorio en vivo los eventos los produce el entorno real: no hay día típico.
+  const live = useBridgeLive();
 
   const apply = () => {
-    applyPlanNow(plan);
+    if (!applyPlanNow(plan)) return;
     const ui = useUiStore.getState();
     ui.notify(`Día típico aplicado: ${countLabel(plan.events.length, 'evento', 'eventos')} al día durante ${DAY_PLAN_DAYS} días. Pulsa «Simular» (mejor a 600x).`, 'success', {
       action: { label: 'Quitar', run: removePlanNow },
@@ -81,7 +84,7 @@ export function DayPlanDialog() {
             </Button>
           )}
           <Button onClick={close}>Cerrar</Button>
-          <Button variant="primary" onClick={apply} disabled={plan.events.length === 0}>
+          <Button variant="primary" onClick={apply} disabled={plan.events.length === 0 || live}>
             Aplicar
           </Button>
         </>
@@ -107,6 +110,11 @@ export function DayPlanDialog() {
             </Button>
           </div>
         </div>
+        {live && (
+          <p role="alert" className="rounded-md bg-amber-50 px-2 py-1 text-sm text-amber-900">
+            El laboratorio está en vivo: el día típico no se puede aplicar mientras tanto.
+          </p>
+        )}
         {active && (
           <p role="status" className="rounded-md bg-emerald-50 px-2 py-1 text-sm text-emerald-900">
             Hay un día típico activo. Al aplicar otro, sustituye al anterior.

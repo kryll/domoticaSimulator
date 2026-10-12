@@ -106,6 +106,14 @@ function DeviceProperties({ device }: { device: Device }) {
         />
         {/* E1: «Vía hacia HA» con el laboratorio activado (src/bridge). */}
         <DeviceBridgeLine device={device} def={def} />
+        {def?.entities.some((e) => e.domain === 'alarm_control_panel') && (
+          <CommitTextField
+            label="Código de la alarma"
+            value={device.alarmCode ?? ''}
+            allowEmpty
+            onCommit={(v) => updateDevice(device.id, { alarmCode: v === '' ? undefined : v })}
+          />
+        )}
         {def && def.power !== 'battery' && (
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input

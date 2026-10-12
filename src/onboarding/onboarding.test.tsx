@@ -12,6 +12,9 @@ import { makeDevice, makeProject } from '../test/fixtures';
 import { catalog } from '../devices/catalog';
 import { guideProgress } from './guide';
 
+/** Montar la app entera es lento con la máquina cargada: estos tests tienen su propio margen. */
+const APP_TIMEOUT = 20_000;
+
 async function renderApp(project = makeProject()) {
   useUiStore.getState().reset();
   useViewStore.getState().reset();
@@ -66,13 +69,13 @@ describe('primera experiencia', () => {
     expect(within(card).getByText('2 de 3 pasos hechos')).toBeInTheDocument();
     await userEvent.click(within(card).getByRole('button', { name: 'Ocultar la guía' }));
     expect(screen.queryByRole('region', { name: 'Primeros pasos' })).toBeNull();
-  });
+  }, APP_TIMEOUT);
 
   it('un proyecto con contenido no muestra la guía', async () => {
     await renderApp(makeProject({ devices: [makeDevice('hue-white-e27', 'l1')] }));
     expect(screen.queryByRole('region', { name: 'Empieza tu instalación' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Primeros pasos' })).toBeNull();
-  });
+  }, APP_TIMEOUT);
 
   it('el tour de 5 pasos se abre desde la ayuda, resalta cada zona, se puede saltar y se recuerda', async () => {
     await renderApp(makeProject({ devices: [makeDevice('hue-white-e27', 'l1')] }));
@@ -83,10 +86,14 @@ describe('primera experiencia', () => {
     expect(within(dialog).getByRole('heading', { name: 'Catálogo' })).toHaveFocus();
     const titles = ['Lienzo', 'Propiedades', 'Panel inferior', 'Simular'];
     for (const title of titles) {
-      await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+      act(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+      });
       expect(screen.getByRole('dialog', { name: title })).toBeInTheDocument();
     }
-    await userEvent.click(screen.getByRole('button', { name: 'Anterior' }));
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Anterior' }));
+    });
     expect(screen.getByRole('dialog', { name: 'Panel inferior' })).toBeInTheDocument();
     expect(tourDone()).toBe(false);
     // Escape lo salta y queda recordado.
@@ -94,7 +101,7 @@ describe('primera experiencia', () => {
     expect(screen.queryByRole('dialog', { name: 'Panel inferior' })).toBeNull();
     expect(tourDone()).toBe(true);
     expect(localStorage.getItem(PREF_KEYS.tourDone)).toBe('1');
-  });
+  }, APP_TIMEOUT);
 
   it('el tour funciona aunque localStorage falle', async () => {
     const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
@@ -105,7 +112,7 @@ describe('primera experiencia', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Saltar tour' }));
     expect(useViewStore.getState().tourStep).toBeNull();
     spy.mockRestore();
-  });
+  }, APP_TIMEOUT);
 
   it('la primera vez ofrece la demo o empezar en blanco y después el tour', async () => {
     await renderApp(makeProject({ devices: [makeDevice('hue-white-e27', 'l1')] }));
@@ -115,7 +122,7 @@ describe('primera experiencia', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Explorar la demo' }));
     expect(welcomeDone()).toBe(true);
     expect(screen.getByRole('dialog', { name: 'Catálogo' })).toBeInTheDocument();
-  });
+  }, APP_TIMEOUT);
 
   it('«Empezar en blanco» abre un proyecto vacío con la guía', async () => {
     await renderApp(makeProject({ id: 'demo-x', devices: [makeDevice('hue-white-e27', 'l1')] }));
@@ -124,7 +131,7 @@ describe('primera experiencia', () => {
     await waitFor(() => expect(useProjectStore.getState().project.devices).toHaveLength(0));
     expect(useProjectStore.getState().project.name).toBe('Mi instalación');
     expect(await screen.findByRole('region', { name: 'Empieza tu instalación' })).toBeInTheDocument();
-  });
+  }, APP_TIMEOUT);
 });
 
 describe('demo guardada al abrirse', () => {

@@ -272,9 +272,9 @@ export function TopBar() {
       )}
       data-compact={compact ? 'true' : undefined}
     >
-      <h1 className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-base font-bold text-slate-800">
+      <h1 className={compact ? 'sr-only' : 'flex shrink-0 items-center gap-1.5 whitespace-nowrap text-base font-bold text-slate-800'}>
         <span aria-hidden="true">🏠</span>
-        <span className={compact ? 'sr-only' : undefined}>HA Simulator</span>
+        HA Simulator
       </h1>
       <ProjectName compact={compact} />
       <SaveIndicator />

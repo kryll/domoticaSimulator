@@ -9,6 +9,7 @@ import { DayPlanDialog } from './DayPlanDialog';
 import { DayPlanIndicator } from './DayPlanIndicator';
 import { pendingPlanEvents } from './dayPlanActions';
 import { DAY_MS } from '../simulation/clock';
+import { useBridgeStore } from '../bridge/bridgeStore';
 
 beforeEach(() => {
   const p = createDemoProject();
@@ -54,5 +55,14 @@ describe('día típico', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Quitar' }));
     expect(pendingPlanEvents(useSimulationStore.getState().sim.pending)).toBe(0);
     expect(screen.getByRole('button', { name: 'Generar día típico' })).toBeInTheDocument();
+  });
+
+  it('no se puede aplicar con el laboratorio en vivo', () => {
+    useBridgeStore.setState({ live: true });
+    useLayoutStore.getState().setDayPlanOpen(true);
+    render(<DayPlanDialog />);
+    expect(screen.getByRole('alert')).toHaveTextContent('laboratorio está en vivo');
+    expect(screen.getByRole('button', { name: 'Aplicar' })).toBeDisabled();
+    useBridgeStore.setState({ live: false });
   });
 });

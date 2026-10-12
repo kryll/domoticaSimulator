@@ -12,6 +12,7 @@ import {
   activateScene,
   callService,
   createSimulationState,
+  fireHomeAssistantEvent,
   renameEntities,
   runAutomation,
   jumpTo,
@@ -80,6 +81,8 @@ export interface SimulationStoreState {
 }
 
 let loop: ReturnType<typeof setInterval> | undefined;
+/** ¿Ya se lanzó el arranque de HA en esta simulación? */
+let haBooted = false;
 let lastTick = 0;
 
 function stopLoop() {
@@ -100,12 +103,17 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     stopLoop();
     const target = p ?? project();
     const sim = createSimulationState(target, knownDefinitions(), simNowForProject(target, new Date()));
+    haBooted = false;
     set({ sim: { ...sim, speed: get().speed, running: false }, running: false });
   },
   start: () => {
     if (get().running) return;
     lastTick = performance.now();
-    set((s) => ({ running: true, sim: { ...s.sim, running: true } }));
+    // Tanda 3: el primer «Simular» tras crear o reiniciar la simulación es el arranque de HA
+    // (dispara los disparadores `homeassistant: start`).
+    const boot = !haBooted;
+    haBooted = true;
+    set((s) => ({ running: true, sim: { ...(boot ? fireHomeAssistantEvent(s.sim, project(), 'start') : s.sim), running: true } }));
     stopLoop();
     loop = setInterval(() => {
       const now = performance.now();

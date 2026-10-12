@@ -1,3 +1,4 @@
+import { findHelperByEntity } from '../simulation/helpers';
 import { WEEKDAYS } from '../automations/tanda3/stepFlags';
 import { describeTimePattern } from '../automations/tanda3/timePattern';
 // Automatizaciones en lenguaje natural para el cliente (Tanda 2): «Cuando se detecta movimiento
@@ -117,6 +118,8 @@ function entityPhrase(ctx: Ctx, entityId: string): string {
     const group = (ctx.project.groups ?? []).find((g) => groupEntityId(g) === entityId);
     if (group) return `el grupo ${quoted(group.name)}`;
     if (entityId.startsWith('zone.')) return `la zona ${quoted(entityId.slice(5))}`;
+    const helper = findHelperByEntity(ctx.project, entityId);
+    if (helper) return `${quoted(helper.name)}`;
     return entityId;
   }
   return namePhrase(info, info.friendlyName);

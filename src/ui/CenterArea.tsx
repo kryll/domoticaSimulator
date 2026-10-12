@@ -32,13 +32,15 @@ export function CenterViewSwitch() {
     <div role="group" aria-label="Vista del área central" className="ml-auto flex shrink-0 rounded-md bg-slate-200/70 p-0.5">
       {(
         [
-          ['plan', 'Plano'],
-          ['dashboard', 'Dashboard'],
+          ['plan', 'Plano', '🗺️'],
+          ['dashboard', 'Dashboard', '📊'],
         ] as const
-      ).map(([key, label]) => (
+      ).map(([key, label, icon]) => (
         <button
           key={key}
           type="button"
+          aria-label={label}
+          title={label}
           aria-pressed={view === key}
           onClick={() => setView(key)}
           className={cx(
@@ -46,7 +48,12 @@ export function CenterViewSwitch() {
             view === key ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-600 hover:text-slate-900',
           )}
         >
-          {label}
+          <span aria-hidden="true" className="sm:hidden">
+            {icon}
+          </span>
+          <span aria-hidden="true" className="hidden sm:inline">
+            {label}
+          </span>
         </button>
       ))}
     </div>

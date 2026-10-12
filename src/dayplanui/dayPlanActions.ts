@@ -4,13 +4,17 @@ import { applyDayPlan, clearDayPlan, DAY_PLAN_KEY } from '../dayplan/dayplan';
 import { DAY_MS } from '../simulation/clock';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
+import { isBridgeLive } from '../bridge/useBridge';
 
 /** Días que se programan al aplicar (el plan se repite cada día). */
 export const DAY_PLAN_DAYS = 2;
 
-export function applyPlanNow(plan: DayPlan): void {
+/** Programa el plan (no con el laboratorio en vivo). Devuelve si se aplicó. */
+export function applyPlanNow(plan: DayPlan): boolean {
+  if (isBridgeLive()) return false;
   const project = useProjectStore.getState().project;
   useSimulationStore.setState((s) => ({ sim: applyDayPlan(s.sim, project, plan, s.sim.now, s.sim.now + DAY_PLAN_DAYS * DAY_MS) }));
+  return true;
 }
 
 export function removePlanNow(): void {

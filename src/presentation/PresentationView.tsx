@@ -70,7 +70,7 @@ export function PresentationView() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col bg-slate-100 text-slate-800" data-testid="presentation">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-slate-100 text-slate-800" data-testid="presentation">
       <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
         <h1 className="flex min-w-0 items-center gap-2 text-base font-bold text-slate-900">
           <span aria-hidden="true">🏠</span>
@@ -78,7 +78,7 @@ export function PresentationView() {
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Presentación</span>
         </h1>
         <Tabs<View> label="Vista de la presentación" tabs={VIEWS} active={view} onChange={setView} idPrefix={PREFIX} className="mx-auto" />
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SimulationControls />
           <Button size="sm" onClick={exitPresentation} title="Salir del modo presentación (Esc)">
             Salir <kbd className="ml-1 font-mono text-[10px] text-slate-600">Esc</kbd>

@@ -12,6 +12,7 @@ import { devicesToCsv } from '../export/csv';
 import { knownDefinitions } from '../canvas/analysis';
 import { enterPresentation } from '../presentation/presentationMode';
 import { downloadText, safeFilename } from './download';
+import { isBridgeLive } from '../bridge/useBridge';
 
 /** Lleva el plano a un dispositivo: su planta, seleccionado y centrado. */
 export function revealDevice(deviceId: string): void {
@@ -88,6 +89,10 @@ export function runAppAction(id: AppActionId): void {
       useLayoutStore.getState().setImportHaOpen(true);
       return;
     case 'day-plan':
+      if (isBridgeLive()) {
+        ui.notify('El laboratorio está en vivo: el día típico no está disponible', 'info');
+        return;
+      }
       useLayoutStore.getState().setDayPlanOpen(true);
       return;
     case 'presentation':
