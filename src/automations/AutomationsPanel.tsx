@@ -2,6 +2,7 @@ import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { formatSimTime } from '../simulation/clock';
+import { isTimer } from '../simulation/engine';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { EmptyState } from '../ui/Panel';
@@ -21,7 +22,7 @@ export function AutomationsPanel() {
   const running = useSimulationStore((s) => s.running);
   const pending = useSimulationStore((s) => s.sim.pending);
   const notify = useUiStore((s) => s.notify);
-  const waits = selected ? pending.filter((p) => !p.timer && p.automationId === selected.id) : [];
+  const waits = selected ? pending.filter((p) => !isTimer(p) && p.automationId === selected.id) : [];
   const nextDue = waits.reduce<number | undefined>((min, p) => (min === undefined || p.dueAt < min ? p.dueAt : min), undefined);
 
   return (
@@ -52,7 +53,7 @@ export function AutomationsPanel() {
               >
                 <span className="truncate">{a.name}</span>
                 <span className="flex shrink-0 items-center gap-1">
-                  {pending.some((p) => !p.timer && p.automationId === a.id) && (
+                  {pending.some((p) => !isTimer(p) && p.automationId === a.id) && (
                     <span title="Tiene esperas pendientes" aria-label="Tiene esperas pendientes">
                       ⏳
                     </span>

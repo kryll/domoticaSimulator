@@ -1,6 +1,7 @@
 import { useSimulationStore, SPEEDS, type Speed } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
 import { formatSimDate, formatSimTime } from './clock';
+import { userWaits } from './engine';
 import { Button } from '../ui/Button';
 
 /** Controles de la simulación: reproducir/pausar, reiniciar, velocidad y reloj. */
@@ -12,12 +13,12 @@ export function SimulationControls() {
   const pause = useSimulationStore((s) => s.pause);
   const reset = useSimulationStore((s) => s.reset);
   const setSpeed = useSimulationStore((s) => s.setSpeed);
-  const waits = useSimulationStore((s) => s.sim.pending.filter((p) => !p.timer).length);
+  const waits = useSimulationStore((s) => userWaits(s.sim).length);
 
   const onStart = () => {
     start();
     const ui = useUiStore.getState();
-    if (ui.canvasMode !== 'interact' && !ui.interactOffered) {
+    if (ui.canvasMode !== 'interact' && ui.canvasMode !== 'room' && !ui.interactOffered) {
       ui.setInteractOffered(true);
       ui.notify('Simulación en marcha. ¿Quieres controlar los dispositivos con un clic?', 'info', {
         action: { label: 'Activar modo Uso (U)', run: () => useUiStore.getState().setCanvasMode('interact') },

@@ -143,7 +143,7 @@ export function ThermostatBody({ view, onStep }: BodyProps) {
         }
       />
       {onStep && (
-        <span className="nodrag nopan ml-auto flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <span className="nodrag nopan absolute right-1.5 top-6 flex gap-0.5 rounded bg-white/90 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
           <NodeMiniButton label="Bajar consigna" onClick={() => onStep(-1)}>
             −
           </NodeMiniButton>

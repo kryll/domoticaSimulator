@@ -10,7 +10,7 @@ import { Canvas } from './canvas/Canvas';
 import { FloorBar } from './canvas/FloorBar';
 import { PropertiesPanel } from './canvas/PropertiesPanel';
 import { startAutosave, useProjectStore } from './store/projectStore';
-import { startSimulationSync, stopSimulationLoop } from './store/simulationStore';
+import { startInteractAutoplay, startSimulationSync, stopSimulationLoop } from './store/simulationStore';
 import { useUiStore } from './store/uiStore';
 import { loadInitialProject } from './store/bootstrap';
 
@@ -47,6 +47,10 @@ export function App({ autoLoad = true }: AppProps) {
 
   useEffect(() => {
     const stopSync = startSimulationSync();
+    const stopAutoplay = startInteractAutoplay(
+      (listener) => useUiStore.subscribe((s, prev) => listener(s.canvasMode, prev.canvasMode)),
+      () => useUiStore.getState().notify('Modo Uso: la simulación se ha puesto en marcha para que avancen los temporizadores', 'info'),
+    );
     let stopAutosave: (() => void) | undefined;
     let cancelled = false;
     const boot = autoLoad ? loadInitialProject() : Promise.resolve();
@@ -58,6 +62,7 @@ export function App({ autoLoad = true }: AppProps) {
     return () => {
       cancelled = true;
       stopSync();
+      stopAutoplay();
       stopAutosave?.();
       stopSimulationLoop();
     };

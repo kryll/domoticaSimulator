@@ -50,7 +50,7 @@ describe('interacción directa en el lienzo', () => {
     fireEvent.click(node('luz'));
     expect(useUiStore.getState().selection).toEqual({ kind: 'device', id: 'luz' });
     expect(state(LIGHT)?.state).toBe('off');
-    await userEvent.click(within(node('luz')).getByRole('button', { name: /Encender Luz salón/ }));
+    await userEvent.click(within(node('luz')).getByLabelText('Encender Luz salón'));
     expect(state(LIGHT)?.state).toBe('on');
     fireEvent.click(node('luz'), { altKey: true });
     expect(state(LIGHT)?.state).toBe('off');

@@ -49,7 +49,11 @@ export function BinarySensorControl({ entityId, definition, state, events }: Con
   return (
     <div className="flex flex-wrap gap-1" role="group" aria-label={`Simular ${definition.name}`}>
       {isMotion && events.motionPulse && (
-        <CtlButton variant="primary" onClick={() => events.motionPulse?.(entityId)} title="Movimiento con autoapagado según el modelo">
+        <CtlButton
+          variant="primary"
+          onClick={() => events.motionPulse?.(entityId)}
+          title="Movimiento con autoapagado según el modelo"
+        >
           〰 Pulso de movimiento
         </CtlButton>
       )}
@@ -103,17 +107,18 @@ export function NumericSensorControl({ entityId, definition, state, events }: Co
           onChange={(e) => setDraft(e.target.value)}
         />
         {definition.unit && <span className="text-xs text-slate-500">{definition.unit}</span>}
-        <CtlButton onClick={() => {
-          const n = Number(draft);
-          if (Number.isFinite(n)) apply(n);
-        }}>
+        <CtlButton
+          onClick={() => {
+            const n = Number(draft);
+            if (Number.isFinite(n)) apply(n);
+          }}
+        >
           Aplicar
         </CtlButton>
       </form>
     </div>
   );
 }
-
 
 /** Mando inalámbrico: un botón por cada acción del modelo. */
 export function RemoteControl({ entityId, definition, events }: ControlProps & { events: SensorEvents }) {
@@ -128,4 +133,3 @@ export function RemoteControl({ entityId, definition, events }: ControlProps & {
     </div>
   );
 }
-

@@ -20,7 +20,7 @@ export function Toast() {
     <div
       aria-live="polite"
       role="status"
-      className="pointer-events-none fixed left-1/2 top-24 z-50 w-max max-w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2"
+      className="pointer-events-none fixed left-1/2 top-40 z-50 w-max max-w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2"
     >
       {notice && (
         <div

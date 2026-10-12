@@ -25,7 +25,6 @@ import { deviceIcon, deviceView, primaryAction } from '../devices/presentation';
 import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
 import { addDeviceFromDefinition, connectDevices } from './actions';
 import { polygonBounds } from './geometry';
-import { CATEGORY_ICONS } from './style';
 import { DeviceContextMenu } from './DeviceContextMenu';
 import { setHoveredDevice, useCanvasKeyboard } from './useCanvasKeyboard';
 import { DEVICE_DRAG_MIME, type AppNode, type DeviceNode, type ProtocolEdge, type RoomNode, type PlanNode, type RoomLabelNode } from './types';
@@ -166,7 +165,7 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
         device,
         definition,
         view,
-        icon: definition ? deviceIcon(definition) : CATEGORY_ICONS.sensor,
+        icon: definition ? deviceIcon(definition) : '❔',
         mode,
         popoverOpen: popoverDeviceId === device.id,
         ...(primary ? { primaryLabel: primary.label } : {}),

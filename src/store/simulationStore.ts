@@ -209,3 +209,20 @@ export function startSimulationSync(): () => void {
 export function stopSimulationLoop(): void {
   stopLoop();
 }
+
+/**
+ * Al entrar en modo Uso arranca la simulación si está en pausa: sin reloj, los temporizadores
+ * (recorrido de persianas, autoapagado del movimiento) no avanzan.
+ */
+export function startInteractAutoplay(
+  subscribe: (listener: (mode: string, prev: string) => void) => () => void,
+  onStarted?: () => void,
+): () => void {
+  return subscribe((mode, prev) => {
+    if (mode !== 'interact' || prev === 'interact') return;
+    const sim = useSimulationStore.getState();
+    if (sim.running) return;
+    sim.start();
+    onStarted?.();
+  });
+}

@@ -20,12 +20,12 @@ const WHEEL_INTERVAL_MS = 90;
 
 /** Halo de la luz: color y opacidad según el brillo. */
 function LightHalo({ color, pct }: { color: string; pct: number }) {
-  const alpha = 0.25 + 0.75 * Math.max(0, Math.min(1, pct / 100));
+  const alpha = 0.35 + 0.65 * Math.max(0, Math.min(1, pct / 100));
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute -inset-3 rounded-full transition-opacity duration-300 motion-reduce:transition-none"
-      style={{ background: `radial-gradient(circle, ${color} 0%, transparent 70%)`, opacity: alpha }}
+      className="pointer-events-none absolute -inset-4 rounded-full transition-opacity duration-300 motion-reduce:transition-none"
+      style={{ background: `radial-gradient(circle, ${color} 0%, ${color} 35%, transparent 72%)`, opacity: alpha }}
     />
   );
 }

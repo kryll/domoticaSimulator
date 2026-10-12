@@ -18,38 +18,45 @@ export function CanvasToolbar() {
 
   return (
     <div className="flex flex-col items-start gap-1" data-export-ignore="">
-    <div className="flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white/95 p-1 shadow-sm">
-      <div role="group" aria-label="Modo del lienzo" className="flex gap-1">
-        {MODES.map((m) => (
-          <Button
-            key={m.mode}
-            size="sm"
-            variant={mode === m.mode ? 'primary' : 'ghost'}
-            aria-pressed={mode === m.mode}
-            aria-keyshortcuts={m.key}
-            title={m.hint}
-            onClick={() => setMode(m.mode)}
-          >
-            {m.label}
-          </Button>
-        ))}
+      <div className="flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white/95 p-1 shadow-sm">
+        <div role="group" aria-label="Modo del lienzo" className="flex gap-1">
+          {MODES.map((m) => (
+            <Button
+              key={m.mode}
+              size="sm"
+              variant={mode === m.mode ? 'primary' : 'ghost'}
+              aria-pressed={mode === m.mode}
+              aria-keyshortcuts={m.key}
+              title={m.hint}
+              onClick={() => setMode(m.mode)}
+            >
+              {m.label}
+            </Button>
+          ))}
+        </div>
+        <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden="true" />
+        <Button size="sm" variant="ghost" onClick={() => autoConnect()} title="Crear las conexiones sugeridas">
+          Autoconectar
+        </Button>
+        <Button size="sm" variant={showCoverage ? 'primary' : 'ghost'} aria-pressed={showCoverage} onClick={toggleCoverage}>
+          Cobertura
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => openHelp(true)}
+          aria-label="Atajos de teclado"
+          title="Atajos de teclado (?)"
+          aria-keyshortcuts="?"
+        >
+          ?
+        </Button>
       </div>
-      <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden="true" />
-      <Button size="sm" variant="ghost" onClick={() => autoConnect()} title="Crear las conexiones sugeridas">
-        Autoconectar
-      </Button>
-      <Button size="sm" variant={showCoverage ? 'primary' : 'ghost'} aria-pressed={showCoverage} onClick={toggleCoverage}>
-        Cobertura
-      </Button>
-      <Button size="sm" variant="ghost" onClick={() => openHelp(true)} aria-label="Atajos de teclado" title="Atajos de teclado (?)" aria-keyshortcuts="?">
-        ?
-      </Button>
-    </div>
-    {mode === 'interact' && (
-      <p className="rounded-md bg-emerald-600/95 px-2 py-1 text-xs font-medium text-white shadow" role="status">
-        Modo Uso: clic = acción principal · doble clic = control · Mayús+clic selecciona · rueda ajusta
-      </p>
-    )}
+      {mode === 'interact' && (
+        <p className="rounded-md bg-emerald-600/95 px-2 py-1 text-xs font-medium text-white shadow" role="status">
+          Modo Uso: clic = acción principal · doble clic = control · Mayús+clic selecciona · rueda ajusta
+        </p>
+      )}
     </div>
   );
 }

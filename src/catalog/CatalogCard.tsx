@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { DeviceDefinition } from '../types';
-import { CATEGORY_ICONS, PROTOCOL_COLORS } from '../canvas/style';
+import { PROTOCOL_COLORS } from '../canvas/style';
+import { deviceIcon } from '../devices/presentation';
 import { DEVICE_DRAG_MIME } from '../canvas/types';
 import { PROTOCOL_LABELS, isCloud } from '../devices/catalog';
 import { Badge } from '../ui/Badge';
@@ -24,7 +25,7 @@ function CatalogCardImpl({ definition, onAdd }: CatalogCardProps) {
       aria-label={`${definition.brand} ${definition.name}`}
     >
       <span className="mt-0.5 text-xl" aria-hidden="true">
-        {CATEGORY_ICONS[definition.category]}
+        {deviceIcon(definition)}
       </span>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-slate-800" title={definition.name}>
