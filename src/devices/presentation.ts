@@ -6,7 +6,8 @@ import { entitiesForDevice, type DeviceEntity } from './entities';
 import { isInfra } from './roles';
 import { callService, entityTimerKey, findTimer } from '../simulation/engine';
 import { jamLock, motionPulse, openDoor, pressButton, setLeak } from '../simulation/events';
-import { brightnessToPct, coverPosition } from '../simulation/services';
+import { brightnessToPct, COVER_STEP, coverPosition, coverStepSeconds } from '../simulation/services';
+import { HVAC_ACTION_LABELS, HVAC_MODE_LABELS, labelOf, PRESET_LABELS } from './labels';
 
 export type DeviceKind =
   | 'light'
@@ -52,6 +53,10 @@ export interface DeviceView {
   volumePct?: number;
   /** Solo si hvac_action = heating. */
   heating?: boolean;
+  /** Cerradura atascada. */
+  jammed?: boolean;
+  /** Estado crudo de la entidad principal ("on", "opening", "jammed"...). */
+  state?: string;
   /** Segundos que faltan para el autoapagado (movimiento) o para terminar un recorrido. */
   countdownSeconds?: number;
   entities: DeviceViewEntity[];
@@ -76,6 +81,8 @@ export interface EventQuickAction {
   event: QuickEvent;
   entityId: string;
   label: string;
+  /** Mando: acción que se simula (por defecto la primera de buttonActions, o "single"). */
+  action?: string;
 }
 
 export type QuickAction = ServiceQuickAction | EventQuickAction;
@@ -177,27 +184,43 @@ function remaining(sim: SimulationState, entityId: string): number | undefined {
   return t ? Math.max(0, Math.ceil((t.dueAt - sim.now) / 1000)) : undefined;
 }
 
-const COVER_LABEL = (pos: number): string => (pos >= 100 ? 'abierta' : pos <= 0 ? 'cerrada' : `${pos} %`);
+const COVER_LABEL = (pos: number): string => (pos >= 100 ? 'Abierta' : pos <= 0 ? 'Cerrada' : `${pos} %`);
+const ON_OFF_F = (on: boolean): string => (on ? 'Encendida' : 'Apagada');
+const ON_OFF_M = (on: boolean): string => (on ? 'Encendido' : 'Apagado');
 
 const LOCK_LABELS: Record<string, string> = {
-  locked: 'cerrada con llave',
-  unlocked: 'sin llave',
-  open: 'abierta',
-  jammed: 'atascada',
-  locking: 'cerrando',
-  unlocking: 'abriendo',
+  locked: 'Cerrada con llave',
+  unlocked: 'Sin llave',
+  open: 'Abierta',
+  jammed: 'Atascada',
+  locking: 'Cerrando',
+  unlocking: 'Abriendo',
 };
 const VACUUM_LABELS: Record<string, string> = {
-  cleaning: 'limpiando',
-  paused: 'en pausa',
-  returning: 'volviendo a la base',
-  docked: 'en la base',
-  idle: 'parada',
-  error: 'error',
+  cleaning: 'Limpiando',
+  paused: 'En pausa',
+  returning: 'Volviendo a la base',
+  docked: 'En la base',
+  idle: 'Parada',
+  error: 'Error',
 };
-const MEDIA_LABELS: Record<string, string> = { playing: 'reproduciendo', paused: 'en pausa', idle: 'inactivo', on: 'encendido', off: 'apagado' };
-const CAMERA_LABELS: Record<string, string> = { idle: 'en reposo', recording: 'grabando', streaming: 'emitiendo', off: 'apagada' };
-const HVAC_LABELS: Record<string, string> = { heating: 'calentando', cooling: 'enfriando', idle: 'en reposo', off: 'apagado' };
+const MEDIA_LABELS: Record<string, string> = { playing: 'Reproduciendo', paused: 'En pausa', idle: 'Inactivo', on: 'Encendido', off: 'Apagado' };
+const CAMERA_LABELS: Record<string, string> = { idle: 'En reposo', recording: 'Grabando', streaming: 'Emitiendo', off: 'Apagada' };
+
+/** Posición interpolada y segundos hasta el objetivo de una persiana en movimiento. */
+function coverMotion(sim: SimulationState, entityId: string, st: EntityState, caps: EntityCapabilities): { position: number; seconds?: number } {
+  const pos = coverPosition(st);
+  const t = findTimer(sim, entityTimerKey(entityId));
+  if (t?.timer?.kind !== 'cover_step') return { position: pos };
+  const target = t.timer.target;
+  const stepSeconds = coverStepSeconds(pos, target, caps);
+  const left = Math.max(0, (t.dueAt - sim.now) / 1000);
+  const delta = Math.max(-COVER_STEP, Math.min(COVER_STEP, target - pos));
+  const fraction = stepSeconds > 0 ? Math.min(1, Math.max(0, 1 - left / stepSeconds)) : 1;
+  const position = Math.round(pos + delta * fraction);
+  const rest = ((caps.travelSeconds ?? 0) * Math.abs(target - (pos + delta))) / 100;
+  return { position, seconds: Math.ceil(left + rest) };
+}
 
 // ---------- Vista ----------
 
@@ -220,42 +243,43 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
   const unavailable = st?.state === 'unavailable' || (sim.offline?.[device.id] !== undefined);
   const base: DeviceView = { kind, active: false, unavailable, summary: '', entities: list };
   if (primary) base.entityId = primary.entityId;
-  if (unavailable) return { ...base, summary: 'no disponible' };
-  if (kind === 'infrastructure') return { ...base, active: true, summary: 'en línea' };
+  if (st) base.state = stateText(st);
+  if (unavailable) return { ...base, summary: 'No disponible' };
+  if (kind === 'infrastructure') return { ...base, active: true, summary: 'En línea' };
   if (!primary || !st) return { ...base, summary: '—' };
 
   const caps = withDefaults(primary.definition.domain, primary.definition.capabilities);
   const battery = num(sibling(entities, sim, (e) => e.definition.deviceClass === 'battery')?.state);
-  const batteryText = battery === undefined ? undefined : `batería ${Math.round(battery)} %`;
+  const batteryText = battery === undefined ? undefined : `Batería ${Math.round(battery)} %`;
   const s = stateText(st);
 
   switch (kind) {
     case 'light': {
       const on = s === 'on';
-      const view: DeviceView = { ...base, active: on, summary: s };
+      const view: DeviceView = { ...base, active: on, summary: ON_OFF_F(on) };
       if (!on) return view;
       view.colorCss = lightColor(st);
       if (isDimmable(caps)) {
         const pct = brightnessToPct(num(st.attributes?.brightness) ?? 255);
         view.brightnessPct = pct;
-        view.summary = `on · ${pct} %`;
+        view.summary = `Encendida · ${pct} %`;
       }
       if (st.attributes?.color_mode === 'color_temp' && st.attributes.color_temp_kelvin !== undefined) {
         view.secondary = `${String(st.attributes.color_temp_kelvin)} K`;
-      } else if (st.attributes?.color_mode === 'rgb') view.secondary = 'color';
+      } else if (st.attributes?.color_mode === 'rgb') view.secondary = 'Color';
       return view;
     }
     case 'switch': {
-      const view: DeviceView = { ...base, active: s === 'on', summary: s };
+      const view: DeviceView = { ...base, active: s === 'on', summary: ON_OFF_M(s === 'on') };
       const pct = num(st.attributes?.percentage);
-      if (primary.definition.domain === 'fan' && s === 'on' && pct !== undefined) view.summary = `on · ${pct} %`;
+      if (primary.definition.domain === 'fan' && s === 'on' && pct !== undefined) view.summary = `Encendido · ${pct} %`;
       const power = num(sibling(entities, sim, (e) => e.definition.deviceClass === 'power')?.state);
       if (power !== undefined && power > 0) view.secondary = `${formatNumber(power)} W`;
       return view;
     }
     case 'motion': {
       const on = s === 'on';
-      const view: DeviceView = { ...base, active: on, summary: on ? 'movimiento' : 'sin movimiento' };
+      const view: DeviceView = { ...base, active: on, summary: on ? 'Hay movimiento' : 'Sin movimiento' };
       const left = on ? remaining(sim, primary.entityId) : undefined;
       if (left !== undefined) view.countdownSeconds = left;
       const lux = num(sibling(entities, sim, (e) => e.definition.deviceClass === 'illuminance')?.state);
@@ -264,11 +288,11 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
       return view;
     }
     case 'contact':
-      return { ...base, active: s === 'on', summary: s === 'on' ? 'abierta' : 'cerrada', ...(batteryText ? { secondary: batteryText } : {}) };
+      return { ...base, active: s === 'on', summary: s === 'on' ? 'Abierta' : 'Cerrada', ...(batteryText ? { secondary: batteryText } : {}) };
     case 'leak':
-      return { ...base, active: s === 'on', summary: s === 'on' ? 'fuga' : 'seco', ...(batteryText ? { secondary: batteryText } : {}) };
+      return { ...base, active: s === 'on', summary: s === 'on' ? 'Fuga de agua' : 'Seco', ...(batteryText ? { secondary: batteryText } : {}) };
     case 'smoke':
-      return { ...base, active: s === 'on', summary: s === 'on' ? 'alarma' : 'normal', ...(batteryText ? { secondary: batteryText } : {}) };
+      return { ...base, active: s === 'on', summary: s === 'on' ? 'Alarma' : 'Normal', ...(batteryText ? { secondary: batteryText } : {}) };
     case 'climate_sensor': {
       const temp = num(sibling(entities, sim, (e) => e.definition.deviceClass === 'temperature')?.state);
       const hum = num(sibling(entities, sim, (e) => e.definition.deviceClass === 'humidity')?.state);
@@ -282,30 +306,34 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
       const target = num(st.attributes?.temperature);
       const action = String(st.attributes?.hvac_action ?? (s === 'off' ? 'off' : 'idle'));
       const heating = action === 'heating';
-      const summary =
-        s === 'off'
-          ? `${current === undefined ? '' : `${formatNumber(current)}° · `}apagado`
-          : `${current === undefined ? '—' : `${formatNumber(current)}°`} → ${target === undefined ? '—' : `${formatNumber(target)}°`}`;
+      const currentText = current === undefined ? undefined : `${formatNumber(current)}°`;
+      if (s === 'off') {
+        return { ...base, heating: false, summary: currentText ? `${currentText} · Apagado` : 'Apagado' };
+      }
+      const summary = `${currentText ?? '—'} → ${target === undefined ? '—' : `${formatNumber(target)}°`}`;
       const preset = st.attributes?.preset_mode;
-      const secondary = [HVAC_LABELS[action] ?? action, s === 'off' ? undefined : s, preset === undefined ? undefined : String(preset)].filter(Boolean).join(' · ');
+      const parts = [labelOf(HVAC_ACTION_LABELS, action), labelOf(HVAC_MODE_LABELS, s), preset === undefined ? undefined : labelOf(PRESET_LABELS, String(preset))];
+      const secondary = parts.filter((x, i): x is string => x !== undefined && parts.indexOf(x) === i).join(' · ');
       return { ...base, active: heating || action === 'cooling', heating, summary, secondary };
     }
     case 'cover': {
-      const pos = coverPosition(st);
       const moving = s === 'opening' ? 'up' : s === 'closing' ? 'down' : undefined;
+      const motion = moving ? coverMotion(sim, primary.entityId, st, caps) : { position: coverPosition(st) };
+      const pos = motion.position;
       const view: DeviceView = { ...base, active: pos > 0 || moving !== undefined, positionPct: pos, summary: COVER_LABEL(pos) };
       if (moving) {
         view.moving = moving;
-        view.summary = `${moving === 'up' ? 'subiendo' : 'bajando'} · ${pos} %`;
+        view.summary = `${moving === 'up' ? 'Subiendo' : 'Bajando'} · ${pos} %`;
+        if (motion.seconds !== undefined) view.countdownSeconds = motion.seconds;
       }
       return view;
     }
     case 'lock':
-      return { ...base, active: s !== 'locked', summary: LOCK_LABELS[s] ?? s, ...(batteryText ? { secondary: batteryText } : {}) };
+      return { ...base, active: s !== 'locked', jammed: s === 'jammed', summary: LOCK_LABELS[s] ?? s, ...(batteryText ? { secondary: batteryText } : {}) };
     case 'camera': {
       const motion = sibling(entities, sim, (e) => e.definition.domain === 'binary_sensor' && MOTION_CLASSES.includes(e.definition.deviceClass ?? ''));
       const view: DeviceView = { ...base, active: s === 'recording' || s === 'streaming' || motion?.state === 'on', summary: CAMERA_LABELS[s] ?? s };
-      if (motion?.state === 'on') view.secondary = 'movimiento';
+      if (motion?.state === 'on') view.secondary = 'Movimiento';
       return view;
     }
     case 'media': {
@@ -314,7 +342,7 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
       const view: DeviceView = { ...base, active: s === 'playing' || s === 'on', summary: MEDIA_LABELS[s] ?? s };
       if (s !== 'off' && vol !== undefined) {
         view.volumePct = Math.round(vol * 100);
-        view.summary = `${view.summary} · ${muted ? 'silencio' : `${view.volumePct} %`}`;
+        view.summary = `${view.summary} · ${muted ? 'Silenciado' : `${view.volumePct} %`}`;
       }
       if (s !== 'off' && st.attributes?.source !== undefined) view.secondary = String(st.attributes.source);
       return view;
@@ -327,7 +355,7 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
       return view;
     }
     case 'remote': {
-      const view: DeviceView = { ...base, summary: s === 'none' || s === '' ? 'en espera' : s };
+      const view: DeviceView = { ...base, summary: s === 'none' || s === '' ? 'En espera' : `Pulsado: ${s}` };
       if (batteryText) view.secondary = batteryText;
       return view;
     }
@@ -383,8 +411,10 @@ export function primaryAction(device: Device, def: DeviceDefinition, sim: Simula
       return { event: 'leak', entityId: id, label: s === 'on' ? 'Secar' : 'Simular fuga' };
     case 'smoke':
       return { event: 'smoke', entityId: id, label: s === 'on' ? 'Silenciar alarma' : 'Simular humo' };
-    case 'remote':
-      return { event: 'button', entityId: id, label: 'Pulsar' };
+    case 'remote': {
+      const action = entity.definition.capabilities?.buttonActions?.[0] ?? 'single';
+      return { event: 'button', entityId: id, label: 'Pulsar', action };
+    }
     default:
       return null;
   }
@@ -400,24 +430,42 @@ export function stepAction(device: Device, def: DeviceDefinition, sim: Simulatio
   const up = direction === 1;
   const step = (service: string, label: string, data: ServiceData): StepQuickAction => ({ entityId: id, service, data, label });
   switch (view.kind) {
-    case 'light':
-      return isDimmable(caps) ? step('light.turn_on', up ? 'Subir brillo' : 'Bajar brillo', { brightness_step_pct: 10 * direction }) : null;
-    case 'cover':
-      return step('cover.set_cover_position', up ? 'Subir 10 %' : 'Bajar 10 %', { position: clamp(coverPosition(st) + 10 * direction, 0, 100) });
+    case 'light': {
+      if (!isDimmable(caps)) return null;
+      const on = st.state === 'on';
+      const pct = on ? brightnessToPct(num(st.attributes?.brightness) ?? 255) : 0;
+      if ((!on && !up) || (up && pct >= 100)) return null;
+      return step('light.turn_on', up ? 'Subir brillo' : 'Bajar brillo', { brightness_step_pct: 10 * direction });
+    }
+    case 'cover': {
+      // en movimiento se parte del objetivo del recorrido para que los pasos se acumulen
+      const t = findTimer(sim, entityTimerKey(id));
+      const from = t?.timer?.kind === 'cover_step' ? t.timer.target : coverPosition(st);
+      const to = clamp(from + 10 * direction, 0, 100);
+      if (to === from) return null;
+      return step('cover.set_cover_position', up ? 'Subir 10 %' : 'Bajar 10 %', { position: to });
+    }
     case 'media': {
+      if (st.state === 'off') return null;
       const vol = num(st.attributes?.volume_level) ?? 0;
-      return step('media_player.volume_set', up ? 'Subir volumen' : 'Bajar volumen', { volume_level: clamp(Math.round(vol * 10 + direction) / 10, 0, 1) });
+      const to = clamp(Math.round(vol * 10 + direction) / 10, 0, 1);
+      if (to === vol) return null;
+      return step('media_player.volume_set', up ? 'Subir volumen' : 'Bajar volumen', { volume_level: to });
     }
     case 'thermostat': {
+      if (st.state === 'off') return null;
       const inc = caps.tempStep ?? 0.5;
       const target = num(st.attributes?.temperature) ?? 21;
-      const next = clamp(target + inc * direction, caps.minTemp ?? 7, caps.maxTemp ?? 35);
-      return step('climate.set_temperature', `${up ? 'Subir' : 'Bajar'} consigna (${formatNumber(next)}°)`, { temperature: Number(next.toFixed(2)) });
+      const next = Number(clamp(target + inc * direction, caps.minTemp ?? 7, caps.maxTemp ?? 35).toFixed(2));
+      if (next === target) return null;
+      return step('climate.set_temperature', `${up ? 'Subir' : 'Bajar'} consigna (${formatNumber(next)}°)`, { temperature: next });
     }
     case 'switch': {
       if (entity.definition.domain !== 'fan') return null;
-      const pct = num(st.attributes?.percentage) ?? 0;
-      return step('fan.set_percentage', up ? 'Más velocidad' : 'Menos velocidad', { percentage: clamp(pct + 10 * direction, 0, 100) });
+      const pct = st.state === 'on' ? (num(st.attributes?.percentage) ?? 0) : 0;
+      const to = clamp(pct + 10 * direction, 0, 100);
+      if (to === pct) return null;
+      return step('fan.set_percentage', up ? 'Más velocidad' : 'Menos velocidad', { percentage: to });
     }
     default:
       return null;
@@ -430,6 +478,9 @@ export function setLevelAction(device: Device, def: DeviceDefinition, sim: Simul
   if (!entity || !st || view.unavailable) return null;
   const id = entity.entityId;
   const level = clamp(Math.round(pct), 0, 100);
+  const isOff = st.state === 'off';
+  // 0 sobre algo ya apagado no aplica
+  if (level === 0 && isOff && ['light', 'switch', 'media', 'thermostat'].includes(view.kind)) return null;
   switch (view.kind) {
     case 'light':
       if (level === 0) return svc(id, 'light.turn_off', 'Apagar');
@@ -461,7 +512,7 @@ export function applyQuickAction(sim: SimulationState, project: Project, action:
     case 'smoke':
       return setLeak(sim, project, action.entityId, !on);
     case 'button':
-      return pressButton(sim, project, action.entityId, 'single');
+      return pressButton(sim, project, action.entityId, action.action ?? 'single');
     case 'jam':
       return jamLock(sim, project, action.entityId);
   }

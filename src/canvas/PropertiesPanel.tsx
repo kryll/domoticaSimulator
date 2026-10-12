@@ -16,6 +16,8 @@ import { SelectField, TextField } from '../ui/Field';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { EntityControls } from '../simulation/EntityControls';
+import { OfflineNotice } from '../simulation/OfflineNotice';
+import { useDeviceOffline } from '../simulation/useDeviceOffline';
 import { effectiveIotClass } from '../devices/roles';
 import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
 import { PROTOCOL_COLORS, formatState } from './style';
@@ -67,6 +69,7 @@ function DeviceProperties({ device }: { device: Device }) {
   const refs = entitiesOfDevice(device);
   const issues = analyzeProject(project).issuesByDevice.get(device.id) ?? [];
   const rooms = project.rooms.filter((r) => r.floorId === device.floorId);
+  const offline = useDeviceOffline(device.id);
 
   return (
     <div className="flex flex-col gap-4 p-3">
@@ -139,7 +142,9 @@ function DeviceProperties({ device }: { device: Device }) {
 
       <section aria-label="Entidades">
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Entidades y simulación</h3>
-        {refs.length === 0 ? (
+        {offline ? (
+          <OfflineNotice deviceId={device.id} />
+        ) : refs.length === 0 ? (
           <p className="text-xs text-slate-500">Este dispositivo no expone entidades.</p>
         ) : (
           <ul className="flex flex-col gap-2">

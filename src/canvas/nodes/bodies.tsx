@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { DeviceView } from '../../devices/presentation';
 import { cx } from '../../ui/cx';
 import { clock } from './format';
+import { LiveCountdown } from './LiveCountdown';
 
 export interface BodyProps {
   view: DeviceView;
@@ -71,6 +72,11 @@ export function CoverBody({ view }: BodyProps) {
           ) : null
         }
       />
+      {dir && view.countdownSeconds !== undefined && (
+        <span className="text-[10px] tabular-nums text-sky-800" title="Tiempo hasta terminar el recorrido">
+          ⏱ {clock(view.countdownSeconds)}
+        </span>
+      )}
       <LevelBar pct={pct} color={dir ? 'bg-sky-400' : 'bg-sky-600'} label="Posición de la persiana" />
     </div>
   );
@@ -80,11 +86,7 @@ export function MotionBody({ view }: BodyProps) {
   return (
     <div className="flex items-center gap-1.5">
       <Summary view={view} />
-      {view.active && view.countdownSeconds !== undefined && (
-        <span className="rounded bg-orange-100 px-1 text-[10px] font-semibold tabular-nums text-orange-800" title="Tiempo hasta volver a «sin movimiento»">
-          ⏱ {clock(view.countdownSeconds)}
-        </span>
-      )}
+      {view.active && view.entityId && <LiveCountdown entityId={view.entityId} title="Tiempo hasta volver a «sin movimiento»" />}
     </div>
   );
 }

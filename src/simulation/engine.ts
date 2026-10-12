@@ -31,7 +31,7 @@ import {
   updateClimateCurrentTemperature,
 } from './services';
 
-export { captureSceneEntities } from './scenes';
+export { capturableEntities, captureSceneEntities, type CapturableEntities } from './scenes';
 
 /** Profundidad máxima de llamadas anidadas (automatización → acción → automatización...). */
 export const MAX_DEPTH = 10;
@@ -175,6 +175,65 @@ function cancelStateFor(sim: SimulationState, entityId: string): SimulationState
   return keep.length === sim.pending.length ? sim : { ...sim, pending: keep };
 }
 
+// ---------- Renombrado ----------
+
+function renameKey<T>(record: Record<string, T>, mapping: Record<string, string>): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const [k, v] of Object.entries(record)) out[mapping[k] ?? k] = v;
+  return out;
+}
+
+function renameTimer(timer: SimTimer, mapping: Record<string, string>): SimTimer {
+  const ren = (id: string): string => mapping[id] ?? id;
+  switch (timer.kind) {
+    case 'set_states':
+      return { ...timer, setStates: renameKey(timer.setStates, mapping) };
+    case 'cover_step':
+    case 'state_for':
+      return { ...timer, entityId: ren(timer.entityId) };
+  }
+}
+
+function renameActions(actions: Action[], mapping: Record<string, string>): Action[] {
+  return actions.map((a) => (a.type === 'service' && mapping[a.entityId] ? { ...a, entityId: mapping[a.entityId] ?? a.entityId } : a));
+}
+
+function renamePending(p: PendingAction, mapping: Record<string, string>): PendingAction {
+  const next: PendingAction = { ...p, actions: renameActions(p.actions, mapping) };
+  if (p.timer) {
+    next.timer = renameTimer(p.timer, mapping);
+    const entityId = p.key?.startsWith('entity:') ? p.key.slice(7) : undefined;
+    if (entityId !== undefined && mapping[entityId]) {
+      next.key = entityTimerKey(mapping[entityId] ?? entityId);
+      next.id = `timer:${next.key}`;
+    }
+  }
+  return next;
+}
+
+/**
+ * Traslada el estado de la simulación a entity_id nuevos (dispositivo renombrado): entidades,
+ * temporizadores (claves, entityId, setStates, state_for), esperas, cola y dispositivos offline.
+ * `mapping`: entity_id anterior -> entity_id nuevo. Función pura.
+ */
+export function renameEntities(sim: SimulationState, mapping: Record<string, string>): SimulationState {
+  const pairs = Object.entries(mapping).filter(([from, to]) => from !== to);
+  if (pairs.length === 0) return sim;
+  const map = Object.fromEntries(pairs);
+  const next: SimulationState = {
+    ...sim,
+    entities: renameKey(sim.entities, map),
+    pending: sim.pending.map((p) => renamePending(p, map)),
+  };
+  if (sim.queue) next.queue = sim.queue.map((p) => renamePending(p, map));
+  if (sim.offline) {
+    const offline: Record<Id, Record<string, EntityState>> = {};
+    for (const [deviceId, states] of Object.entries(sim.offline)) offline[deviceId] = renameKey(states, map);
+    next.offline = offline;
+  }
+  return next;
+}
+
 // ---------- Creación ----------
 
 export function createSimulationState(project: Project, defs: DeviceDefinition[], now: number): SimulationState {
@@ -186,6 +245,7 @@ export function createSimulationState(project: Project, defs: DeviceDefinition[]
     pending: [],
     queue: [],
     log: [],
+    startedAt: now,
   };
   return addLog(sim, 'info', `Simulación preparada con ${Object.keys(sim.entities).length} entidades`);
 }
@@ -197,7 +257,9 @@ export function evaluateCondition(c: Condition, sim: SimulationState): boolean {
     case 'state': {
       const current = sim.entities[c.entityId];
       if (current === undefined || !sameState(current.state, c.state)) return false;
-      return !c.for || current.lastChanged === undefined || sim.now - current.lastChanged >= c.for * SECOND_MS;
+      if (!c.for) return true;
+      const since = current.lastChanged ?? sim.startedAt;
+      return since === undefined || sim.now - since >= c.for * SECOND_MS;
     }
     case 'numeric_state':
       return inNumericRange(sim.entities[c.entityId]?.state, c.above, c.below);

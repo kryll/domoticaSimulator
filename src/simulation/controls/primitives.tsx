@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { cx } from '../../ui/cx';
 
 export interface SliderProps {
@@ -200,6 +200,48 @@ export function Stepper({
           +
         </CtlButton>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Selector de color: mientras se arrastra por la paleta solo actualiza el borrador (evento
+ * input) y aplica al confirmar (evento change nativo), no en cada movimiento.
+ */
+export function ColorInput({ value, onCommit, label = 'Color' }: { value: string; onCommit: (hex: string) => void; label?: string }) {
+  const id = useId();
+  const ref = useRef<HTMLInputElement>(null);
+  const [draft, setDraft] = useState(value);
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    setDraft(value);
+  }
+  const commitRef = useRef({ value, onCommit });
+  commitRef.current = { value, onCommit };
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onChange = () => {
+      const { value: current, onCommit: commit } = commitRef.current;
+      if (el.value.toLowerCase() !== current.toLowerCase()) commit(el.value);
+    };
+    el.addEventListener('change', onChange);
+    return () => el.removeEventListener('change', onChange);
+  }, []);
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <label htmlFor={id} className="text-xs font-medium text-slate-600">
+        {label}
+      </label>
+      <input
+        ref={ref}
+        id={id}
+        type="color"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        className="h-7 w-14 cursor-pointer rounded border border-slate-300 bg-white"
+      />
     </div>
   );
 }

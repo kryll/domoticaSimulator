@@ -3,6 +3,8 @@ import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
 import { EntityControls } from '../simulation/EntityControls';
+import { OfflineNotice } from '../simulation/OfflineNotice';
+import { useDeviceOffline } from '../simulation/useDeviceOffline';
 import { entitiesOfDevice } from './analysis';
 import { formatState } from './style';
 
@@ -22,13 +24,15 @@ export function DevicePopover({ deviceId }: { deviceId: string }) {
   const entities = useSimulationStore((s) => s.sim.entities);
   const close = () => useUiStore.getState().openPopover(null);
   const ref = useRef<HTMLDivElement>(null);
+  const offline = useDeviceOffline(deviceId);
   const refs = useMemo(() => (device ? entitiesOfDevice(device) : []), [device]);
   const main = refs.filter((r) => !DIAGNOSTIC_KEYS.has(r.definition.key) && !DIAGNOSTIC_KEYS.has(r.definition.deviceClass ?? ''));
   const diag = refs.filter((r) => !main.includes(r));
 
   useEffect(() => {
     const first =
-      ref.current?.querySelector<HTMLElement>('ul button, ul input, ul select') ?? ref.current?.querySelector<HTMLElement>('button');
+      ref.current?.querySelector<HTMLElement>('ul button, ul input, ul select') ??
+      ref.current?.querySelector<HTMLElement>('button');
     first?.focus({ preventScroll: true });
   }, []);
 
@@ -63,37 +67,45 @@ export function DevicePopover({ deviceId }: { deviceId: string }) {
           ✕
         </button>
       </div>
-      {refs.length === 0 && <p className="text-xs text-slate-500">Este dispositivo no expone entidades.</p>}
-      <ul className="flex max-h-[60vh] flex-col gap-3 overflow-auto">
-        {main.map((r) => (
-          <li key={r.entityId}>
-            {!single && (
-              <div className="mb-1 flex items-baseline justify-between gap-2">
-                <span className="truncate text-xs font-semibold text-slate-700" title={r.entityId}>
-                  {r.definition.name}
-                </span>
-                <span className="text-xs tabular-nums text-slate-500">{formatState(entities[r.entityId], r.definition.unit)}</span>
-              </div>
-            )}
-            <EntityControls entityId={r.entityId} definition={r.definition} state={entities[r.entityId]} />
-          </li>
-        ))}
-      </ul>
-      {diag.length > 0 && (
-        <details className="mt-2 text-xs">
-          <summary className="cursor-pointer text-slate-500">Diagnóstico</summary>
-          <ul className="mt-1 flex flex-col gap-2">
-            {diag.map((r) => (
+      {offline ? (
+        <OfflineNotice deviceId={deviceId} />
+      ) : (
+        <>
+          {refs.length === 0 && <p className="text-xs text-slate-500">Este dispositivo no expone entidades.</p>}
+          <ul className="flex max-h-[60vh] flex-col gap-3 overflow-auto">
+            {main.map((r) => (
               <li key={r.entityId}>
-                <div className="mb-0.5 flex justify-between text-slate-600">
-                  <span>{r.definition.name}</span>
-                  <span className="tabular-nums">{formatState(entities[r.entityId], r.definition.unit)}</span>
-                </div>
+                {!single && (
+                  <div className="mb-1 flex items-baseline justify-between gap-2">
+                    <span className="truncate text-xs font-semibold text-slate-700" title={r.entityId}>
+                      {r.definition.name}
+                    </span>
+                    <span className="text-xs tabular-nums text-slate-500">
+                      {formatState(entities[r.entityId], r.definition.unit)}
+                    </span>
+                  </div>
+                )}
                 <EntityControls entityId={r.entityId} definition={r.definition} state={entities[r.entityId]} />
               </li>
             ))}
           </ul>
-        </details>
+          {diag.length > 0 && (
+            <details className="mt-2 text-xs">
+              <summary className="cursor-pointer text-slate-500">Diagnóstico</summary>
+              <ul className="mt-1 flex flex-col gap-2">
+                {diag.map((r) => (
+                  <li key={r.entityId}>
+                    <div className="mb-0.5 flex justify-between text-slate-600">
+                      <span>{r.definition.name}</span>
+                      <span className="tabular-nums">{formatState(entities[r.entityId], r.definition.unit)}</span>
+                    </div>
+                    <EntityControls entityId={r.entityId} definition={r.definition} state={entities[r.entityId]} />
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
       )}
     </div>
   );

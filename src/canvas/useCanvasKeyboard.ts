@@ -18,14 +18,29 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 
 function isInteractive(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  // Botones, enlaces, menús y diálogos ya gestionan Espacio/Intro/flechas.
-  return Boolean(target.closest('button, a[href], [role="menu"], [role="dialog"], [role="tab"], [role="separator"], summary'));
+  // Botones, enlaces y pestañas ya gestionan Espacio/Intro/flechas.
+  return Boolean(target.closest('button, a[href], [role="tab"], [role="separator"], summary'));
+}
+
+/** ¿El foco está dentro de un menú o diálogo (popover, menú contextual)? */
+function inMenuOrDialog(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && Boolean(target.closest('[role="menu"], [role="dialog"]'));
+}
+
+/** Nodo de dispositivo con el foco del teclado (React Flow pone data-id en el envoltorio). */
+function focusedDevice(): Id | null {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return null;
+  const nodeEl = active.closest<HTMLElement>('.react-flow__node-device');
+  return nodeEl?.dataset.id ?? null;
 }
 
 const MODE_KEYS: Record<string, CanvasMode> = { v: 'select', c: 'connect', r: 'room' };
 
-/** Dispositivo objetivo del teclado: el que está bajo el ratón o, si no, el seleccionado. */
+/** Dispositivo objetivo del teclado: el enfocado, el que está bajo el ratón o el seleccionado. */
 function targetDevice(): Id | null {
+  const focused = focusedDevice();
+  if (focused) return focused;
   if (hoveredDeviceId) return hoveredDeviceId;
   const sel = useUiStore.getState().selection;
   return sel?.kind === 'device' ? sel.id : null;
@@ -43,16 +58,17 @@ export function useCanvasKeyboard(): void {
       const key = e.key;
       const lower = key.toLowerCase();
 
-      if (key === '?') {
-        ui.setShortcutsOpen(true);
-        e.preventDefault();
-        return;
-      }
       if (key === 'Escape') {
         if (ui.contextMenu) ui.openContextMenu(null);
         else if (ui.popoverDeviceId) ui.openPopover(null);
         else if (ui.connectFromId) ui.setConnectFrom(null);
         else if (ui.canvasMode === 'room' || ui.canvasMode === 'connect') ui.setCanvasMode('select');
+        return;
+      }
+      if (inMenuOrDialog(e.target)) return;
+      if (key === '?') {
+        ui.setShortcutsOpen(true);
+        e.preventDefault();
         return;
       }
       if (isInteractive(e.target) && (key === ' ' || key === 'Enter' || key.startsWith('Arrow'))) return;
@@ -85,7 +101,7 @@ export function useCanvasKeyboard(): void {
       } else if (key === 'ArrowUp' || key === 'ArrowDown') {
         sim.step(deviceId, key === 'ArrowUp' ? 1 : -1);
       } else if (/^[0-9]$/.test(key)) {
-        sim.setLevel(deviceId, Number(key) * 10);
+        if (!sim.setLevel(deviceId, Number(key) * 10)) ui.notify('Este dispositivo no admite nivel', 'info');
       } else {
         return;
       }

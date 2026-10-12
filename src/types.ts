@@ -313,6 +313,8 @@ export interface SimulationState {
    * fallo, para restaurarlo al recuperarse.
    */
   offline?: Record<Id, Record<string, EntityState>>;
+  /** Hora simulada de creación: last_changed por defecto de las entidades que no han cambiado. */
+  startedAt?: number;
 }
 
 /** Temporizador interno del motor (no es una espera de una automatización). */

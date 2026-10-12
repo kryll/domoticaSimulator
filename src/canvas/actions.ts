@@ -155,7 +155,25 @@ function suggestedTo(domain: string, key: string): EntityStateValue | undefined 
   }
 }
 
-const TRIGGER_PRIORITY = ['binary_sensor', 'sensor', 'lock', 'cover', 'light', 'switch', 'media_player', 'climate'];
+/** Orden de preferencia del disparador: actuadores y binary_sensor antes que los sensores. */
+const TRIGGER_PRIORITY = ['binary_sensor', 'lock', 'cover', 'light', 'switch', 'fan', 'media_player', 'climate', 'vacuum', 'camera', 'sensor'];
+/** Entidades de diagnóstico que no tienen sentido como disparador por defecto. */
+const DIAGNOSTIC = new Set(['battery', 'power', 'energy', 'linkquality', 'voltage', 'current', 'signal_strength']);
+
+function isDiagnostic(e: { definition: { key: string; deviceClass?: string } }): boolean {
+  return DIAGNOSTIC.has(e.definition.key) || DIAGNOSTIC.has(e.definition.deviceClass ?? '');
+}
+
+/** Entidad que mejor representa al dispositivo como disparador de una automatización. */
+export function triggerEntityFor<T extends { definition: { key: string; domain: string; deviceClass?: string } }>(entities: T[]): T | undefined {
+  const rank = (e: T): number => {
+    if (e.definition.key === 'action') return -1;
+    const i = TRIGGER_PRIORITY.indexOf(e.definition.domain);
+    return i === -1 ? TRIGGER_PRIORITY.length : i;
+  };
+  const candidates = entities.filter((e) => !isDiagnostic(e));
+  return [...(candidates.length > 0 ? candidates : entities)].sort((a, b) => rank(a) - rank(b))[0];
+}
 
 /** Crea una automatización con el dispositivo como disparador y la abre en el editor. */
 export function createAutomationForDevice(deviceId: Id): Id | null {
@@ -163,9 +181,7 @@ export function createAutomationForDevice(deviceId: Id): Id | null {
   const device = store.project.devices.find((d) => d.id === deviceId);
   const def = device ? getDefinition(device.definitionId, catalog) : undefined;
   if (!device || !def) return null;
-  const entities = entitiesForDevice(device, def);
-  const rank = (domain: string, key: string) => (key === 'action' ? -1 : TRIGGER_PRIORITY.indexOf(domain) === -1 ? 99 : TRIGGER_PRIORITY.indexOf(domain));
-  const main = [...entities].sort((a, b) => rank(a.definition.domain, a.definition.key) - rank(b.definition.domain, b.definition.key))[0];
+  const main = triggerEntityFor(entitiesForDevice(device, def));
   const trigger: Trigger = { type: 'state', entityId: main?.entityId ?? '' };
   const to = main ? suggestedTo(main.definition.domain, main.definition.key) : undefined;
   if (to !== undefined) trigger.to = to;

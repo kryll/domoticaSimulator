@@ -21,8 +21,8 @@ function isUnavailable(sim: SimulationState, entityId: string): boolean {
  * motionTimeoutSeconds del modelo, 60 s si no constan). Otro pulso reinicia la cuenta.
  */
 export function motionPulse(sim: SimulationState, project: Project, entityId: string, seconds?: number): SimulationState {
-  if (!sim.entities[entityId]) return warn(sim, `Entidad desconocida: ${entityId}`, entityId);
-  if (isUnavailable(sim, entityId)) return warn(sim, `${entityId} no está disponible: se ignora el movimiento`, entityId);
+  const stop = blocked(sim, entityId, 'el movimiento');
+  if (stop) return stop;
   const timeout = seconds ?? entityCapabilities(project, entityId).motionTimeoutSeconds ?? 60;
   const on = setEntityState(sim, project, entityId, 'on');
   return scheduleTimer(on, entityTimerKey(entityId), on.now + Math.max(0, timeout) * SECOND_MS, {
@@ -40,9 +40,16 @@ export function triggerMotion(sim: SimulationState, project: Project, entityId: 
   return setEntityState(cancelTimer(sim, entityTimerKey(entityId)), project, entityId, 'off');
 }
 
+/** Aviso si la entidad no existe o no está disponible (un evento físico no la cambia). */
+function blocked(sim: SimulationState, entityId: string, what: string): SimulationState | undefined {
+  if (!sim.entities[entityId]) return warn(sim, `Entidad desconocida: ${entityId}`, entityId);
+  if (isUnavailable(sim, entityId)) return warn(sim, `${entityId} no está disponible: se ignora ${what}`, entityId);
+  return undefined;
+}
+
 /** Abre (on) o cierra (off) un sensor de puerta/ventana. */
 export function openDoor(sim: SimulationState, project: Project, entityId: string, open = true): SimulationState {
-  return setEntityState(sim, project, entityId, open ? 'on' : 'off');
+  return blocked(sim, entityId, open ? 'la apertura' : 'el cierre') ?? setEntityState(sim, project, entityId, open ? 'on' : 'off');
 }
 
 export function closeDoor(sim: SimulationState, project: Project, entityId: string): SimulationState {
@@ -51,28 +58,30 @@ export function closeDoor(sim: SimulationState, project: Project, entityId: stri
 
 /** Fuga de agua detectada (on) o seca (off). */
 export function setLeak(sim: SimulationState, project: Project, entityId: string, wet = true): SimulationState {
-  return setEntityState(sim, project, entityId, wet ? 'on' : 'off');
+  return blocked(sim, entityId, 'la fuga') ?? setEntityState(sim, project, entityId, wet ? 'on' : 'off');
 }
 
 /** Fija la lectura de un sensor de temperatura (redondeada a una décima). */
 export function setTemperature(sim: SimulationState, project: Project, entityId: string, celsius: number): SimulationState {
-  return setEntityState(sim, project, entityId, Math.round(celsius * 10) / 10);
+  return blocked(sim, entityId, 'la lectura') ?? setEntityState(sim, project, entityId, Math.round(celsius * 10) / 10);
 }
 
 /** Fija una lectura numérica genérica (humedad, iluminancia, potencia...). */
 export function setSensorValue(sim: SimulationState, project: Project, entityId: string, value: number): SimulationState {
-  return setEntityState(sim, project, entityId, value);
+  return blocked(sim, entityId, 'la lectura') ?? setEntityState(sim, project, entityId, value);
 }
 
 /** Pulsación de un mando inalámbrico (sensor de acción): "single", "double", "hold"... */
 export function pressButton(sim: SimulationState, project: Project, entityId: string, action = 'single'): SimulationState {
+  const stop = blocked(sim, entityId, 'la pulsación');
+  if (stop) return stop;
   const pressed = setEntityState(sim, project, entityId, action);
   return setEntityState(pressed, project, entityId, 'none');
 }
 
 /** Cerradura atascada: solo se fuerza con este evento; lock/unlock la desatascan. */
 export function jamLock(sim: SimulationState, project: Project, entityId: string): SimulationState {
-  return setEntityState(sim, project, entityId, 'jammed');
+  return blocked(sim, entityId, 'el atasco') ?? setEntityState(sim, project, entityId, 'jammed');
 }
 
 /** Estado al que vuelve una entidad tras recuperarse (sin transitorios que nadie terminará). */

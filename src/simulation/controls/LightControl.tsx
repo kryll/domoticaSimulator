@@ -1,7 +1,7 @@
 import { isDimmable, withDefaults } from '../../devices/capabilities';
 import { formatRgb, kelvinToRgb, parseRgb, rgbToCss } from '../../devices/color';
 import { attr, hexToRgb, isOn, num, rgbToHex } from './attrs';
-import { Slider, Toggle } from './primitives';
+import { ColorInput, Slider, Toggle } from './primitives';
 import type { ControlProps } from './types';
 
 /** Luz: encendido, brillo en %, temperatura de color y color según capacidades. */
@@ -43,15 +43,7 @@ export function LightControl({ definition, state, onService }: ControlProps) {
         />
       )}
       {modes.includes('rgb') && (
-        <label className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600">
-          Color
-          <input
-            type="color"
-            value={rgb ? rgbToHex(rgb) : '#ffffff'}
-            onChange={(e) => onService('turn_on', { rgb_color: formatRgb(hexToRgb(e.target.value)) })}
-            className="h-7 w-14 cursor-pointer rounded border border-slate-300 bg-white"
-          />
-        </label>
+        <ColorInput value={rgb ? rgbToHex(rgb) : '#ffffff'} onCommit={(hex) => onService('turn_on', { rgb_color: formatRgb(hexToRgb(hex)) })} />
       )}
     </div>
   );

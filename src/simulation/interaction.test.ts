@@ -6,14 +6,29 @@ import { HOUR_MS, MINUTE_MS } from './clock';
 import {
   activateScene,
   callService,
+  capturableEntities,
+  captureSceneEntities,
   createSimulationState,
   evaluateCondition,
+  renameEntities,
+  runActions,
   runAutomation,
   setEntityState,
   tick,
   userWaits,
 } from './engine';
-import { isDeviceOffline, jamLock, motionPulse, setDeviceOffline, setTemperature, triggerMotion } from './events';
+import {
+  isDeviceOffline,
+  jamLock,
+  motionPulse,
+  openDoor,
+  pressButton,
+  setDeviceOffline,
+  setLeak,
+  setSensorValue,
+  setTemperature,
+  triggerMotion,
+} from './events';
 
 const T0 = Date.UTC(2026, 9, 12, 12, 0, 0);
 const MOTION = 'binary_sensor.mov_motion';
@@ -179,8 +194,14 @@ describe('for: en disparadores y condiciones', () => {
     const cond = { type: 'state' as const, entityId: LOCK, state: 'unlocked', for: 300 };
     expect(evaluateCondition(cond, sim)).toBe(false);
     expect(evaluateCondition(cond, tick(sim, p, 5 * MINUTE_MS))).toBe(true);
-    // sin cambios desde el inicio: se considera cumplida
-    expect(evaluateCondition({ type: 'state', entityId: MOTION, state: 'off', for: 3600 }, start(p))).toBe(true);
+    // sin cambios: cuenta desde el inicio de la simulación (startedAt)
+    const hourCond = { type: 'state' as const, entityId: MOTION, state: 'off', for: 3600 };
+    expect(evaluateCondition(hourCond, start(p))).toBe(false);
+    expect(evaluateCondition(hourCond, tick(start(p), p, HOUR_MS))).toBe(true);
+    // estados antiguos sin startedAt ni lastChanged: se cumple
+    const legacy = { ...start(p) };
+    delete legacy.startedAt;
+    expect(evaluateCondition(hourCond, legacy)).toBe(true);
   });
 });
 
@@ -256,5 +277,87 @@ describe('escenas mediante servicios', () => {
     expect(state(sim, COVER)).toBe('opening');
     expect(tick(sim, p, 20_000).entities[COVER]?.attributes?.current_position).toBe(50);
     expect(lastMessages(sim, 4)).toContain('Servicio cover.set_cover_position → Persiana Persiana (posición 50 %)');
+  });
+});
+
+describe('renameEntities', () => {
+  it('traslada una persiana en movimiento y sigue su recorrido con el nuevo id', () => {
+    const p = home();
+    const moving = tick(callService(start(p), p, COVER, 'cover.open_cover'), p, 4_000);
+    const renamed = renameEntities(moving, { [COVER]: 'cover.estor_cover' });
+    expect(renamed.entities[COVER]).toBeUndefined();
+    expect(renamed.pending[0]).toMatchObject({ key: 'entity:cover.estor_cover', timer: { kind: 'cover_step', entityId: 'cover.estor_cover' } });
+    const p2 = { ...p, devices: p.devices.map((d) => (d.id === 'c' ? { ...d, name: 'Estor' } : d)) };
+    expect(tick(renamed, p2, 20_000).entities['cover.estor_cover']).toMatchObject({ state: 'open', attributes: { current_position: 100 } });
+  });
+
+  it('traslada el autoapagado del movimiento y los for: pendientes', () => {
+    const p = home({ automations: [auto('f', { triggers: [{ type: 'state', entityId: MOTION, to: 'on', for: 10 }] })] });
+    const pulse = motionPulse(start(p), p, MOTION);
+    const renamed = renameEntities(pulse, { [MOTION]: 'binary_sensor.pasillo_motion' });
+    const timers = renamed.pending.map((x) => x.timer);
+    expect(timers).toContainEqual({ kind: 'set_states', setStates: { 'binary_sensor.pasillo_motion': { state: 'off' } }, reason: 'sin movimiento' });
+    expect(timers).toContainEqual({ kind: 'state_for', entityId: 'binary_sensor.pasillo_motion', automationId: 'f', triggerIndex: 0 });
+    const p2 = { ...p, devices: p.devices.map((d) => (d.id === 'm' ? { ...d, name: 'Pasillo' } : d)) };
+    expect(state(tick(renamed, p2, 60_000), 'binary_sensor.pasillo_motion')).toBe('off');
+  });
+
+  it('traslada los dispositivos offline, que se reconectan con el nuevo id', () => {
+    const p = home();
+    const lit = callService(start(p), p, LIGHT, 'light.turn_on', { brightness_pct: 50 });
+    const renamed = renameEntities(setDeviceOffline(lit, p, 'l', true), { [LIGHT]: 'light.lampara' });
+    expect(renamed.offline?.l?.['light.lampara']).toMatchObject({ state: 'on' });
+    const p2 = { ...p, devices: p.devices.map((d) => (d.id === 'l' ? { ...d, name: 'Lámpara' } : d)) };
+    expect(setDeviceOffline(renamed, p2, 'l', false).entities['light.lampara']).toMatchObject({ state: 'on', attributes: { brightness: 128 } });
+  });
+
+  it('traslada esperas de automatizaciones y no cambia nada con un mapeo vacío', () => {
+    const p = home();
+    const sim = runActions(start(p), p, [{ type: 'delay', seconds: 5 }, { type: 'service', service: 'light.turn_off', entityId: LIGHT }]);
+    expect(renameEntities(sim, { [LIGHT]: 'light.x' }).pending[0]?.actions[0]).toMatchObject({ entityId: 'light.x' });
+    expect(renameEntities(sim, {})).toBe(sim);
+  });
+});
+
+describe('eventos sobre entidades no disponibles', () => {
+  it('se ignoran con aviso, igual que los servicios', () => {
+    const p = home();
+    const sim = setDeviceOffline(setDeviceOffline(setDeviceOffline(start(p), p, 'm', true), p, 'k', true), p, 'th', true);
+    const checks: [SimulationState, string][] = [
+      [openDoor(sim, p, MOTION), MOTION],
+      [setLeak(sim, p, MOTION), MOTION],
+      [setSensorValue(sim, p, 'sensor.mov_illuminance', 5), 'sensor.mov_illuminance'],
+      [pressButton(sim, p, MOTION), MOTION],
+      [jamLock(sim, p, LOCK), LOCK],
+      [setTemperature(sim, p, 'sensor.termo_temperature', 10), 'sensor.termo_temperature'],
+      [callService(sim, p, LOCK, 'lock.unlock'), LOCK],
+    ];
+    for (const [after, id] of checks) {
+      expect(state(after, id), id).toBe('unavailable');
+      expect(after.log.at(-1)?.level).toBe('warning');
+    }
+  });
+});
+
+describe('tick sin cambios', () => {
+  it('reutiliza las referencias de entities, pending y offline', () => {
+    const p = home();
+    const sim = setDeviceOffline(motionPulse(start(p), p, MOTION), p, 'l', true);
+    const later = tick(sim, p, 1_000);
+    expect(later).not.toBe(sim);
+    expect(later.now).toBe(sim.now + 1_000);
+    expect(later.entities).toBe(sim.entities);
+    expect(later.pending).toBe(sim.pending);
+    expect(later.offline).toBe(sim.offline);
+    expect(later.log).toBe(sim.log);
+  });
+});
+
+describe('capturableEntities', () => {
+  it('separa capturables, no disponibles y desconocidas', () => {
+    const p = home();
+    const sim = setDeviceOffline(start(p), p, 'l', true);
+    expect(capturableEntities(sim, [LIGHT, COVER, 'light.nada'])).toEqual({ capturable: [COVER], unavailable: [LIGHT], missing: ['light.nada'] });
+    expect(Object.keys(captureSceneEntities(sim, [LIGHT, COVER]))).toEqual([COVER]);
   });
 });

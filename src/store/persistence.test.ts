@@ -3,9 +3,9 @@ import { catalog } from '../devices/catalog';
 import { initialEntityStates } from '../devices/entities';
 import { analyzeMesh } from '../network/mesh';
 import { validateProject } from '../network/validator';
-import { createSimulationState, runScript, setEntityState, tick } from '../simulation/engine';
+import { callService, createSimulationState, runScript, setEntityState, tick } from '../simulation/engine';
 import { DAY_MS } from '../simulation/clock';
-import { motionPulse } from '../simulation/events';
+import { motionPulse, pressButton, setLeak } from '../simulation/events';
 import type { Action, Condition, Project, Trigger } from '../types';
 import {
   createDemoProject,
@@ -47,7 +47,7 @@ describe('createDemoProject', () => {
     expect(demo.rooms.length).toBeGreaterThanOrEqual(6);
     expect(demo.devices.length).toBeGreaterThanOrEqual(15);
     expect(demo.connections.length).toBeGreaterThanOrEqual(demo.devices.length - 1);
-    expect(demo.automations).toHaveLength(5);
+    expect(demo.automations).toHaveLength(8);
     expect(demo.scenes).toHaveLength(2);
     expect(demo.scripts).toHaveLength(1);
   });
@@ -108,6 +108,18 @@ describe('createDemoProject', () => {
     expect(sim.entities['light.luz_pasillo']?.state).toBe('on');
     sim = tick(sim, demo, 1_000);
     expect(sim.entities['light.luz_pasillo']?.state).toBe('off');
+    expect(sim.log.some((l) => l.level !== 'info')).toBe(false);
+  });
+
+  it('mando del salón y sensor de fuga', () => {
+    let sim = createSimulationState(demo, catalog, Date.UTC(2026, 9, 12, 12, 0));
+    sim = pressButton(sim, demo, 'sensor.mando_salon_action', 'single');
+    expect(sim.entities['light.luz_salon']?.state).toBe('on');
+    sim = pressButton(sim, demo, 'sensor.mando_salon_action', 'double');
+    expect(sim.entities['light.luz_salon']?.attributes?.rgb_color).toBe('[255, 120, 40]');
+    sim = callService(sim, demo, 'switch.enchufe_bano_switch', 'switch.turn_on');
+    sim = setLeak(sim, demo, 'binary_sensor.fuga_bano_leak');
+    expect(sim.entities['switch.enchufe_bano_switch']?.state).toBe('off');
     expect(sim.log.some((l) => l.level !== 'info')).toBe(false);
   });
 

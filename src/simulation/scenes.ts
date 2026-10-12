@@ -40,9 +40,30 @@ export function sceneEntityState(entityId: string, st: EntityState): EntityState
 /** Captura el estado actual de las entidades indicadas para guardarlo en una escena. */
 export function captureSceneEntities(sim: SimulationState, entityIds: readonly string[]): Record<string, EntityState> {
   const result: Record<string, EntityState> = {};
+  for (const id of capturableEntities(sim, entityIds).capturable) {
+    const st = sim.entities[id];
+    if (st) result[id] = sceneEntityState(id, st);
+  }
+  return result;
+}
+
+export interface CapturableEntities {
+  /** Se pueden guardar en la escena. */
+  capturable: string[];
+  /** No disponibles (dispositivo desconectado): se omiten. */
+  unavailable: string[];
+  /** No existen en la simulación. */
+  missing: string[];
+}
+
+/** Clasifica las entidades antes de capturar una escena, para que la interfaz avise. */
+export function capturableEntities(sim: SimulationState, entityIds: readonly string[]): CapturableEntities {
+  const result: CapturableEntities = { capturable: [], unavailable: [], missing: [] };
   for (const id of entityIds) {
     const st = sim.entities[id];
-    if (st && st.state !== 'unavailable') result[id] = sceneEntityState(id, st);
+    if (!st) result.missing.push(id);
+    else if (st.state === 'unavailable') result.unavailable.push(id);
+    else result.capturable.push(id);
   }
   return result;
 }

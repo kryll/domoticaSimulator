@@ -10,6 +10,8 @@ export type DeviceNodeData = {
   view: DeviceView | null;
   /** Etiqueta de la acción principal (clic en Uso, ⏻ en Edición), si la hay. */
   primaryLabel?: string;
+  /** ¿La rueda y ↑/↓ ajustan algo? Si no, la rueda hace zoom. */
+  steppable: boolean;
   /** Icono del dispositivo. */
   icon: string;
   mode: CanvasMode;

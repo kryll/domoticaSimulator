@@ -3,7 +3,7 @@ import { catalog } from './catalog';
 import { def, dev, project } from './testUtils';
 import type { Project, SimulationState } from '../types';
 import { callService, createSimulationState, tick } from '../simulation/engine';
-import { motionPulse, setDeviceOffline, setTemperature } from '../simulation/events';
+import { jamLock, motionPulse, setDeviceOffline, setTemperature } from '../simulation/events';
 import { applyQuickAction, deviceIcon, deviceView, primaryAction, setLevelAction, stepAction } from './presentation';
 
 const T0 = Date.UTC(2026, 9, 12, 12, 0, 0);
@@ -43,10 +43,10 @@ function device(id: string) {
 
 describe('deviceView', () => {
   it('luz: brillo, color y entidades', () => {
-    expect(view('luz')).toMatchObject({ kind: 'light', active: false, summary: 'off', unavailable: false });
+    expect(view('luz')).toMatchObject({ kind: 'light', active: false, summary: 'Apagada', unavailable: false, state: 'off' });
     const sim = callService(start(), p, 'light.luz_salon', 'light.turn_on', { brightness_pct: 60, rgb_color: [255, 0, 0] });
     const v = view('luz', sim);
-    expect(v).toMatchObject({ kind: 'light', active: true, summary: 'on · 60 %', brightnessPct: 60, colorCss: 'rgb(255, 0, 0)' });
+    expect(v).toMatchObject({ kind: 'light', active: true, summary: 'Encendida · 60 %', brightnessPct: 60, colorCss: 'rgb(255, 0, 0)' });
     expect(v.entities).toEqual([{ entityId: 'light.luz_salon', name: 'Luz salón', domain: 'light', state: 'on' }]);
     const warm = view('luz', callService(sim, p, 'light.luz_salon', 'light.turn_on', { color_temp_kelvin: 2700 }));
     expect(warm.colorCss).toMatch(/^rgb\(255, /);
@@ -57,9 +57,9 @@ describe('deviceView', () => {
     const pulse = motionPulse(start(), p, 'binary_sensor.mov_motion');
     expect(view('mov', pulse)).toMatchObject({ kind: 'motion', active: true, countdownSeconds: 60 });
     expect(view('mov', tick(pulse, p, 15_000)).countdownSeconds).toBe(45);
-    expect(view('puerta')).toMatchObject({ kind: 'contact', summary: 'cerrada' });
+    expect(view('puerta')).toMatchObject({ kind: 'contact', summary: 'Cerrada' });
     expect(view('clima')).toMatchObject({ kind: 'climate_sensor', summary: '21,5° · 50 %' });
-    expect(view('fuga')).toMatchObject({ kind: 'leak', summary: 'seco' });
+    expect(view('fuga')).toMatchObject({ kind: 'leak', summary: 'Seco' });
     expect(view('mando')).toMatchObject({ kind: 'remote' });
   });
 
@@ -70,20 +70,42 @@ describe('deviceView', () => {
   });
 
   it('persiana con posición y movimiento; media con volumen', () => {
-    expect(view('pers')).toMatchObject({ kind: 'cover', summary: 'cerrada', positionPct: 0 });
+    expect(view('pers')).toMatchObject({ kind: 'cover', summary: 'Cerrada', positionPct: 0 });
     const moving = tick(callService(start(), p, 'cover.persiana_cover', 'cover.open_cover'), p, 9_000);
-    expect(view('pers', moving)).toMatchObject({ moving: 'up', positionPct: 40, summary: 'subiendo · 40 %' });
-    expect(view('pers', tick(moving, p, 20_000)).summary).toBe('abierta');
+    expect(view('pers', moving)).toMatchObject({ moving: 'up', positionPct: 45, summary: 'Subiendo · 45 %', countdownSeconds: 11, state: 'opening' });
+    expect(view('pers', tick(moving, p, 20_000)).summary).toBe('Abierta');
     const tv = callService(start(), p, 'media_player.tele', 'media_player.turn_on');
     expect(view('tv', tv)).toMatchObject({ kind: 'media', volumePct: 30, active: true, secondary: 'TV' });
   });
 
   it('infraestructura, cerradura, aspiradora y no disponible', () => {
     expect(view('coord')).toMatchObject({ kind: 'infrastructure', active: true });
-    expect(view('cerr')).toMatchObject({ kind: 'lock', summary: 'cerrada con llave', active: false });
-    expect(view('robot')).toMatchObject({ kind: 'vacuum', summary: 'en la base' });
+    expect(view('cerr')).toMatchObject({ kind: 'lock', summary: 'Cerrada con llave', active: false, jammed: false });
+    expect(view('robot')).toMatchObject({ kind: 'vacuum', summary: 'En la base' });
     expect(view('cam')).toMatchObject({ kind: 'camera' });
-    expect(view('luz', setDeviceOffline(start(), p, 'luz', true))).toMatchObject({ unavailable: true, summary: 'no disponible' });
+    expect(view('luz', setDeviceOffline(start(), p, 'luz', true))).toMatchObject({ unavailable: true, summary: 'No disponible' });
+  });
+});
+
+describe('textos y estados', () => {
+  it('termostato apagado sin duplicados y modos traducidos', () => {
+    const off = callService(start(), p, 'climate.termo_climate', 'climate.turn_off');
+    expect(view('termo', off)).toMatchObject({ summary: '21,5° · Apagado', heating: false });
+    expect(view('termo', off).secondary).toBeUndefined();
+    const eco = callService(start(), p, 'climate.termo_climate', 'climate.set_preset_mode', { preset_mode: 'away' });
+    expect(view('termo', eco).secondary).toBe('En reposo · Calefacción · Ausente');
+    const cold = setTemperature(eco, p, 'sensor.termo_temperature', 18);
+    expect(view('termo', cold).secondary).toBe('Calentando · Calefacción · Ausente');
+  });
+
+  it('cerradura atascada expone jammed y el estado crudo', () => {
+    expect(view('cerr', jamLock(start(), p, 'lock.cerradura_lock'))).toMatchObject({ jammed: true, state: 'jammed', summary: 'Atascada' });
+  });
+
+  it('enchufe y TV en masculino; luz en femenino', () => {
+    expect(view('enchufe').summary).toBe('Apagado');
+    expect(view('tv').summary).toBe('Apagado');
+    expect(view('luz').summary).toBe('Apagada');
   });
 });
 
@@ -107,15 +129,48 @@ describe('acciones rápidas', () => {
     const { d: luz, def: luzDef } = device('luz');
     expect(stepAction(luz, luzDef, sim, 1)).toMatchObject({ service: 'light.turn_on', data: { brightness_step_pct: 10 } });
     expect(setLevelAction(luz, luzDef, sim, 70)).toMatchObject({ service: 'light.turn_on', data: { brightness_pct: 70 } });
-    expect(setLevelAction(luz, luzDef, sim, 0)).toMatchObject({ service: 'light.turn_off' });
+    expect(setLevelAction(luz, luzDef, sim, 0)).toBeNull();
+    const lit = callService(sim, p, 'light.luz_salon', 'light.turn_on', { brightness_pct: 50 });
+    expect(setLevelAction(luz, luzDef, lit, 0)).toMatchObject({ service: 'light.turn_off' });
     const { d: termo, def: termoDef } = device('termo');
     expect(stepAction(termo, termoDef, sim, -1)).toMatchObject({ service: 'climate.set_temperature', data: { temperature: 20.5 } });
     const { d: pers, def: persDef } = device('pers');
     expect(stepAction(pers, persDef, sim, 1)).toMatchObject({ data: { position: 10 } });
     const { d: tv, def: tvDef } = device('tv');
-    expect(stepAction(tv, tvDef, sim, 1)).toMatchObject({ service: 'media_player.volume_set', data: { volume_level: 0.4 } });
+    const tvOn = callService(sim, p, 'media_player.tele', 'media_player.turn_on');
+    expect(stepAction(tv, tvDef, tvOn, 1)).toMatchObject({ service: 'media_player.volume_set', data: { volume_level: 0.4 } });
     const { d: puerta, def: puertaDef } = device('puerta');
     expect(stepAction(puerta, puertaDef, sim, 1)).toBeNull();
+  });
+
+  it('stepAction devuelve null cuando no aplica', () => {
+    const sim = start();
+    const { d: luz, def: luzDef } = device('luz');
+    expect(stepAction(luz, luzDef, sim, -1)).toBeNull();
+    const full = callService(sim, p, 'light.luz_salon', 'light.turn_on', { brightness_pct: 100 });
+    expect(stepAction(luz, luzDef, full, 1)).toBeNull();
+    expect(stepAction(luz, luzDef, full, -1)).not.toBeNull();
+    const { d: pers, def: persDef } = device('pers');
+    expect(stepAction(pers, persDef, sim, -1)).toBeNull();
+    const { d: tv, def: tvDef } = device('tv');
+    expect(stepAction(tv, tvDef, sim, 1)).toBeNull();
+  });
+
+  it('pasos de persiana en movimiento se acumulan sobre el objetivo', () => {
+    const { d: pers, def: persDef } = device('pers');
+    let sim = start();
+    for (let i = 0; i < 3; i++) {
+      const a = stepAction(pers, persDef, sim, 1);
+      if (!a) throw new Error('sin paso');
+      sim = applyQuickAction(sim, p, a);
+    }
+    expect(sim.entities['cover.persiana_cover']?.state).toBe('opening');
+    expect(tick(sim, p, 60_000).entities['cover.persiana_cover']?.attributes?.current_position).toBe(30);
+  });
+
+  it('el mando simula su primera acción', () => {
+    const { d: mando, def: mandoDef } = device('mando');
+    expect(primaryAction(mando, mandoDef, start())).toMatchObject({ event: 'button', action: 'single' });
   });
 
   it('applyQuickAction ejecuta servicios y eventos', () => {

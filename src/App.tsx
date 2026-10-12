@@ -1,10 +1,8 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { TopBar } from './ui/TopBar';
 import { BottomPanel } from './ui/BottomPanel';
 import { Toast } from './ui/Toast';
-import { ShortcutsHelp } from './ui/ShortcutsHelp';
-import { AddToSceneDialog } from './scenes/AddToSceneDialog';
 import { CatalogPanel } from './catalog/CatalogPanel';
 import { Canvas } from './canvas/Canvas';
 import { FloorBar } from './canvas/FloorBar';
@@ -35,6 +33,21 @@ function useShortcuts() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+}
+
+// Diálogos poco frecuentes: se cargan bajo demanda.
+const ShortcutsHelp = lazy(() => import('./ui/ShortcutsHelp').then((m) => ({ default: m.ShortcutsHelp })));
+const AddToSceneDialog = lazy(() => import('./scenes/AddToSceneDialog').then((m) => ({ default: m.AddToSceneDialog })));
+
+function LazyDialogs() {
+  const help = useUiStore((s) => s.shortcutsOpen);
+  const addToScene = useUiStore((s) => s.addToScene !== null);
+  return (
+    <Suspense fallback={null}>
+      {help && <ShortcutsHelp />}
+      {addToScene && <AddToSceneDialog />}
+    </Suspense>
+  );
 }
 
 export interface AppProps {
@@ -88,8 +101,7 @@ export function App({ autoLoad = true }: AppProps) {
           </div>
         </div>
         <Toast />
-        <ShortcutsHelp />
-        <AddToSceneDialog />
+        <LazyDialogs />
       </div>
     </ReactFlowProvider>
   );

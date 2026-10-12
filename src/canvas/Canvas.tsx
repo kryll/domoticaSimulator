@@ -21,7 +21,10 @@ import type { IssueSeverity, Project, SimulationState } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore, type CanvasMode, type Selection } from '../store/uiStore';
-import { deviceIcon, deviceView, primaryAction } from '../devices/presentation';
+import { deviceIcon } from '../devices/presentation';
+import { devicePresentation } from './viewCache';
+import { mergeNodes } from './mergeNodes';
+import { useShallow } from 'zustand/react/shallow';
 import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
 import { addDeviceFromDefinition, connectDevices } from './actions';
 import { polygonBounds } from './geometry';
@@ -145,8 +148,9 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
   for (const device of project.devices) {
     if (device.floorId !== floorId) continue;
     const definition = definitionOf(device);
-    const view = definition ? deviceView(device, definition, sim) : null;
-    const primary = definition ? primaryAction(device, definition, sim) : null;
+    const presentation = definition ? devicePresentation(device, definition, sim) : null;
+    const view = presentation?.view ?? null;
+    const primary = presentation?.primary ?? null;
     const activity = entitiesOfDevice(device)
       .map((r) => lastLog.get(r.entityId))
       .filter((x): x is string => x !== undefined)
@@ -165,6 +169,7 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
         device,
         definition,
         view,
+        steppable: presentation?.steppable ?? false,
         icon: definition ? deviceIcon(definition) : '❔',
         mode,
         popoverOpen: popoverDeviceId === device.id,
@@ -179,27 +184,13 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
         crossFloorLinks: crossLinks.get(device.id) ?? [],
       },
       selected: isSelected(selection, 'device', device.id),
+      ariaLabel: `${device.name}: ${view?.unavailable ? 'no disponible' : [view?.summary, view?.secondary].filter(Boolean).join(', ')}`,
       draggable: mode === 'select' || mode === 'room',
       zIndex: popoverDeviceId === device.id ? 5 : 1,
     };
     nodes.push(node);
   }
   return nodes;
-}
-
-/** Fusiona los nodos derivados conservando medidas y posición durante el arrastre. */
-function mergeNodes(prev: AppNode[], next: AppNode[]): AppNode[] {
-  const byId = new Map(prev.map((n) => [n.id, n]));
-  return next.map((n) => {
-    const old = byId.get(n.id);
-    if (!old) return n;
-    return {
-      ...n,
-      measured: old.measured,
-      dragging: old.dragging,
-      position: old.dragging ? old.position : n.position,
-    } as AppNode;
-  });
 }
 
 /** Espera para distinguir clic de doble clic en modo Uso. */
@@ -218,7 +209,10 @@ export function Canvas() {
   const mode = useUiStore((s) => s.canvasMode);
   const showCoverage = useUiStore((s) => s.showCoverage);
   const focusRequest = useUiStore((s) => s.focusRequest);
-  const sim = useSimulationStore((s) => s.sim);
+  // Sin `now`: el lienzo solo se recalcula cuando cambian estados, temporizadores o fallos.
+  const simParts = useSimulationStore(
+    useShallow((s) => ({ entities: s.sim.entities, pending: s.sim.pending, offline: s.sim.offline, log: s.sim.log })),
+  );
   const popoverDeviceId = useUiStore((s) => s.popoverDeviceId);
   const connectFromId = useUiStore((s) => s.connectFromId);
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -229,8 +223,8 @@ export function Canvas() {
   const interact = mode === 'interact';
 
   const derived = useMemo(
-    () => buildNodes(project, floorId, sim, { selection, highlighted, mode, popoverDeviceId }),
-    [project, floorId, sim, selection, highlighted, mode, popoverDeviceId],
+    () => buildNodes(project, floorId, { ...useSimulationStore.getState().sim, ...simParts }, { selection, highlighted, mode, popoverDeviceId }),
+    [project, floorId, simParts, selection, highlighted, mode, popoverDeviceId],
   );
   const [nodes, setNodes] = useState<AppNode[]>(derived);
   useEffect(() => setNodes((prev) => mergeNodes(prev, derived)), [derived]);

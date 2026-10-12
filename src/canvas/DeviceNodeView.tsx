@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, memo, useEffect, useRef, useState } from 'react';
 import { Handle, NodeToolbar, Position, type NodeProps } from '@xyflow/react';
 import type { DeviceNode } from './types';
 import { PROTOCOL_COLORS } from './style';
@@ -7,7 +7,8 @@ import { effectiveIotClass } from '../devices/roles';
 import { useSimulationStore } from '../store/simulationStore';
 import { cx } from '../ui/cx';
 import { NodeBody } from './nodes/bodies';
-import { DevicePopover } from './DevicePopover';
+
+const DevicePopover = lazy(() => import('./DevicePopover').then((m) => ({ default: m.DevicePopover })));
 
 const severityRing = {
   error: 'ring-2 ring-red-500',
@@ -40,10 +41,12 @@ function MotionWaves() {
 }
 
 function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
+  (window as unknown as { __renders: number }).__renders = ((window as unknown as { __renders?: number }).__renders ?? 0) + 1; // MEDICION-TEMPORAL
   const {
     device,
     definition,
     view,
+    steppable,
     icon,
     mode,
     primaryLabel,
@@ -81,7 +84,8 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
     const el = ref.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!(interact || e.shiftKey)) return;
+      // Sin nivel que ajustar (sensores, mandos...) la rueda sigue haciendo zoom.
+      if (!steppable || !(interact || e.shiftKey)) return;
       e.preventDefault();
       e.stopPropagation();
       const now = performance.now();
@@ -93,9 +97,8 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [id, interact]);
+  }, [id, interact, steppable]);
 
-  const stateText = unavailable ? 'no disponible' : view ? [view.summary, view.secondary].filter(Boolean).join(', ') : '';
   const lightColor = view?.colorCss ?? '#fbbf24';
 
   return (
@@ -103,7 +106,8 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
       ref={ref}
       className={cx(
         'group relative flex min-h-[70px] w-[180px] items-center gap-2 rounded-lg border bg-white px-2 py-1.5 shadow-sm transition-colors motion-reduce:transition-none',
-        interact && !connectMode && 'nowheel cursor-pointer',
+        interact && !connectMode && 'cursor-pointer',
+        interact && steppable && 'nowheel',
         active ? 'border-amber-400 bg-amber-50/70' : 'border-slate-300',
         unavailable && 'border-dashed border-slate-400 bg-slate-100 grayscale',
         unreachable && !unavailable && 'border-dashed border-red-500 bg-red-50',
@@ -115,7 +119,6 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
       data-testid={`device-node-${device.id}`}
       data-kind={kind}
       data-active={active ? 'true' : 'false'}
-      aria-label={`${device.name}${stateText ? `: ${stateText}` : ''}`}
     >
       {flash > 0 && <span key={flash} aria-hidden="true" className="ha-flash pointer-events-none absolute inset-0 rounded-lg" />}
       <span className="relative flex h-9 w-9 shrink-0 items-center justify-center" aria-hidden="true">
@@ -204,7 +207,11 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
         }
       />
       <NodeToolbar isVisible={popoverOpen} position={Position.Right} offset={12} className="nodrag nopan nowheel">
-        {popoverOpen && <DevicePopover deviceId={device.id} />}
+        {popoverOpen && (
+          <Suspense fallback={<div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-500 shadow-xl">Cargando…</div>}>
+            <DevicePopover deviceId={device.id} />
+          </Suspense>
+        )}
       </NodeToolbar>
     </div>
   );

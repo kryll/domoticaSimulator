@@ -156,3 +156,45 @@ export const INTEGRATION_IOT_CLASS: Record<Integration, IotClass> = {
   tplink: 'local_polling',
   homeassistant: 'local_push',
 };
+
+/** hvac_action de un termostato. */
+export const HVAC_ACTION_LABELS: Record<string, string> = {
+  heating: 'Calentando',
+  cooling: 'Enfriando',
+  drying: 'Deshumidificando',
+  fan: 'Ventilando',
+  idle: 'En reposo',
+  off: 'Apagado',
+};
+
+/** Modos HVAC (estado de una entidad climate). */
+export const HVAC_MODE_LABELS: Record<string, string> = {
+  off: 'Apagado',
+  heat: 'Calefacción',
+  cool: 'Refrigeración',
+  heat_cool: 'Calor/frío',
+  auto: 'Automático',
+  dry: 'Deshumidificar',
+  fan_only: 'Solo ventilador',
+};
+
+/** Presets habituales de termostatos. */
+export const PRESET_LABELS: Record<string, string> = {
+  eco: 'Eco',
+  away: 'Ausente',
+  home: 'En casa',
+  comfort: 'Confort',
+  boost: 'Turbo',
+  sleep: 'Noche',
+  manual: 'Manual',
+  auto: 'Automático',
+  schedule: 'Programación',
+  frost_guard: 'Antiheladas',
+  activity: 'Actividad',
+  none: 'Ninguno',
+};
+
+/** Etiqueta de un valor con su tabla, o el propio valor si no está. */
+export function labelOf(table: Record<string, string>, value: string): string {
+  return table[value] ?? value;
+}
