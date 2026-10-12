@@ -7,6 +7,7 @@ import { TextField, inputClass } from '../ui/Field';
 import { usePeople, useZones } from './zones';
 import { addPerson, movePersonTo, removePerson, updatePerson } from './personActions';
 import { ZonesSection } from './ZonesSection';
+import { confirmDialog } from '../ui/confirm';
 
 const OUTSIDE = '';
 
@@ -78,8 +79,8 @@ function PersonRow({ person }: { person: Person }) {
           size="sm"
           variant="danger"
           aria-label={`Borrar a ${person.name}`}
-          onClick={() => {
-            if (window.confirm(`¿Borrar a «${person.name}»?`)) removePerson(person.id);
+          onClick={async () => {
+            if (await confirmDialog({ title: `¿Borrar a «${person.name}»?`, confirmLabel: 'Borrar', danger: true })) removePerson(person.id);
           }}
         >
           ✕

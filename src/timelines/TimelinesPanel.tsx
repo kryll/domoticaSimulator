@@ -12,6 +12,7 @@ import { TimelineRunner } from './TimelineRunner';
 import { useSimulationStore } from '../store/simulationStore';
 import { timelineStart } from '../simulation/timeline';
 import { formatSimDate, formatSimTime, startOfDay } from '../simulation/clock';
+import { confirmDialog } from '../ui/confirm';
 
 const EMPTY: Timeline[] = [];
 
@@ -118,8 +119,8 @@ export function TimelinesPanel() {
               <Button
                 size="sm"
                 variant="danger"
-                onClick={() => {
-                  if (!window.confirm(`¿Eliminar la prueba «${selected.name}»?`)) return;
+                onClick={async () => {
+                  if (!(await confirmDialog({ title: `¿Eliminar la prueba «${selected.name}»?`, confirmLabel: 'Eliminar', danger: true }))) return;
                   useProjectStore.getState().update((p) => ({ ...p, timelines: (p.timelines ?? []).filter((t) => t.id !== selected.id) }));
                   setSelectedId(null);
                 }}

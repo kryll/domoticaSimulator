@@ -8,6 +8,7 @@ import { recordTimeline, runTimeline, timelineStart, type TimelineRun } from '..
 import { formatSimTime, startOfDay } from '../simulation/clock';
 import { Button } from '../ui/Button';
 import { cx } from '../ui/cx';
+import { confirmDialog } from '../ui/confirm';
 
 /** Resultado de la última ejecución por prueba (se pierde al cambiar de proyecto). */
 const lastRuns = new Map<string, { run: TimelineRun; steps: TimelineStep[]; startAt: number | undefined }>();
@@ -32,14 +33,22 @@ export function TimelineRunner({ timeline, onRecorded }: { timeline: Timeline; o
     }
   };
 
-  const record = () => {
+  const record = async () => {
     const { log, now } = useSimulationStore.getState().sim;
     const steps = recordTimeline(log);
     if (steps.length === 0) {
       useUiStore.getState().notify('El registro no tiene eventos que grabar: usa los dispositivos con la simulación y vuelve a intentarlo', 'info');
       return;
     }
-    if (timeline.steps.length > 0 && !window.confirm(`¿Sustituir los ${timeline.steps.length} pasos de «${timeline.name}» por los ${steps.length} grabados?`)) return;
+    if (
+      timeline.steps.length > 0 &&
+      !(await confirmDialog({
+        title: `¿Sustituir los pasos de «${timeline.name}»?`,
+        message: `Los ${timeline.steps.length} pasos actuales se sustituirán por los ${steps.length} grabados.`,
+        confirmLabel: 'Sustituir',
+      }))
+    )
+      return;
     // La prueba grabada empieza el día de la primera entrada del registro.
     onRecorded(steps, startOfDay(log[0]?.timestamp ?? now));
     useUiStore.getState().notify(`Grabados ${steps.length} pasos desde el registro`, 'success');

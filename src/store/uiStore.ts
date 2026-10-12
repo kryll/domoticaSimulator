@@ -18,6 +18,8 @@ export type Selection =
   | { kind: 'room'; id: Id }
   | { kind: 'connection'; id: Id };
 
+export type SelectionKind = Selection['kind'];
+
 export interface Notice {
   id: number;
   text: string;
@@ -57,7 +59,12 @@ export const BOTTOM_DEFAULT = 288;
 
 export interface UiState {
   activeFloorId: Id | null;
-  selection: Selection | null;
+  /**
+   * Elementos seleccionados. Varios solo para dispositivos (selección múltiple); una sala o una
+   * conexión se seleccionan de una en una. El tipo está en `selectionKind`.
+   */
+  selection: Id[];
+  selectionKind: SelectionKind | null;
   /** Dispositivos resaltados (p. ej. desde el panel de validación). */
   highlightedDeviceIds: Id[];
   canvasMode: CanvasMode;
@@ -89,9 +96,16 @@ export interface UiState {
   templateGallery: { deviceId?: Id } | null;
   /** Pestaña activa del editor de automatizaciones. */
   automationView: AutomationView;
+  /** Diálogo «Historial de versiones». */
+  versionsOpen: boolean;
 
   setActiveFloor: (id: Id | null) => void;
+  /** Selecciona un único elemento (o nada). */
   select: (selection: Selection | null) => void;
+  /** Sustituye la selección de dispositivos (o de otro tipo, si se indica). */
+  setSelection: (ids: Id[], kind?: SelectionKind) => void;
+  /** Añade o quita un dispositivo de la selección (Ctrl/Cmd+clic). */
+  toggleSelected: (id: Id) => void;
   setHighlighted: (ids: Id[]) => void;
   setCanvasMode: (mode: CanvasMode) => void;
   setBottomTab: (tab: BottomTab) => void;
@@ -112,17 +126,35 @@ export interface UiState {
   setSettingsOpen: (open: boolean, tab?: SettingsTab) => void;
   openTemplates: (opts: { deviceId?: Id } | null) => void;
   setAutomationView: (view: AutomationView) => void;
+  setVersionsOpen: (open: boolean) => void;
   /** Abre una automatización en el panel inferior (opcionalmente en una pestaña). */
   showAutomation: (id: Id, view?: AutomationView) => void;
   reset: () => void;
 }
 
 let noticeCounter = 0;
+
+function sameIds(a: Id[], b: Id[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/** El elemento seleccionado si hay exactamente uno; null si no hay ninguno o hay varios. */
+export function primarySelection(s: Pick<UiState, 'selection' | 'selectionKind'>): Selection | null {
+  const id = s.selection[0];
+  if (s.selection.length !== 1 || id === undefined || !s.selectionKind) return null;
+  return { kind: s.selectionKind, id } as Selection;
+}
+
+/** Dispositivos seleccionados (vacío si la selección es una sala o una conexión). */
+export function selectedDeviceIds(s: Pick<UiState, 'selection' | 'selectionKind'>): Id[] {
+  return s.selectionKind === 'device' ? s.selection : [];
+}
 let focusCounter = 0;
 
 const initial = {
   activeFloorId: null,
-  selection: null,
+  selection: [] as Id[],
+  selectionKind: null as SelectionKind | null,
   highlightedDeviceIds: [],
   canvasMode: 'select' as CanvasMode,
   bottomTab: 'validation' as BottomTab,
@@ -143,12 +175,31 @@ const initial = {
   settingsTab: 'project' as SettingsTab,
   templateGallery: null,
   automationView: 'visual' as AutomationView,
+  versionsOpen: false,
 };
 
 export const useUiStore = create<UiState>()((set) => ({
   ...initial,
-  setActiveFloor: (id) => set({ activeFloorId: id, selection: null, popoverDeviceId: null, contextMenu: null }),
-  select: (selection) => set({ selection }),
+  setActiveFloor: (id) => set({ activeFloorId: id, selection: [], selectionKind: null, popoverDeviceId: null, contextMenu: null }),
+  select: (selection) =>
+    set((s) => {
+      if (!selection) return s.selection.length === 0 && s.selectionKind === null ? s : { selection: [], selectionKind: null };
+      if (s.selectionKind === selection.kind && s.selection.length === 1 && s.selection[0] === selection.id) return s;
+      return { selection: [selection.id], selectionKind: selection.kind };
+    }),
+  setSelection: (ids, kind = 'device') =>
+    set((s) => {
+      const unique = [...new Set(ids)];
+      const nextKind = unique.length === 0 ? null : kind;
+      if (s.selectionKind === nextKind && sameIds(s.selection, unique)) return s;
+      return { selection: unique, selectionKind: nextKind };
+    }),
+  toggleSelected: (id) =>
+    set((s) => {
+      const devices = s.selectionKind === 'device' ? s.selection : [];
+      const next = devices.includes(id) ? devices.filter((x) => x !== id) : [...devices, id];
+      return { selection: next, selectionKind: next.length === 0 ? null : 'device' };
+    }),
   setHighlighted: (ids) =>
     set((s) =>
       s.highlightedDeviceIds.length === ids.length && s.highlightedDeviceIds.every((id, i) => id === ids[i])
@@ -184,6 +235,7 @@ export const useUiStore = create<UiState>()((set) => ({
   setSettingsOpen: (open, tab = 'project') => set(open ? { settingsOpen: true, settingsTab: tab } : { settingsOpen: false }),
   openTemplates: (opts) => set({ templateGallery: opts, contextMenu: null }),
   setAutomationView: (view) => set({ automationView: view }),
+  setVersionsOpen: (open) => set({ versionsOpen: open }),
   showAutomation: (id, view) =>
     set((s) => ({ selectedAutomationId: id, bottomTab: 'automations', bottomOpen: true, automationView: view ?? s.automationView })),
   reset: () => set({ ...initial }),

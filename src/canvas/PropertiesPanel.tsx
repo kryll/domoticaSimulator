@@ -2,7 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { Connection, Device, Protocol, Room } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
-import { useUiStore } from '../store/uiStore';
+import { primarySelection, useUiStore } from '../store/uiStore';
+import { useShallow } from 'zustand/react/shallow';
+import { MultiDeviceProperties } from './MultiDeviceProperties';
+import { deleteDevices } from './selectionActions';
 import {
   CATEGORY_LABELS,
   INTEGRATION_LABELS,
@@ -72,9 +75,7 @@ function Dl({ items }: { items: Array<[string, ReactNode]> }) {
 function DeviceProperties({ device }: { device: Device }) {
   const project = useProjectStore((s) => s.project);
   const updateDevice = useProjectStore((s) => s.updateDevice);
-  const removeDevices = useProjectStore((s) => s.removeDevices);
   const entities = useSimulationStore((s) => s.sim.entities);
-  const select = useUiStore((s) => s.select);
   const def = definitionOf(device);
   const iotClass = def ? effectiveIotClass(device, def) : undefined;
   const refs = entitiesOfDevice(device);
@@ -203,10 +204,7 @@ function DeviceProperties({ device }: { device: Device }) {
 
       <Button
         variant="danger"
-        onClick={() => {
-          removeDevices([device.id]);
-          select(null);
-        }}
+        onClick={() => void deleteDevices([device.id])}
       >
         Eliminar dispositivo
       </Button>
@@ -248,6 +246,9 @@ function RoomProperties({ room }: { room: Room }) {
         onClick={() => {
           removeRoom(room.id);
           select(null);
+          useUiStore.getState().notify(`Sala «${room.name}» eliminada`, 'success', {
+            action: { label: 'Deshacer', run: () => useProjectStore.getState().undo() },
+          });
         }}
       >
         Eliminar sala
@@ -281,6 +282,9 @@ function ConnectionProperties({ connection }: { connection: Connection }) {
         onClick={() => {
           removeConnections([connection.id]);
           select(null);
+          useUiStore.getState().notify('Conexión eliminada', 'success', {
+            action: { label: 'Deshacer', run: () => useProjectStore.getState().undo() },
+          });
         }}
       >
         Eliminar conexión
@@ -291,7 +295,8 @@ function ConnectionProperties({ connection }: { connection: Connection }) {
 
 /** Panel derecho contextual con las propiedades de la selección. */
 export function PropertiesPanel() {
-  const selection = useUiStore((s) => s.selection);
+  const { ids, kind } = useUiStore(useShallow((s) => ({ ids: s.selection, kind: s.selectionKind })));
+  const selection = primarySelection({ selection: ids, selectionKind: kind });
   const project = useProjectStore((s) => s.project);
 
   let title = 'Propiedades';
@@ -299,7 +304,16 @@ export function PropertiesPanel() {
     <EmptyState>Selecciona un dispositivo, una sala o una conexión en el lienzo.</EmptyState>
   );
 
-  if (selection?.kind === 'device') {
+  if (kind === 'device' && ids.length > 1) {
+    const devices = project.devices.filter((d) => ids.includes(d.id));
+    if (devices.length > 1) {
+      title = `${devices.length} dispositivos`;
+      body = <MultiDeviceProperties devices={devices} />;
+    } else if (devices[0]) {
+      title = 'Dispositivo';
+      body = <DeviceProperties key={devices[0].id} device={devices[0]} />;
+    }
+  } else if (selection?.kind === 'device') {
     const device = project.devices.find((d) => d.id === selection.id);
     if (device) {
       title = 'Dispositivo';

@@ -8,7 +8,8 @@ import { isCloudNotifyService } from './notify';
 import { unavailabilityReasons } from './availability';
 import { findScene, findScript } from './engine';
 import { findGroupByEntity } from './logic';
-import { actionConditions, conditionEntityIds, flattenActions, triggerEntityIds } from '../automations/walk';
+import { actionConditions, conditionEntityIds, flattenActions, serviceEntityIds, triggerEntityIds } from '../automations/walk';
+import { resolveServiceTargets } from '../devices/areas';
 
 export type FailureScenarioId = 'internet' | 'coordinator' | 'power' | 'ha_restart' | 'hub';
 
@@ -125,7 +126,7 @@ function expandGroup(project: Project, entityId: string): string[] {
  * con walk.ts las acciones anidadas de la Fase 3 (choose/if/repeat), sus condiciones y los
  * disparadores de wait_for_trigger.
  */
-function actionEntities(actions: Action[], project: Project, seen: Set<string> = new Set()): string[] {
+function actionEntities(actions: Action[], project: Project, defs?: DeviceDefinition[], seen: Set<string> = new Set()): string[] {
   const out: string[] = [];
   for (const a of flattenActions(actions)) {
     out.push(...actionConditions(a).flatMap(conditionEntityIds));
@@ -144,11 +145,12 @@ function actionEntities(actions: Action[], project: Project, seen: Set<string> =
       const script = findScript(project, scriptRef);
       if (script && !seen.has(`script:${script.id}`)) {
         seen.add(`script:${script.id}`);
-        out.push(...actionEntities(script.sequence, project, seen));
+        out.push(...actionEntities(script.sequence, project, defs, seen));
       }
-    } else if (a.type === 'service' && a.entityId !== '') {
-      // notify.* no tiene entidad; un grupo depende de sus miembros.
-      out.push(...expandGroup(project, a.entityId));
+    } else if (a.type === 'service') {
+      // notify.* no tiene entidad; un grupo depende de sus miembros. Tanda 1: también los
+      // destinos adicionales y las entidades de las áreas (salas) de destino.
+      for (const id of defs ? resolveServiceTargets(project, defs, a) : serviceEntityIds(a)) out.push(...expandGroup(project, id));
     }
   }
   return out;
@@ -232,7 +234,7 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
       const d = down.get(id);
       if (d) extra.push(describeDown('Condición', id, d));
     }
-    for (const id of unique(actionEntities(a.actions, project))) {
+    for (const id of unique(actionEntities(a.actions, project, defs))) {
       const d = down.get(id);
       if (d) extra.push(describeDown('Acción', id, d));
     }
@@ -250,7 +252,7 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
   });
 
   const scripts = project.scripts.map((s) => {
-    const ids = unique(actionEntities(s.sequence, project));
+    const ids = unique(actionEntities(s.sequence, project, defs));
     const fallen = ids.filter((id) => down.has(id));
     const reasonsList = fallen.map((id) => describeDown('Acción', id, down.get(id) ?? { name: id, reason: '' }));
     if (failures.haRestarting) return { scriptId: s.id, status: 'broken' as const, reasons: [HA_RESTART_REASON, ...reasonsList] };

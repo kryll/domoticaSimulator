@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ValidationPanel } from './ValidationPanel';
 import { useProjectStore } from '../store/projectStore';
-import { useUiStore } from '../store/uiStore';
+import { primarySelection, useUiStore } from '../store/uiStore';
 import { makeDevice, makeProject } from '../test/fixtures';
 import type { ValidationIssue } from '../types';
 
@@ -29,7 +29,7 @@ describe('ValidationPanel', () => {
     render(<ValidationPanel issues={issues} />);
     await userEvent.click(screen.getByRole('button', { name: /Falta coordinador Zigbee/ }));
     const ui = useUiStore.getState();
-    expect(ui.selection).toEqual({ kind: 'device', id: 'd1' });
+    expect(primarySelection(ui)).toEqual({ kind: 'device', id: 'd1' });
     expect(ui.focusRequest?.deviceIds).toEqual(['d1']);
     expect(ui.highlightedDeviceIds).toEqual(['d1']);
   });

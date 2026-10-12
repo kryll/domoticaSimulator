@@ -13,7 +13,7 @@ import type {
   Script,
 } from '../types';
 import { projectSettings } from '../simulation/energy';
-import { createEmptyProject, saveProject } from './persistence';
+import { createEmptyProject } from './persistence';
 import { reassignRooms, resolveRoomId, translatePolygon } from '../canvas/geometry';
 import { newId } from '../ui/ids';
 import { catalog, getDefinition } from '../devices/catalog';
@@ -27,6 +27,17 @@ const COALESCE_MS = 1500;
 
 type Patch<T> = Partial<Omit<T, 'id'>>;
 
+export type SaveStatus = 'saved' | 'saving' | 'error';
+
+export interface SaveConflict {
+  /** Por qué: el guardado encontró otra revisión, u otra pestaña avisó de que guardó. */
+  reason: 'conflict' | 'other-tab';
+  /** Revisión guardada por la otra pestaña. */
+  revision: number;
+  /** Versión guardada más reciente, si ya se conoce. */
+  current?: Project;
+}
+
 export interface ProjectState {
   project: Project;
   past: Project[];
@@ -34,6 +45,14 @@ export interface ProjectState {
   /** true cuando hay cambios aún no guardados en IndexedDB. */
   dirty: boolean;
   lastSavedAt: string | null;
+  /** Estado del guardado automático (indicador de la barra superior). */
+  saveStatus: SaveStatus;
+  /** Último error de guardado (con saveStatus 'error'). */
+  saveError: string | null;
+  /** Revisión guardada en IndexedDB sobre la que trabaja esta pestaña. */
+  baseRevision: number;
+  /** Conflicto con otra pestaña: se muestra el diálogo y se detiene el guardado automático. */
+  conflict: SaveConflict | null;
 
   /** Sustituye el proyecto completo (abrir, nuevo, importar). Limpia el historial. */
   loadProject: (project: Project) => void;
@@ -42,6 +61,9 @@ export interface ProjectState {
   undo: () => void;
   redo: () => void;
   markSaved: (at: string) => void;
+  setSaveState: (patch: Partial<Pick<ProjectState, 'saveStatus' | 'saveError' | 'baseRevision' | 'conflict' | 'dirty' | 'lastSavedAt'>>) => void;
+  /** Sustituye el proyecto guardando el actual en el historial (p. ej. restaurar una versión). */
+  replaceProject: (project: Project) => void;
 
   renameProject: (name: string) => void;
   /** Cambia los ajustes del proyecto (ubicación, precios...). Con deshacer. */
@@ -61,6 +83,8 @@ export interface ProjectState {
   addDevice: (device: Device) => void;
   updateDevice: (id: Id, patch: Patch<Device>) => void;
   moveDevice: (id: Id, position: Point) => void;
+  /** Mueve varios dispositivos en un único paso de deshacer (arrastre múltiple, alinear...). */
+  moveDevicesTo: (moves: Array<{ id: Id; position: Point }>) => void;
   removeDevices: (ids: Id[]) => void;
 
   /** Borra dispositivos, salas y conexiones en un único paso de deshacer. */
@@ -116,11 +140,25 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
     future: [],
     dirty: false,
     lastSavedAt: null,
+    saveStatus: 'saved',
+    saveError: null,
+    baseRevision: 0,
+    conflict: null,
 
     loadProject: (project) => {
       lastCoalesce = null;
-      set({ project, past: [], future: [], dirty: false });
+      set({
+        project,
+        past: [],
+        future: [],
+        dirty: false,
+        baseRevision: project.revision ?? 0,
+        conflict: null,
+        saveStatus: 'saved',
+        saveError: null,
+      });
     },
+    replaceProject: (project) => commit(() => project),
     update: (mutator) => commit(mutator),
     undo: () => {
       lastCoalesce = null;
@@ -137,6 +175,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
       set({ project: next, past: [...past, project].slice(-HISTORY_LIMIT), future: future.slice(1), dirty: true });
     },
     markSaved: (at) => set({ dirty: false, lastSavedAt: at }),
+    setSaveState: (patch) => set(patch),
 
     renameProject: (name) => commit((p) => (p.name === name ? p : { ...p, name })),
     updateSettings: (patch) =>
@@ -229,6 +268,18 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
         if (current.position.x === position.x && current.position.y === position.y) return p;
         const roomId = resolveRoomId(p.rooms, current.floorId, position, current.roomId);
         return { ...p, devices: p.devices.map((d) => (d.id === id ? { ...d, position, roomId } : d)) };
+      }),
+    moveDevicesTo: (moves) =>
+      commit((p) => {
+        const byId = new Map(moves.map((m) => [m.id, m.position]));
+        let changed = false;
+        const devices = p.devices.map((d) => {
+          const position = byId.get(d.id);
+          if (!position || (position.x === d.position.x && position.y === d.position.y)) return d;
+          changed = true;
+          return { ...d, position, roomId: resolveRoomId(p.rooms, d.floorId, position, d.roomId) };
+        });
+        return changed ? { ...p, devices } : p;
       }),
     removeDevices: (ids) =>
       commit((p) => {
@@ -337,28 +388,3 @@ export function getProject(): Project {
   return useProjectStore.getState().project;
 }
 
-/**
- * Guarda automáticamente el proyecto en IndexedDB tras `delayMs` sin cambios.
- * Devuelve una función para cancelar la suscripción.
- */
-export function startAutosave(delayMs = 800): () => void {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const flush = async () => {
-    const { project, markSaved } = useProjectStore.getState();
-    try {
-      await saveProject(project);
-      markSaved(new Date().toISOString());
-    } catch (err) {
-      console.error('No se pudo guardar el proyecto', err);
-    }
-  };
-  const unsubscribe = useProjectStore.subscribe((state, prev) => {
-    if (state.project === prev.project) return;
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => void flush(), delayMs);
-  });
-  return () => {
-    if (timer) clearTimeout(timer);
-    unsubscribe();
-  };
-}

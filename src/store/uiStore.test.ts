@@ -1,4 +1,4 @@
-import { useUiStore } from './uiStore';
+import { primarySelection, useUiStore } from './uiStore';
 
 describe('uiStore', () => {
   beforeEach(() => useUiStore.getState().reset());
@@ -10,7 +10,7 @@ describe('uiStore', () => {
     ui.setBottomOpen(false);
     ui.setBottomTab('logbook');
     const s = useUiStore.getState();
-    expect(s.selection).toEqual({ kind: 'device', id: 'd1' });
+    expect(primarySelection(s)).toEqual({ kind: 'device', id: 'd1' });
     expect(s.canvasMode).toBe('room');
     expect(s.bottomTab).toBe('logbook');
     expect(s.bottomOpen).toBe(true);
@@ -19,7 +19,7 @@ describe('uiStore', () => {
   it('cambiar de planta limpia la selección', () => {
     useUiStore.getState().select({ kind: 'room', id: 'r1' });
     useUiStore.getState().setActiveFloor('f2');
-    expect(useUiStore.getState().selection).toBeNull();
+    expect(useUiStore.getState().selection).toEqual([]);
     expect(useUiStore.getState().activeFloorId).toBe('f2');
   });
 

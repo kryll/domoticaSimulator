@@ -26,11 +26,12 @@ function useCandidates(domain: GroupDomain) {
 }
 
 function GroupForm({ initial, onDone }: { initial?: EntityGroup; onDone: () => void }) {
-  const selection = useUiStore((s) => s.selection);
+  const selectedIds = useUiStore((s) => s.selection);
+  const selectionKind = useUiStore((s) => s.selectionKind);
   const [domain, setDomain] = useState<GroupDomain>(initial?.domain ?? 'light');
   const [name, setName] = useState(initial?.name ?? '');
   const candidates = useCandidates(domain);
-  const selectedEntities = candidates.filter((c) => selection?.kind === 'device' && c.deviceId === selection.id).map((c) => c.entityId);
+  const selectedEntities = candidates.filter((c) => selectionKind === 'device' && selectedIds.includes(c.deviceId)).map((c) => c.entityId);
   const [members, setMembers] = useState<string[]>(() => initial?.entityIds ?? selectedEntities);
   const rooms = [...new Set(candidates.map((c) => c.room))].sort((a, b) => a.localeCompare(b, 'es'));
   const toggle = (id: string, on: boolean) => setMembers((m) => (on ? [...new Set([...m, id])] : m.filter((x) => x !== id)));

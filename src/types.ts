@@ -225,10 +225,10 @@ export interface Connection {
 
 export type Trigger =
   /** `for`: segundos que el nuevo estado debe mantenerse antes de disparar. */
-  | { type: 'state'; entityId: string; to?: EntityStateValue; from?: EntityStateValue; for?: number }
-  | { type: 'numeric_state'; entityId: string; above?: number; below?: number }
-  | { type: 'time'; at: string } // "HH:MM"
-  | { type: 'sun'; event: SunEvent; offsetMinutes?: number }
+  | { type: 'state'; entityId: string; to?: EntityStateValue; from?: EntityStateValue; for?: number; id?: string }
+  | { type: 'numeric_state'; entityId: string; above?: number; below?: number; id?: string }
+  | { type: 'time'; at: string; id?: string } // "HH:MM"
+  | { type: 'sun'; event: SunEvent; offsetMinutes?: number; id?: string }
   // Fase 3 (B9): una persona entra en una zona o sale de ella.
   | ZoneTrigger
   // Fase 3 (B9): evento de un mando (acción del sensor `*_action`: single, double, hold...).
@@ -257,10 +257,12 @@ export type Condition =
   // Fase 3 (B11): ninguna de las condiciones se cumple.
   | NotCondition
   // Fase 3 (B9): la persona está en la zona.
-  | ZoneCondition;
+  | ZoneCondition
+  // Tanda 1: el disparo vino de uno de estos disparadores (por su `id`).
+  | TriggerCondition;
 
 export type Action =
-  | { type: 'service'; service: string; entityId: string; data?: Record<string, EntityStateValue> }
+  | ServiceAction
   | { type: 'scene'; sceneId: Id }
   | { type: 'script'; scriptId: Id }
   | { type: 'delay'; seconds: number }
@@ -271,6 +273,32 @@ export type Action =
   | RepeatAction
   | NotifyAction
   | VariablesAction;
+
+/**
+ * Destinos adicionales de una llamada a servicio (`target:` de HA con varias entidades o áreas).
+ * `entityId` de la acción sigue siendo el destino principal; estos se suman a él.
+ */
+export interface ServiceTargets {
+  entityIds?: string[];
+  /** Ids de sala (Room.id): equivalen al `area_id` de HA. */
+  areaIds?: Id[];
+}
+
+export interface ServiceAction {
+  type: 'service';
+  service: string;
+  /** Destino principal ('' si no tiene, p. ej. notify.* o una acción solo con áreas). */
+  entityId: string;
+  data?: Record<string, EntityStateValue>;
+  /** Tanda 1: más entidades y áreas de destino. */
+  targets?: ServiceTargets;
+}
+
+/** Tanda 1: `condition: trigger`. Se cumple si el disparo vino de un disparador con uno de esos `id`. */
+export interface TriggerCondition {
+  type: 'trigger';
+  ids: string[];
+}
 
 export interface Automation {
   id: Id;
@@ -403,7 +431,8 @@ export interface EnergyState {
 
 // ---------- Trazas ----------
 
-export type TraceTrigger = { index: number; description: string } | { manual: true };
+/** `id`: id del disparador (el suyo o, como en HA, su posición si no tiene). */
+export type TraceTrigger = { index: number; description: string; id?: string } | { manual: true };
 
 export interface TraceCondition {
   index: number;
@@ -523,6 +552,7 @@ export interface ZoneTrigger {
   personId: Id;
   zoneId: Id;
   event: 'enter' | 'leave';
+  id?: string;
 }
 
 export interface DeviceActionTrigger {
@@ -531,6 +561,7 @@ export interface DeviceActionTrigger {
   entityId: string;
   /** Acción: 'single', 'double', 'hold'... */
   action: string;
+  id?: string;
 }
 
 export interface ZoneCondition {
@@ -778,6 +809,11 @@ export interface HistorySample {
 // ---- Ampliaciones de interfaces existentes (fusión de declaraciones) ----
 
 export interface Project {
+  /**
+   * Tanda 1: revisión del guardado (sube en cada guardado con saveProjectChecked). Sin valor
+   * equivale a 0 (proyectos anteriores).
+   */
+  revision?: number;
   /** B9 */
   people?: Person[];
   zones?: Zone[];

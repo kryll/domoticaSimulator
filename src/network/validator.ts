@@ -19,7 +19,8 @@ import { findScene, findScript } from '../simulation/engine';
 import { groupEntityId, peopleEntities, projectZones } from '../simulation/logic';
 import { zoneConflicts } from '../simulation/zones';
 import { missingRequiredFields } from '../simulation/serviceCatalog';
-import { actionConditions, flattenActions } from '../automations/walk';
+import { actionConditions, flattenActions, serviceAreaIds, serviceEntityIds } from '../automations/walk';
+import { areaEntityIds } from '../devices/areas';
 import { canConnect } from './connections';
 import { isInRange } from './coverage';
 import { analyzeMesh } from './mesh';
@@ -248,13 +249,25 @@ function serviceDomainRule(ctx: Ctx): ValidationIssue[] {
   ];
   for (const o of owners) {
     for (const a of flattenActions(o.actions)) {
-      if (a.type !== 'service' || a.entityId === '' || !a.service.includes('.')) continue;
+      if (a.type !== 'service' || !a.service.includes('.')) continue;
       const domain = a.service.slice(0, a.service.indexOf('.'));
-      const target = a.entityId.includes('.') ? a.entityId.slice(0, a.entityId.indexOf('.')) : '';
-      if (NEUTRAL_SERVICE_DOMAINS.has(domain) || target === '' || domain === target) continue;
-      result.push(
-        issue('error', 'servicio-dominio-incompatible', `${o.kind} «${o.name}» llama a ${a.service} sobre ${a.entityId}: el servicio debe ser del dominio ${target}`, [], `${o.id}:${a.entityId}:${a.service}`),
-      );
+      // Tanda 1: el destino principal y los adicionales (targets.entityIds).
+      for (const entityId of serviceEntityIds(a)) {
+        const target = entityId.includes('.') ? entityId.slice(0, entityId.indexOf('.')) : '';
+        if (NEUTRAL_SERVICE_DOMAINS.has(domain) || target === '' || domain === target) continue;
+        result.push(
+          issue('error', 'servicio-dominio-incompatible', `${o.kind} «${o.name}» llama a ${a.service} sobre ${entityId}: el servicio debe ser del dominio ${target}`, [], `${o.id}:${entityId}:${a.service}`),
+        );
+      }
+      // Tanda 1: áreas (salas) de destino que no existen o sin entidades del dominio.
+      for (const roomId of serviceAreaIds(a)) {
+        const room = ctx.project.rooms.find((r) => r.id === roomId);
+        if (!room) {
+          result.push(issue('error', 'area-desconocida', `${o.kind} «${o.name}» llama a ${a.service} sobre un área que no existe (${roomId})`, [], `${o.id}:area:${roomId}`));
+        } else if (areaEntityIds(ctx.project, ctx.defs, roomId, domain).length === 0) {
+          result.push(issue('warning', 'area-sin-entidades', `${o.kind} «${o.name}» llama a ${a.service} sobre el área «${room.name}», que no tiene entidades de ese tipo`, [], `${o.id}:area:${roomId}:${a.service}`));
+        }
+      }
     }
   }
   return result;

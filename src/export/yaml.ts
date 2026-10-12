@@ -1,6 +1,8 @@
 // Serializador YAML propio (sin dependencias) y exportación al formato de Home Assistant
 // (sintaxis actual: triggers:/- trigger:, conditions:/- condition:, actions:/- action:).
-import type { Action, Automation, Condition, EntityStateValue, Project, Scene, Script, Trigger } from '../types';
+import type { Action, Automation, Condition, EntityStateValue, Project, Room, Scene, Script, ServiceAction, Trigger } from '../types';
+import { areaId } from '../devices/areas';
+import { serviceAreaIds, serviceEntityIds } from '../automations/walk';
 import { slugify } from '../devices/entities';
 import { sceneEntityState } from '../simulation/scenes';
 import { scriptEntityId, scriptKeys } from '../simulation/scriptKeys';
@@ -100,6 +102,8 @@ export function toYaml(value: YamlValue): string {
 export interface YamlContext extends PeopleContext {
   scenes?: Scene[];
   scripts?: Script[];
+  /** Salas, para escribir y leer `area_id` (slug del nombre de la sala). */
+  rooms?: Room[];
 }
 
 function sceneEntity(id: string, ctx: YamlContext): string {
@@ -154,6 +158,14 @@ function dataToYaml(data: Record<string, EntityStateValue>): YamlMap {
 }
 
 export function triggerToYaml(t: Trigger, ctx: YamlContext = {}): YamlMap {
+  const m = triggerBodyToYaml(t, ctx);
+  if (t.id === undefined || t.id === '') return m;
+  // `id` justo después de `trigger:`, como lo escribe el editor de HA.
+  const [first, ...rest] = Object.entries(m);
+  return Object.fromEntries([...(first ? [first] : []), ['id', t.id], ...rest.filter(([k]) => k !== 'id')]) as YamlMap;
+}
+
+function triggerBodyToYaml(t: Trigger, ctx: YamlContext): YamlMap {
   switch (t.type) {
     case 'state': {
       const m: YamlMap = { trigger: 'state', entity_id: t.entityId };
@@ -214,14 +226,33 @@ export function conditionToYaml(c: Condition, ctx: YamlContext = {}): YamlMap {
     case 'not':
     case 'zone':
       return fase3ConditionToYaml(c, ctx);
+    case 'trigger':
+      return { condition: 'trigger', id: c.ids.length === 1 ? (c.ids[0] ?? '') : [...c.ids] };
   }
+}
+
+/** Una lista de un elemento se escribe como valor suelto (como hace HA). */
+const oneOrList = (xs: string[]): YamlValue => (xs.length === 1 ? (xs[0] ?? '') : [...xs]);
+
+/** `target:` de una llamada a servicio: entity_id (uno o varios) y area_id (slug de la sala). */
+function serviceTargetToYaml(a: ServiceAction, ctx: YamlContext): YamlMap | undefined {
+  const target: YamlMap = {};
+  const entities = serviceEntityIds(a);
+  if (entities.length > 0) target.entity_id = oneOrList(entities);
+  const areas = serviceAreaIds(a).map((id) => {
+    const room = ctx.rooms?.find((r) => r.id === id);
+    return room ? areaId(room) : id;
+  });
+  if (areas.length > 0) target.area_id = oneOrList(areas);
+  return Object.keys(target).length > 0 ? target : undefined;
 }
 
 export function actionToYaml(a: Action, ctx: YamlContext = {}): YamlMap {
   switch (a.type) {
     case 'service': {
       // notify.* no tiene entidad de destino.
-      const m: YamlMap = a.service.startsWith('notify.') && a.entityId === '' ? { action: a.service } : { action: a.service, target: { entity_id: a.entityId } };
+      const target = serviceTargetToYaml(a, ctx);
+      const m: YamlMap = target ? { action: a.service, target } : a.service.startsWith('notify.') ? { action: a.service } : { action: a.service, target: { entity_id: a.entityId } };
       if (a.data && Object.keys(a.data).length > 0) m.data = dataToYaml(a.data);
       return m;
     }

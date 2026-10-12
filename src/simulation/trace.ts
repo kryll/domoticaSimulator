@@ -8,6 +8,7 @@ import type {
   EntityStateValue,
   Id,
   Project,
+  ServiceAction,
   SimulationState,
   SunEvent,
   TraceAction,
@@ -21,6 +22,7 @@ import { friendlyName, inNumericRange, normalizeState, sameState, toNumber } fro
 import { describeServiceData } from './services';
 import { serviceName } from './serviceCatalog';
 import { isNotifyService, notificationContent } from './notify';
+import { serviceAreaIds, serviceEntityIds } from '../automations/walk';
 
 /** Trazas que se conservan por automatización (las más recientes). */
 export const MAX_TRACES_PER_AUTOMATION = 50;
@@ -215,7 +217,7 @@ function since(sim: SimulationState, entityId: string): number | undefined {
  * Evalúa una condición y explica el resultado: descripción («Hora entre 20:00 y 07:30»),
  * resultado y detalle («son las 15:12»).
  */
-export function explainCondition(c: Condition, sim: SimulationState, where: SunSource): ConditionExplanation {
+export function explainCondition(c: Condition, sim: SimulationState, where: SunSource, vars?: Record<string, EntityStateValue>): ConditionExplanation {
   switch (c.type) {
     case 'state': {
       const current = sim.entities[c.entityId];
@@ -257,7 +259,7 @@ export function explainCondition(c: Condition, sim: SimulationState, where: SunS
     }
     case 'and':
     case 'or': {
-      const parts = c.conditions.map((x) => explainCondition(x, sim, where));
+      const parts = c.conditions.map((x) => explainCondition(x, sim, where, vars));
       const ok = parts.filter((p) => p.result).length;
       const result = c.type === 'and' ? parts.every((p) => p.result) : parts.some((p) => p.result);
       const joined = parts.map((p) => p.description).join(c.type === 'and' ? ' y ' : ' o ');
@@ -267,7 +269,7 @@ export function explainCondition(c: Condition, sim: SimulationState, where: SunS
     }
     case 'not': {
       // Fase 3: se cumple si no se cumple ninguna.
-      const parts = c.conditions.map((x) => explainCondition(x, sim, where));
+      const parts = c.conditions.map((x) => explainCondition(x, sim, where, vars));
       const ok = parts.filter((p) => p.result).length;
       const description = `Ninguna: ${parts.map((p) => p.description).join(' o ') || '(ninguna)'}`;
       const children: TraceCondition[] = parts.map((p, index) => ({ index, ...p }));
@@ -281,6 +283,13 @@ export function explainCondition(c: Condition, sim: SimulationState, where: SunS
       if (!current) return { result: false, description, detail: 'la persona no existe' };
       const at = String(current.attributes?.zone_id ?? '');
       return { result, description, detail: at === '' ? 'está fuera' : `está en ${zoneName(sim, at)}` };
+    }
+    case 'trigger': {
+      // Tanda 1: `condition: trigger`, con el id del disparo en las variables (trigger.id).
+      const description = `Disparado por ${c.ids.length === 1 ? 'el disparador' : 'uno de los disparadores'} ${c.ids.map((x) => `«${x}»`).join(', ') || '(ninguno)'}`;
+      const fired = vars?.['trigger.id'];
+      if (fired === undefined) return { result: false, description, detail: 'sin disparo (ejecución manual)' };
+      return { result: c.ids.includes(String(fired)), description, detail: `disparó «${String(fired)}»` };
     }
   }
 }
@@ -299,8 +308,17 @@ export function formatTraceCondition(c: Pick<TraceCondition, 'description' | 're
 
 // ---------- Acciones ----------
 
+/** « Luz salón», « Luz salón, Luz cocina y área Salón»: destinos de una llamada a servicio. */
+function describeTargets(a: ServiceAction, sim: SimulationState, project: Partial<Pick<Project, 'rooms'>>): string {
+  const names = serviceEntityIds(a).map((id) => friendlyName(sim, id));
+  for (const roomId of serviceAreaIds(a)) names.push(`área ${project.rooms?.find((r) => r.id === roomId)?.name ?? roomId}`);
+  if (names.length === 0) return a.entityId === '' ? '' : ` ${friendlyName(sim, a.entityId)}`;
+  const last = names.pop() ?? '';
+  return ` ${names.length > 0 ? `${names.join(', ')} y ${last}` : last}`;
+}
+
 /** «Encender Luz salón (brillo 47 %)», «Esperar 2 min», «Activar escena Cine»... */
-export function describeAction(a: Action, sim: SimulationState, project: Pick<Project, 'scenes' | 'scripts'>): string {
+export function describeAction(a: Action, sim: SimulationState, project: Pick<Project, 'scenes' | 'scripts'> & Partial<Pick<Project, 'rooms'>>): string {
   switch (a.type) {
     case 'service': {
       if (isNotifyService(a.service)) {
@@ -308,7 +326,7 @@ export function describeAction(a: Action, sim: SimulationState, project: Pick<Pr
         return n ? `Notificar: ${n.title ? `${n.title} — ` : ''}${n.message}` : 'Notificar (sin mensaje)';
       }
       const data = describeServiceData(a.data);
-      const target = a.service.startsWith('script.') && a.service !== 'script.turn_on' ? '' : ` ${friendlyName(sim, a.entityId)}`;
+      const target = a.service.startsWith('script.') && a.service !== 'script.turn_on' ? '' : describeTargets(a, sim, project);
       return `${serviceName(a.service)}${target}${data ? ` (${data})` : ''}`;
     }
     case 'scene': {
@@ -349,7 +367,7 @@ export function describeAction(a: Action, sim: SimulationState, project: Pick<Pr
 /** Crea una traza nueva con las acciones de la automatización en estado 'skipped'. */
 export function newTrace(
   sim: SimulationState,
-  project: Pick<Project, 'scenes' | 'scripts'>,
+  project: Pick<Project, 'scenes' | 'scripts'> & Partial<Pick<Project, 'rooms'>>,
   a: Automation,
   trigger: TraceTrigger,
   conditions: TraceCondition[],

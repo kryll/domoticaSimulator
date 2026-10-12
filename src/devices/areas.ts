@@ -1,7 +1,7 @@
 // Áreas de Home Assistant (salas del proyecto): a qué sala pertenece cada entidad.
-import type { Automation, DeviceDefinition, EntityGroup, Id, Project, Room, Scene, Script } from '../types';
+import type { Automation, DeviceDefinition, EntityGroup, Id, Project, Room, Scene, Script, ServiceAction } from '../types';
 import { entitiesForDevice, slugify } from './entities';
-import { actionEntityIds, conditionEntityIds, triggerEntityIds } from '../automations/walk';
+import { actionEntityIds, conditionEntityIds, serviceAreaIds, serviceEntityIds, triggerEntityIds } from '../automations/walk';
 import { groupEntityId } from '../simulation/logic';
 
 /** Id del área de HA de una sala (slug del nombre). */
@@ -62,4 +62,48 @@ export function scriptRoom(s: Script, map: Record<string, Id>, rooms: Room[]): I
 
 export function groupRoom(g: EntityGroup, map: Record<string, Id>, rooms: Room[]): Id | undefined {
   return majorityRoom(g.entityIds, map, rooms);
+}
+
+/** Dominios que se controlan con servicios homeassistant.* sobre un área. */
+const CONTROLLABLE_DOMAINS = new Set(['light', 'switch', 'fan', 'cover', 'climate', 'media_player', 'lock', 'vacuum']);
+
+/**
+ * entity_id de los dispositivos de una sala (área de HA) del dominio indicado. Con el dominio
+ * 'homeassistant' (o sin dominio) devuelve las entidades controlables (luces, enchufes, persianas...).
+ */
+export function areaEntityIds(project: Pick<Project, 'devices'>, defs: DeviceDefinition[], roomId: Id, domain?: string): string[] {
+  const ids: string[] = [];
+  const any = domain === undefined || domain === '' || domain === 'homeassistant';
+  for (const device of project.devices) {
+    if (device.roomId !== roomId) continue;
+    const def = defs.find((d) => d.id === device.definitionId);
+    if (!def) continue;
+    for (const e of entitiesForDevice(device, def)) {
+      if (any ? CONTROLLABLE_DOMAINS.has(e.definition.domain) : e.definition.domain === domain) ids.push(e.entityId);
+    }
+  }
+  return ids;
+}
+
+/** Dominio de un servicio ("light.turn_on" → "light"). */
+function serviceDomain(service: string): string {
+  return service.includes('.') ? service.slice(0, service.indexOf('.')) : '';
+}
+
+/**
+ * Todas las entidades de destino de una llamada a servicio: el entity_id principal, los de
+ * `targets.entityIds` y las del dominio del servicio en cada sala de `targets.areaIds`, sin repetir.
+ */
+export function resolveServiceTargets(project: Pick<Project, 'devices'>, defs: DeviceDefinition[], a: ServiceAction): string[] {
+  const ids = serviceEntityIds(a);
+  const domain = serviceDomain(a.service);
+  for (const roomId of serviceAreaIds(a)) {
+    for (const id of areaEntityIds(project, defs, roomId, domain)) if (!ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+/** Sala cuyo id o área (slug del nombre) coincide con `ref`. */
+export function findRoomByArea(rooms: Room[], ref: string): Room | undefined {
+  return rooms.find((r) => r.id === ref) ?? rooms.find((r) => areaId(r) === ref);
 }

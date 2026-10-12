@@ -23,11 +23,13 @@ import type {
   RecordedEvent,
   WaitForTriggerAction,
   PendingStep,
+  ServiceAction,
 } from '../types';
 import { catalog } from '../devices/catalog';
 import { entitiesForDevice, entityDomain, initialEntityStates, slugify } from '../devices/entities';
 import { entityCapabilities, findEntityOwner } from '../devices/capabilities';
-import { mapActionEntities, mapTriggerEntities } from '../automations/walk';
+import { mapActionEntities, mapTriggerEntities, triggerIdOf } from '../automations/walk';
+import { resolveServiceTargets } from '../devices/areas';
 import {
   aggregateGroupState,
   fase3TriggerMatches,
@@ -331,8 +333,8 @@ export function sunSourceOf(project?: Pick<Project, 'settings'>): SunLocation {
  * Evalúa una condición (incluidas not y zone de la Fase 3). Las condiciones de sol usan la
  * ubicación del proyecto (o Madrid).
  */
-export function evaluateCondition(c: Condition, sim: SimulationState, project?: Pick<Project, 'settings'>): boolean {
-  return explainCondition(c, sim, sunSourceOf(project)).result;
+export function evaluateCondition(c: Condition, sim: SimulationState, project?: Pick<Project, 'settings'>, vars?: Variables): boolean {
+  return explainCondition(c, sim, sunSourceOf(project), vars).result;
 }
 
 /** Amanecer y atardecer del día simulado actual en la ubicación del proyecto. */
@@ -466,7 +468,7 @@ function runAutomationInternal(
   const where = sunSourceOf(project);
   const conditions: TraceCondition[] = opts.skipConditions
     ? []
-    : a.conditions.map((c, index) => ({ index, ...explainCondition(c, sim, where) }));
+    : a.conditions.map((c, index) => ({ index, ...explainCondition(c, sim, where, opts.variables) }));
   if (conditions.some((c) => !c.result)) {
     const logged = addLog(sim, 'info', `Automatización «${a.name}»: condiciones no cumplidas`, extra);
     return addTrace(logged, traced('conditions_failed', conditions));
@@ -516,19 +518,26 @@ function fireStateTriggers(
     }
     const t = immediate === undefined ? undefined : a.triggers[immediate];
     if (immediate !== undefined && t) {
-      const trigger: TraceTrigger = { index: immediate, description: describeTrigger(t, result) };
+      const trigger = traceTrigger(t, immediate, result);
       // Personas y zonas por su nombre («cambio de Ana»), no por su entity_id ni su id.
       const who = entityDomain(entityId) === 'person' || entityDomain(entityId) === 'zone' ? friendly(result, entityId) : entityId;
-      const variables = triggerVariables(t, entityId, prev, next);
+      const variables = triggerVariables(t, entityId, prev, next, immediate);
       result = runAutomationInternal(result, project, a, exec, `cambio de ${who}`, trigger, { variables });
     }
   }
   return result;
 }
 
+/** Paso «disparador» de la traza, con el id del disparador si lo tiene. */
+function traceTrigger(t: Trigger, index: number, sim: SimulationState): { index: number; description: string; id?: string } {
+  const description = describeTrigger(t, sim);
+  return t.id === undefined || t.id === '' ? { index, description } : { index, description, id: t.id };
+}
+
 /** Variables trigger.* de un disparo por cambio de estado (para las plantillas {{ }}). */
-function triggerVariables(t: Trigger, entityId: string, prev: EntityStateValue | undefined, next: EntityStateValue | undefined): Variables {
+function triggerVariables(t: Trigger, entityId: string, prev: EntityStateValue | undefined, next: EntityStateValue | undefined, index?: number): Variables {
   const vars: Variables = { 'trigger.platform': t.type === 'device_action' ? 'device' : t.type, 'trigger.entity_id': entityId };
+  if (index !== undefined) vars['trigger.id'] = triggerIdOf(t, index);
   if (prev !== undefined) vars['trigger.from_state.state'] = normalize(prev);
   if (next !== undefined) vars['trigger.to_state.state'] = normalize(next);
   return vars;
@@ -632,7 +641,7 @@ function resumeWaits(
     const hits = p.wait.triggers.map((t, i) => ({ t, i })).filter(({ t }) => stateTriggerMatches(t, entityId, prev, next, project));
     const now = hits.find(({ t }) => !(t.type === 'state' && t.for !== undefined && t.for > 0));
     if (now) {
-      const vars = triggerVariables(now.t, entityId, prev, next);
+      const vars = triggerVariables(now.t, entityId, prev, next, now.i);
       result = completeWait(result, project, p, `${friendly(result, entityId)} → ${normalize(next)}`, { depth: exec.depth + 1, chain: exec.chain }, vars);
       continue;
     }
@@ -982,8 +991,9 @@ export function testTrigger(sim: SimulationState, project: Project, automationId
   if (!a) return addLog(sim, 'warning', `Automatización desconocida: ${automationId}`);
   const t = a.triggers[triggerIndex];
   if (!t) return addLog(sim, 'warning', `La automatización «${a.name}» no tiene el disparador ${triggerIndex + 1}`, { automationId });
-  const description = describeTrigger(t, sim);
-  return runAutomationInternal(sim, project, a, ROOT, `prueba del disparador: ${description}`, { index: triggerIndex, description }, { manual: true });
+  const trigger = traceTrigger(t, triggerIndex, sim);
+  const variables: Variables = { 'trigger.platform': t.type === 'device_action' ? 'device' : t.type, 'trigger.id': triggerIdOf(t, triggerIndex) };
+  return runAutomationInternal(sim, project, a, ROOT, `prueba del disparador: ${trigger.description}`, trigger, { manual: true, variables });
 }
 
 function schedule(sim: SimulationState, rest: Step[], seconds: number, ctx: RunCtx): SimulationState {
@@ -1050,8 +1060,8 @@ function setPendingSteps(pending: PendingAction, rest: Step[]): void {
   if (steps.some((s) => s.scope !== undefined || s.block !== 0 || s.repeatIndex !== undefined)) pending.steps = steps;
 }
 
-function allConditions(conds: Condition[], sim: SimulationState, project: Project): boolean {
-  return conds.every((c) => evaluateCondition(c, sim, project));
+function allConditions(conds: Condition[], sim: SimulationState, project: Project, vars?: Variables): boolean {
+  return conds.every((c) => evaluateCondition(c, sim, project, vars));
 }
 
 /** Paso de la ejecución: la acción y el paso de primer nivel de la traza al que pertenece. */
@@ -1137,7 +1147,7 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
       case 'delay':
         return schedule(markWaiting(result, step), rest, Math.max(0, action.seconds), waitCtx(c, step, rest));
       case 'service':
-        result = traceStep(callServiceCore(result, project, action.entityId, action.service, renderData(action.data, vars, result), c, exec), step);
+        result = traceStep(callServiceAction(result, project, action, renderData(action.data, vars, result), c, exec), step);
         break;
       case 'scene':
         result = traceStep(activateSceneInternal(result, project, action.sceneId, exec), step);
@@ -1146,7 +1156,7 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
         result = traceStep(runScriptInternal(result, project, action.scriptId, c, exec), step);
         break;
       case 'choose': {
-        const index = action.choices.findIndex((o) => allConditions(o.conditions, result, project));
+        const index = action.choices.findIndex((o) => allConditions(o.conditions, result, project, vars));
         const chosen = index === -1 ? action.default ?? [] : (action.choices[index]?.sequence ?? []);
         const detail = index === -1 ? (action.default ? 'ninguna opción se cumple: opción por defecto' : 'ninguna opción se cumple') : `se cumple la opción ${index + 1}`;
         result = traceStep(outcome(addLog(result, 'info', `choose: ${detail}`, extra), true, detail), step);
@@ -1154,7 +1164,7 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
         break;
       }
       case 'if': {
-        const ok = allConditions(action.conditions, result, project);
+        const ok = allConditions(action.conditions, result, project, vars);
         const detail = ok ? 'condiciones cumplidas (then)' : 'condiciones no cumplidas (else)';
         result = traceStep(outcome(addLog(result, 'info', `if: ${detail}`, extra), true, detail), step);
         queue = [...children(ok ? action.then : action.else ?? [], step), ...rest];
@@ -1165,8 +1175,8 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
         const count = action.count === undefined ? undefined : Math.floor(action.count);
         let run: boolean;
         if (count !== undefined) run = index <= count;
-        else if (action.while !== undefined) run = allConditions(action.while, result, project);
-        else if (action.until !== undefined) run = index === 1 || !allConditions(action.until, result, project);
+        else if (action.while !== undefined) run = allConditions(action.while, result, project, vars);
+        else if (action.until !== undefined) run = index === 1 || !allConditions(action.until, result, project, vars);
         else run = false;
         if (index === 1 && !step.nested) result = traceStep(outcome(result, true, run ? undefined : 'ninguna vuelta'), step);
         if (!run) break;
@@ -1204,6 +1214,32 @@ function withoutTrace(ctx: RunCtx): RunCtx {
   const rest: RunCtx = { ...ctx };
   delete rest.trace;
   return rest;
+}
+
+/**
+ * Acción de servicio con uno o varios destinos (Tanda 1): el entity_id principal, los de
+ * targets.entityIds y las entidades del dominio del servicio en cada sala de targets.areaIds.
+ * Se aplica a cada entidad; el paso va bien si va bien en todas.
+ */
+function callServiceAction(sim: SimulationState, project: Project, action: ServiceAction, data: ServiceData | undefined, ctx: RunCtx, exec: Exec): Outcome {
+  const hasTargets = (action.targets?.entityIds?.length ?? 0) > 0 || (action.targets?.areaIds?.length ?? 0) > 0;
+  if (!hasTargets) return callServiceCore(sim, project, action.entityId, action.service, data, ctx, exec);
+  const ids = resolveServiceTargets(project, catalog, action);
+  if (ids.length === 0) {
+    const extra = ctx.automationId === undefined ? {} : { automationId: ctx.automationId };
+    return outcome(addLog(sim, 'warning', `Servicio ${action.service}: ninguna entidad en los destinos`, extra), false, 'ninguna entidad en los destinos');
+  }
+  let result = sim;
+  const failed: string[] = [];
+  const notes: string[] = [];
+  for (const id of ids) {
+    const r = callServiceCore(result, project, id, action.service, data, ctx, exec);
+    result = r.sim;
+    if (!r.ok) failed.push(r.detail ?? id);
+    else if (r.detail !== undefined) notes.push(r.detail);
+  }
+  if (failed.length > 0) return outcome(result, false, `${failed.length} de ${ids.length} destinos fallaron: ${failed.join('; ')}`);
+  return outcome(result, true, notes.length > 0 ? notes.join('; ') : `${ids.length} destinos`);
 }
 
 /** Ejecuta una lista de acciones. Un delay deja el resto como PendingAction. */
@@ -1289,8 +1325,8 @@ function runTimer(sim: SimulationState, project: Project, timer: SimTimer): Simu
       if (t.to !== undefined && !sameState(current.state, t.to)) return sim;
       if (current.lastChanged !== undefined && sim.now - current.lastChanged < t.for * SECOND_MS) return sim;
       const reason = `${timer.entityId} lleva ${formatDuration(t.for)} en ${normalize(current.state)}`;
-      const variables = triggerVariables(t, timer.entityId, undefined, current.state);
-      return runAutomationInternal(sim, project, a, ROOT, reason, { index: timer.triggerIndex, description: describeTrigger(t, sim) }, { variables });
+      const variables = triggerVariables(t, timer.entityId, undefined, current.state, timer.triggerIndex);
+      return runAutomationInternal(sim, project, a, ROOT, reason, traceTrigger(t, timer.triggerIndex, sim), { variables });
     }
     case 'service_call': {
       const ctx: RunCtx = timer.automationId === undefined ? {} : { automationId: timer.automationId };
@@ -1303,7 +1339,7 @@ function runTimer(sim: SimulationState, project: Project, timer: SimTimer): Simu
       if (!p || !current || t?.type !== 'state' || t.entityId !== timer.entityId || !t.for) return sim;
       if (t.to !== undefined && !sameState(current.state, t.to)) return sim;
       if (current.lastChanged !== undefined && sim.now - current.lastChanged < t.for * SECOND_MS) return sim;
-      const vars = triggerVariables(t, timer.entityId, undefined, current.state);
+      const vars = triggerVariables(t, timer.entityId, undefined, current.state, timer.triggerIndex);
       return completeWait(sim, project, p, `${friendly(sim, timer.entityId)} lleva ${formatDuration(t.for)} en ${normalize(current.state)}`, ROOT, vars);
     }
   }
@@ -1489,8 +1525,8 @@ export function tick(sim: SimulationState, project: Project, deltaMs: number, op
       idx++;
       const t = event.automation.triggers[event.triggerIndex];
       const ready = advanceEnergy(result, project, defs, event.at);
-      const trigger: TraceTrigger = { index: event.triggerIndex, description: t ? describeTrigger(t, ready) : event.reason };
-      const variables: Variables = { 'trigger.platform': t?.type ?? 'time' };
+      const trigger: TraceTrigger = t ? traceTrigger(t, event.triggerIndex, ready) : { index: event.triggerIndex, description: event.reason };
+      const variables: Variables = { 'trigger.platform': t?.type ?? 'time', 'trigger.id': t ? triggerIdOf(t, event.triggerIndex) : String(event.triggerIndex) };
       result = runAutomationInternal({ ...ready, now: event.at }, project, event.automation, ROOT, event.reason, trigger, { variables });
     }
   }

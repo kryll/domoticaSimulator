@@ -1,6 +1,6 @@
 // Recorridos genéricos de triggers, condiciones y acciones (incluidas las anidadas de la Fase 3:
 // choose, if, repeat, wait_for_trigger, not). Funciones puras.
-import type { Action, Condition, Trigger } from '../types';
+import type { Action, Condition, Id, ServiceAction, Trigger } from '../types';
 
 export type EntityMapper = (entityId: string) => string;
 
@@ -29,6 +29,7 @@ export function mapConditionEntities(c: Condition, map: EntityMapper): Condition
     case 'time':
     case 'sun':
     case 'zone':
+    case 'trigger':
       return c;
   }
 }
@@ -86,8 +87,9 @@ export function mapActionEntities(a: Action, map: EntityMapper): Action {
   switch (a.type) {
     case 'service': {
       const entityId = map(a.entityId);
-      const next: Action = { ...a, entityId, service: remapServiceDomain(a.service, a.entityId, entityId) };
+      const next: ServiceAction = { ...a, entityId, service: remapServiceDomain(a.service, a.entityId, entityId) };
       if (a.data) next.data = mapDataTemplates(a.data, map);
+      if (a.targets?.entityIds) next.targets = { ...a.targets, entityIds: a.targets.entityIds.map(map) };
       return next;
     }
     case 'choose': {
@@ -140,6 +142,7 @@ export function conditionEntityIds(c: Condition): string[] {
     case 'time':
     case 'sun':
     case 'zone':
+    case 'trigger':
       return [];
   }
 }
@@ -181,9 +184,30 @@ export function flattenActions(actions: Action[]): Action[] {
 export function actionEntityIds(actions: Action[]): string[] {
   const ids: string[] = [];
   for (const a of flattenActions(actions)) {
-    if (a.type === 'service') ids.push(a.entityId);
+    if (a.type === 'service') ids.push(...serviceEntityIds(a));
     if (a.type === 'wait_for_trigger') ids.push(...a.triggers.flatMap(triggerEntityIds));
     ids.push(...actionConditions(a).flatMap(conditionEntityIds));
   }
   return ids;
+}
+
+/**
+ * entity_id de destino explícitos de una llamada a servicio: el principal (si lo hay) y los de
+ * `targets.entityIds`, sin repetir. Las áreas se resuelven aparte (serviceAreaIds y
+ * areaEntityIds de devices/areas.ts) porque dependen de los dispositivos.
+ */
+export function serviceEntityIds(a: ServiceAction): string[] {
+  const ids = a.entityId === '' ? [] : [a.entityId];
+  for (const id of a.targets?.entityIds ?? []) if (id !== '' && !ids.includes(id)) ids.push(id);
+  return ids;
+}
+
+/** Ids de sala (área) de destino de una llamada a servicio. */
+export function serviceAreaIds(a: ServiceAction): Id[] {
+  return [...new Set(a.targets?.areaIds ?? [])];
+}
+
+/** ids de los disparadores de una automatización: el suyo o, como en HA, su posición ("0", "1"...). */
+export function triggerIdOf(t: Trigger, index: number): string {
+  return t.id ?? String(index);
 }

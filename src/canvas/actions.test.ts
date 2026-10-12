@@ -1,6 +1,6 @@
 import { connectDevices, createAutomationForDevice, duplicateDevice, orientConnection } from './actions';
 import { useProjectStore } from '../store/projectStore';
-import { useUiStore } from '../store/uiStore';
+import { primarySelection, useUiStore } from '../store/uiStore';
 import { makeDevice, makeProject } from '../test/fixtures';
 
 describe('canvas/actions', () => {
@@ -65,6 +65,6 @@ describe('canvas/actions · dispositivo', () => {
     const original = devices.find((d) => d.id === 'rele');
     expect(copy).toMatchObject({ name: 'Luz cocina 2', definitionId: original?.definitionId, protocol: original?.protocol, integration: original?.integration });
     expect(copy?.id).not.toBe('rele');
-    expect(useUiStore.getState().selection).toEqual({ kind: 'device', id: copy?.id });
+    expect(primarySelection(useUiStore.getState())).toEqual({ kind: 'device', id: copy?.id });
   });
 });

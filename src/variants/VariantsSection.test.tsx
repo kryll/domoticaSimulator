@@ -1,13 +1,16 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VariantsSection } from './VariantsSection';
 import { useProjectStore } from '../store/projectStore';
 import { makeDevice, makeProject } from '../test/fixtures';
+import { autoConfirm } from '../test/confirm';
 
 describe('VariantsSection', () => {
+  let stop: () => void = () => undefined;
+  afterEach(() => stop());
   beforeEach(() => {
+    stop = autoConfirm(true);
     useProjectStore.getState().loadProject(makeProject({ devices: [makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz')] }));
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   it('guarda, cambia y compara variantes', async () => {
@@ -25,7 +28,7 @@ describe('VariantsSection', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Cambiar a variante Con una luz' }));
-    expect(useProjectStore.getState().project.devices.map((d) => d.id)).toEqual(['d1']);
+    await waitFor(() => expect(useProjectStore.getState().project.devices.map((d) => d.id)).toEqual(['d1']));
     // deshacer recupera el estado anterior
     useProjectStore.getState().undo();
     expect(useProjectStore.getState().project.devices).toHaveLength(2);

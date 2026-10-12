@@ -5,6 +5,7 @@ import { setFloorWalls } from './wallActions';
 import { useExtrasStore } from '../../store/extrasStore';
 import { Button } from '../../ui/Button';
 import { WALL_MATERIAL_LABELS, constrainOrthogonal, makeWall, snapPoint, wallLengthMeters } from './wallGeometry';
+import { confirmDialog } from '../../ui/confirm';
 
 const EMPTY: Wall[] = [];
 
@@ -111,8 +112,14 @@ export function WallDrawOverlay({ floor }: { floor: Floor }) {
           size="sm"
           variant="danger"
           disabled={walls.length === 0}
-          onClick={() => {
-            if (window.confirm(`¿Borrar las ${walls.length} paredes de «${floor.name}»?`)) setFloorWalls(floor.id, []);
+          onClick={async () => {
+            const ok = await confirmDialog({
+              title: `¿Borrar las ${walls.length} paredes de «${floor.name}»?`,
+              message: 'Puedes recuperarlas con Deshacer.',
+              confirmLabel: 'Borrar paredes',
+              danger: true,
+            });
+            if (ok) setFloorWalls(floor.id, []);
           }}
         >
           Borrar todas

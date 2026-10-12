@@ -33,6 +33,7 @@ export const CONDITION_LABELS: Record<Condition['type'], string> = {
   or: 'Alguna (O)',
   not: 'Ninguna (NO)',
   zone: 'Persona en zona',
+  trigger: 'Disparado por',
 };
 
 export const conditionFactories: Array<{ label: string; create: () => Condition }> = [
@@ -42,6 +43,7 @@ export const conditionFactories: Array<{ label: string; create: () => Condition 
   { label: CONDITION_LABELS.sun, create: () => ({ type: 'sun', after: 'sunset', before: 'sunrise' }) },
   { label: CONDITION_LABELS.and, create: () => ({ type: 'and', conditions: [] }) },
   { label: CONDITION_LABELS.or, create: () => ({ type: 'or', conditions: [] }) },
+  { label: CONDITION_LABELS.trigger, create: () => ({ type: 'trigger', ids: [] }) },
   ...advancedConditionFactories,
 ];
 

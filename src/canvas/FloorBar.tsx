@@ -9,6 +9,7 @@ import { TextField } from '../ui/Field';
 import { readFileAsDataUrl } from '../ui/download';
 import { cx } from '../ui/cx';
 import type { Floor } from '../types';
+import { confirmDialog } from '../ui/confirm';
 
 function FloorDialog({ floorId, onClose }: { floorId: string; onClose: () => void }) {
   const floor = useProjectStore((s) => s.project.floors.find((f) => f.id === floorId));
@@ -43,8 +44,14 @@ function FloorDialogBody({ floor, onClose }: { floor: Floor; onClose: () => void
           <Button
             variant="danger"
             disabled={floorCount <= 1}
-            onClick={() => {
-              if (window.confirm(`¿Eliminar la planta "${floor.name}" con sus salas y dispositivos?`)) {
+            onClick={async () => {
+              const ok = await confirmDialog({
+                title: `¿Eliminar la planta «${floor.name}»?`,
+                message: 'Se eliminarán también sus salas y dispositivos. Puedes recuperarla con Deshacer.',
+                confirmLabel: 'Eliminar planta',
+                danger: true,
+              });
+              if (ok) {
                 removeFloor(floor.id);
                 useUiStore.getState().setActiveFloor(null);
                 onClose();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   Background,
   ConnectionMode,
@@ -12,7 +12,6 @@ import {
   type NodeChange,
   type NodeTypes,
   type EdgeTypes,
-  type OnDelete,
   type NodeMouseHandler,
   type OnNodeDrag,
   type EdgeMouseHandler,
@@ -21,7 +20,7 @@ import type { Device, DeviceDefinition, IssueSeverity, Project, SimulationState 
 import { devicePowerWatts, loadWatts } from '../simulation/energy';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
-import { useUiStore, type CanvasMode, type Selection } from '../store/uiStore';
+import { useUiStore, type CanvasMode, type SelectionKind } from '../store/uiStore';
 import { deviceIcon } from '../devices/presentation';
 import { devicePresentation } from './viewCache';
 import { mergeNodes } from './mergeNodes';
@@ -55,8 +54,13 @@ const edgeTypes: EdgeTypes = { protocol: ProtocolEdgeView };
 
 const severityRank: Record<IssueSeverity, number> = { error: 3, warning: 2, info: 1 };
 
-function isSelected(selection: Selection | null, kind: Selection['kind'], id: string): boolean {
-  return selection?.kind === kind && selection.id === id;
+interface SelectionView {
+  ids: ReadonlySet<string>;
+  kind: SelectionKind | null;
+}
+
+function isSelected(selection: SelectionView, kind: SelectionKind, id: string): boolean {
+  return selection.kind === kind && selection.ids.has(id);
 }
 
 /** entity_id -> id de su última entrada en el registro. */
@@ -86,7 +90,7 @@ function powerBadges(device: Device, def: DeviceDefinition, sim: SimulationState
 }
 
 interface BuildOptions {
-  selection: Selection | null;
+  selection: SelectionView;
   highlighted: string[];
   mode: CanvasMode;
   popoverDeviceId: string | null;
@@ -230,7 +234,9 @@ function cancelPendingClick() {
 export function Canvas() {
   const project = useProjectStore((s) => s.project);
   const activeFloorId = useUiStore((s) => s.activeFloorId);
-  const selection = useUiStore((s) => s.selection);
+  const selectedIds = useUiStore((s) => s.selection);
+  const selectionKind = useUiStore((s) => s.selectionKind);
+  const selection = useMemo<SelectionView>(() => ({ ids: new Set(selectedIds), kind: selectionKind }), [selectedIds, selectionKind]);
   const highlighted = useUiStore((s) => s.highlightedDeviceIds);
   const mode = useUiStore((s) => s.canvasMode);
   const showCoverage = useUiStore((s) => s.showCoverage);
@@ -261,6 +267,10 @@ export function Canvas() {
   );
   const [nodes, setNodes] = useState<AppNode[]>(derived);
   useEffect(() => setNodes((prev) => mergeNodes(prev, derived)), [derived]);
+  // Último estado local de los nodos (para leer la selección al terminar el cuadro de selección).
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  const boxSelecting = useRef(false);
 
   const edges = useMemo<ProtocolEdge[]>(() => {
     const onFloor = new Set(project.devices.filter((d) => d.floorId === floorId).map((d) => d.id));
@@ -283,8 +293,23 @@ export function Canvas() {
   }, [project]);
 
   const onNodesChange = useCallback((changes: NodeChange<AppNode>[]) => {
-    const relevant = changes.filter((c) => c.type === 'position' || c.type === 'dimensions');
+    // La selección la gobierna uiStore; solo el cuadro de selección (Mayús+arrastrar) la cambia aquí,
+    // en local, y se confirma al soltar (onSelectionEnd) para no recalcular el lienzo en cada movimiento.
+    const relevant = changes.filter(
+      (c) => c.type === 'position' || c.type === 'dimensions' || (boxSelecting.current && c.type === 'select'),
+    );
     if (relevant.length > 0) setNodes((nds) => applyNodeChanges(relevant, nds));
+  }, []);
+  const onSelectionStart = useCallback(() => {
+    boxSelecting.current = true;
+  }, []);
+  const onSelectionEnd = useCallback(() => {
+    boxSelecting.current = false;
+    // El estado local ya refleja los últimos cambios cuando React procesa este evento.
+    setTimeout(() => {
+      const ids = nodesRef.current.filter((n) => n.type === 'device' && n.selected).map((n) => n.id);
+      useUiStore.getState().setSelection(ids);
+    }, 0);
   }, []);
 
   const select = useUiStore((s) => s.select);
@@ -316,6 +341,10 @@ export function Canvas() {
         }
         if (e.altKey && ui.canvasMode === 'select') {
           useSimulationStore.getState().quickAction(node.id);
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && !usar) {
+          ui.toggleSelected(node.id);
           return;
         }
         select({ kind: 'device', id: node.id });
@@ -352,11 +381,17 @@ export function Canvas() {
   );
 
   const onNodeDragStop: OnNodeDrag<AppNode> = useCallback(
-    (_e, node) => {
+    (_e, node, dragged) => {
       const store = useProjectStore.getState();
       if (node.type === 'device') {
-        store.moveDevice(node.id, { x: Math.round(node.position.x), y: Math.round(node.position.y) });
-        select({ kind: 'device', id: node.id });
+        // Arrastre de varios: todos se mueven en un único paso de deshacer.
+        const moved = dragged.filter((n) => n.type === 'device');
+        store.moveDevicesTo(
+          (moved.length > 0 ? moved : [node]).map((n) => ({ id: n.id, position: { x: Math.round(n.position.x), y: Math.round(n.position.y) } })),
+        );
+        const ui = useUiStore.getState();
+        if (moved.length > 1) ui.setSelection(moved.map((n) => n.id));
+        else select({ kind: 'device', id: node.id });
       } else if (node.type === 'room') {
         const room = store.project.rooms.find((r) => r.id === node.id);
         if (!room) return;
@@ -370,20 +405,16 @@ export function Canvas() {
     [select],
   );
 
-  const onDelete: OnDelete<AppNode, ProtocolEdge> = useCallback(
-    ({ nodes: deletedNodes, edges: deletedEdges }) => {
-      useProjectStore.getState().removeElements({
-        deviceIds: deletedNodes.filter((n) => n.type === 'device').map((n) => n.id),
-        roomIds: deletedNodes.filter((n) => n.type === 'room').map((n) => n.id),
-        connectionIds: deletedEdges.map((e) => e.id),
-      });
-      select(null);
-    },
-    [select],
-  );
-
   const onConnect = useCallback((c: FlowConnection) => {
     connectDevices(c.source, c.target);
+  }, []);
+
+  const onSelectionDragStop = useCallback((_e: unknown, dragged: AppNode[]) => {
+    const moved = dragged.filter((n) => n.type === 'device');
+    if (moved.length === 0) return;
+    useProjectStore
+      .getState()
+      .moveDevicesTo(moved.map((n) => ({ id: n.id, position: { x: Math.round(n.position.x), y: Math.round(n.position.y) } })));
   }, []);
 
   const onDragOver = useCallback((e: DragEvent) => {
@@ -439,13 +470,17 @@ export function Canvas() {
         nodeDragThreshold={4}
         zoomOnDoubleClick={false}
         onNodeDragStop={onNodeDragStop}
-        onDelete={onDelete}
+        onSelectionDragStop={onSelectionDragStop}
         onConnect={onConnect}
         connectionMode={ConnectionMode.Loose}
         connectionRadius={40}
-        deleteKeyCode={interact ? null : ['Delete', 'Backspace']}
+        deleteKeyCode={null}
         panOnDrag={mode !== 'room' && mode !== 'wall'}
         selectionOnDrag={false}
+        selectionKeyCode={interact ? null : 'Shift'}
+        multiSelectionKeyCode={null}
+        onSelectionStart={onSelectionStart}
+        onSelectionEnd={onSelectionEnd}
         fitView
         fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={0.1}

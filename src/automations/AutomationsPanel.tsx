@@ -9,8 +9,10 @@ import { Badge } from '../ui/Badge';
 import { EmptyState } from '../ui/Panel';
 import { cx } from '../ui/cx';
 import { AutomationEditor } from './AutomationEditor';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { ImportAutomationsDialog } from './ImportAutomationsDialog';
 import { lastTraceByAutomation, TRACE_RESULT } from '../ui/traceLabels';
+import { confirmDialog } from '../ui/confirm';
 
 function LastRun({ trace }: { trace: AutomationTrace | undefined }) {
   if (!trace) return null;
@@ -43,11 +45,13 @@ export function AutomationsPanel() {
   const lastTraces = useMemo(() => lastTraceByAutomation(traces), [traces]);
   const openTemplates = useUiStore((s) => s.openTemplates);
   const notify = useUiStore((s) => s.notify);
+  const [importOpen, setImportOpen] = useState(false);
   const waits = selected ? pending.filter((p) => !isTimer(p) && p.automationId === selected.id) : [];
   const nextDue = waits.reduce<number | undefined>((min, p) => (min === undefined || p.dueAt < min ? p.dueAt : min), undefined);
 
   return (
     <div className="flex h-full min-h-0">
+      {importOpen && <ImportAutomationsDialog onClose={() => setImportOpen(false)} />}
       <div className="flex w-60 shrink-0 flex-col border-r border-slate-200">
         <div className="p-2">
           <Button
@@ -60,6 +64,9 @@ export function AutomationsPanel() {
           </Button>
           <Button size="sm" className="mt-1 w-full" onClick={() => openTemplates({})}>
             ✨ Desde plantilla
+          </Button>
+          <Button size="sm" className="mt-1 w-full" onClick={() => setImportOpen(true)}>
+            Importar YAML…
           </Button>
         </div>
         <ul className="min-h-0 flex-1 overflow-auto" aria-label="Automatizaciones">
@@ -121,11 +128,14 @@ export function AutomationsPanel() {
               <Button
                 size="sm"
                 variant="danger"
-                onClick={() => {
-                  if (window.confirm(`¿Eliminar la automatización "${selected.name}"?`)) {
-                    removeAutomation(selected.id);
-                    selectAutomation(null);
-                  }
+                onClick={async () => {
+                  const ok = await confirmDialog({ title: `¿Eliminar la automatización «${selected.name}»?`, confirmLabel: 'Eliminar', danger: true });
+                  if (!ok) return;
+                  removeAutomation(selected.id);
+                  selectAutomation(null);
+                  notify(`Automatización «${selected.name}» eliminada`, 'success', {
+                    action: { label: 'Deshacer', run: () => useProjectStore.getState().undo() },
+                  });
                 }}
               >
                 Eliminar

@@ -3,6 +3,7 @@ import { useUiStore } from '../store/uiStore';
 import { SimClock } from './SimClock';
 import { userWaits } from './engine';
 import { Button } from '../ui/Button';
+import { confirmDialog } from '../ui/confirm';
 
 /** Controles de la simulación: reproducir/pausar, reiniciar, velocidad y reloj. */
 export function SimulationControls() {
@@ -47,8 +48,14 @@ export function SimulationControls() {
       <Button
         size="sm"
         variant="ghost"
-        onClick={() => {
-          if (window.confirm('¿Reiniciar la simulación? Se perderán los estados y el registro.')) reset();
+        onClick={async () => {
+          const ok = await confirmDialog({
+            title: '¿Reiniciar la simulación?',
+            message: 'Se perderán los estados y el registro.',
+            confirmLabel: 'Reiniciar',
+            danger: true,
+          });
+          if (ok) reset();
         }}
         aria-label="Reiniciar simulación"
         title="Reiniciar"

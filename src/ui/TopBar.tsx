@@ -11,11 +11,13 @@ import { ProjectsDialog } from './ProjectsDialog';
 import { downloadText, readFileAsText, safeFilename } from './download';
 import { useExtrasStore } from '../store/extrasStore';
 import { TopBarExtras } from './TopBarExtras';
+import { SaveIndicator } from './SaveIndicator';
 import { useMediaQuery } from './useMediaQuery';
 import { useSimulationStore } from '../store/simulationStore';
 import { hasFailures } from './failures';
 // Estático: yaml.ts ya va en el bundle principal (lo usa el motor a través de yamlLogic.ts).
 import { automationsToYaml, scenesToYaml, scriptsToYaml } from '../export/yaml';
+import { confirmDialog } from './confirm';
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -44,16 +46,6 @@ function ProjectName() {
       }}
       className="w-48 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-slate-800 hover:border-slate-300 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-200"
     />
-  );
-}
-
-function SaveStatus() {
-  const dirty = useProjectStore((s) => s.dirty);
-  const lastSavedAt = useProjectStore((s) => s.lastSavedAt);
-  return (
-    <span className="hidden text-[11px] text-slate-400 xl:inline" aria-live="polite">
-      {dirty ? 'Guardando…' : lastSavedAt ? 'Guardado' : ''}
-    </span>
   );
 }
 
@@ -129,15 +121,20 @@ export function TopBar() {
   const fileItems = (
     <>
       <MenuItem
-        onClick={() => {
-          if (window.confirm('¿Crear un proyecto nuevo? El actual queda guardado en el navegador.'))
-            openProject(createEmptyProject('Nuevo proyecto'));
+        onClick={async () => {
+          const ok = await confirmDialog({
+            title: '¿Crear un proyecto nuevo?',
+            message: 'El actual queda guardado en el navegador.',
+            confirmLabel: 'Crear proyecto',
+          });
+          if (ok) openProject(createEmptyProject('Nuevo proyecto'));
         }}
       >
         Nuevo proyecto
       </MenuItem>
       <MenuItem onClick={() => useExtrasStore.getState().openDialog('houseTemplates')}>Nuevo desde plantilla de casa…</MenuItem>
       <MenuItem onClick={() => setOpenDialog(true)}>Abrir…</MenuItem>
+      <MenuItem onClick={() => useUiStore.getState().setVersionsOpen(true)}>Historial de versiones…</MenuItem>
       <MenuItem onClick={() => safely(() => openAsNewProject(createDemoProject()).then(() => undefined))}>Cargar proyecto de demo</MenuItem>
       <MenuItem onClick={() => fileRef.current?.click()}>Importar JSON…</MenuItem>
       <MenuItem onClick={() => useExtrasStore.getState().openDialog('share')}>Compartir enlace…</MenuItem>
@@ -183,7 +180,7 @@ export function TopBar() {
         <span aria-hidden="true">🏠</span>HA Simulator
       </h1>
       <ProjectName />
-      <SaveStatus />
+      <SaveIndicator />
 
       <nav className="flex items-center gap-1" aria-label="Menús del proyecto">
         {wide ? (

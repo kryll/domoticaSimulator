@@ -14,7 +14,7 @@ export interface ProjectSummary {
 let store: UseStore | undefined;
 
 /** Almacén propio (base "ha-simulator", tabla "projects"), creado bajo demanda. */
-function projectsStore(): UseStore {
+export function projectsStore(): UseStore {
   store ??= createStore('ha-simulator', 'projects');
   return store;
 }

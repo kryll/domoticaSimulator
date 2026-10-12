@@ -8,11 +8,14 @@ import { CenterArea } from './ui/CenterArea';
 import { FloorBar } from './canvas/FloorBar';
 import { FailureBanner } from './simulation/FailureBanner';
 import { PropertiesPanel } from './canvas/PropertiesPanel';
-import { startAutosave, useProjectStore } from './store/projectStore';
+import { useProjectStore } from './store/projectStore';
+import { startAutosave } from './store/autosave';
 import { startInteractAutoplay, startSimulationSync, stopSimulationLoop } from './store/simulationStore';
 import { useUiStore } from './store/uiStore';
 import { loadInitialProject } from './store/bootstrap';
 import { ExtraDialogs } from './ui/ExtraDialogs';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { SaveConflictDialog, SaveErrorBanner } from './ui/SaveIndicator';
 
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -43,6 +46,7 @@ const AddToSceneDialog = lazy(() => import('./scenes/AddToSceneDialog').then((m)
 const ProjectSettingsDialog = lazy(() =>
   import('./settings/ProjectSettingsDialog').then((m) => ({ default: m.ProjectSettingsDialog })),
 );
+const VersionsDialog = lazy(() => import('./ui/VersionsDialog').then((m) => ({ default: m.VersionsDialog })));
 const TemplateGallery = lazy(() => import('./automations/TemplateGallery').then((m) => ({ default: m.TemplateGallery })));
 
 function LazyDialogs() {
@@ -50,12 +54,14 @@ function LazyDialogs() {
   const addToScene = useUiStore((s) => s.addToScene !== null);
   const settings = useUiStore((s) => s.settingsOpen);
   const templates = useUiStore((s) => s.templateGallery !== null);
+  const versions = useUiStore((s) => s.versionsOpen);
   return (
     <Suspense fallback={null}>
       {help && <ShortcutsHelp />}
       {addToScene && <AddToSceneDialog />}
       {settings && <ProjectSettingsDialog />}
       {templates && <TemplateGallery />}
+      {versions && <VersionsDialog />}
     </Suspense>
   );
 }
@@ -95,6 +101,7 @@ export function App({ autoLoad = true }: AppProps) {
     <ReactFlowProvider>
       <div className="flex h-full flex-col bg-slate-100 text-slate-800">
         <TopBar />
+        <SaveErrorBanner />
         <div className="flex min-h-0 flex-1">
           <div className="hidden w-72 shrink-0 border-r border-slate-200 md:block">
             <CatalogPanel />
@@ -112,6 +119,8 @@ export function App({ autoLoad = true }: AppProps) {
         <Toast />
         <LazyDialogs />
         <ExtraDialogs />
+        <ConfirmDialog />
+        <SaveConflictDialog />
       </div>
     </ReactFlowProvider>
   );

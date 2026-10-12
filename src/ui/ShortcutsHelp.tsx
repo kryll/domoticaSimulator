@@ -25,6 +25,19 @@ const GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
     ],
   },
   {
+    title: 'Selección múltiple (Edición)',
+    items: [
+      ['Ctrl/Cmd+clic', 'Añadir o quitar un dispositivo de la selección'],
+      ['Mayús+arrastrar', 'Cuadro de selección'],
+      ['Ctrl+A', 'Seleccionar todos los dispositivos de la planta'],
+      ['Arrastrar', 'Mueve juntos todos los seleccionados'],
+      ['Ctrl+C / Ctrl+V', 'Copiar y pegar (desplazado; también en otra planta)'],
+      ['Ctrl+D', 'Duplicar la selección'],
+      ['Supr', 'Eliminar la selección (con Deshacer)'],
+      ['Esc', 'Vaciar la selección'],
+    ],
+  },
+  {
     title: 'Barra del lienzo y vistas',
     items: [
       ['Capas ▾', 'Cobertura, Clima y Señal (las leyendas se pliegan)'],
@@ -48,7 +61,6 @@ const GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
       ['↑ / ↓', '±10 % o ±0,5 °C'],
       ['1 … 9', '10 % … 90 % (solo dispositivos con nivel)'],
       ['0', 'Apagar'],
-      ['Supr', 'Eliminar (solo en Edición)'],
       ['Ctrl+Z / Ctrl+Y', 'Deshacer / rehacer'],
     ],
   },

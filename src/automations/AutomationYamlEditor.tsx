@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Automation } from '../types';
 import { automationToYaml, type YamlContext } from '../export/yaml';
 import { useProjectStore } from '../store/projectStore';
-import { parseAutomationYaml } from './yaml-parse';
+import { parseAutomationYamlDetailed } from './yaml-parse';
+import { YamlWarningList } from './YamlWarningList';
 import { Button } from '../ui/Button';
 import { TextAreaField } from '../ui/Field';
 
@@ -16,9 +17,9 @@ function safeYaml(a: Automation, ctx: YamlContext): string {
 
 /** Edición en YAML sincronizada con el editor visual. */
 export function AutomationYamlEditor({ automation, onChange }: { automation: Automation; onChange: (a: Automation) => void }) {
-  const scenes = useProjectStore((s) => s.project.scenes);
-  const scripts = useProjectStore((s) => s.project.scripts);
-  const generated = safeYaml(automation, { scenes, scripts });
+  // El proyecto hace de contexto: escenas, scripts, salas (area_id), personas y zonas.
+  const project = useProjectStore((s) => s.project);
+  const generated = safeYaml(automation, project);
   const [text, setText] = useState(generated);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,9 +28,19 @@ export function AutomationYamlEditor({ automation, onChange }: { automation: Aut
     if (!dirty) setText(generated);
   }, [generated, dirty]);
 
+  // Avisos en vivo: lo que el simulador ignorará al aplicar (se puede aplicar igualmente).
+  const warnings = useMemo(() => {
+    if (!dirty) return [];
+    try {
+      return parseAutomationYamlDetailed(text, project).warnings;
+    } catch {
+      return [];
+    }
+  }, [dirty, text, project]);
+
   const apply = () => {
     try {
-      const parsed = parseAutomationYaml(text, { scenes, scripts });
+      const parsed = parseAutomationYamlDetailed(text, project).automation;
       onChange({ ...parsed, id: automation.id });
       setDirty(false);
       setError(null);
@@ -56,9 +67,10 @@ export function AutomationYamlEditor({ automation, onChange }: { automation: Aut
           Error en el YAML: {error}
         </p>
       )}
+      <YamlWarningList warnings={warnings} />
       <div className="flex gap-2">
         <Button variant="primary" size="sm" onClick={apply} disabled={!dirty}>
-          Aplicar YAML
+          {warnings.length > 0 ? 'Aplicar igualmente' : 'Aplicar YAML'}
         </Button>
         <Button
           size="sm"

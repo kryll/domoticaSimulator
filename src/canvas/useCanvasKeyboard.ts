@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import type { Id } from '../types';
 import { useSimulationStore } from '../store/simulationStore';
-import { useUiStore, type CanvasMode } from '../store/uiStore';
+import { primarySelection, selectedDeviceIds, useUiStore, type CanvasMode } from '../store/uiStore';
+import { copyPayloadText, copySelection, deleteSelection, duplicateSelection, pasteText, selectAllOnFloor } from './selectionActions';
 
 /** Dispositivo bajo el puntero (lo actualiza el lienzo). */
 let hoveredDeviceId: Id | null = null;
@@ -42,17 +43,83 @@ function targetDevice(): Id | null {
   const focused = focusedDevice();
   if (focused) return focused;
   if (hoveredDeviceId) return hoveredDeviceId;
-  const sel = useUiStore.getState().selection;
+  const sel = primarySelection(useUiStore.getState());
   return sel?.kind === 'device' ? sel.id : null;
+}
+
+/** ¿Hay texto seleccionado en la página? (entonces Ctrl+C copia ese texto). */
+function hasTextSelection(): boolean {
+  const sel = typeof window.getSelection === 'function' ? window.getSelection() : null;
+  return Boolean(sel && !sel.isCollapsed && sel.toString().trim() !== '');
+}
+
+function modalOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]') !== null;
+}
+
+/** ¿El evento de portapapeles es para el lienzo (no para un campo de texto ni un diálogo)? */
+function canvasClipboardTarget(e: Event): boolean {
+  return !isTypingTarget(e.target) && !isTypingTarget(document.activeElement) && !modalOpen() && !inMenuOrDialog(e.target);
+}
+
+/** Atajos con Ctrl/Cmd (selección múltiple). Ctrl+C y Ctrl+V llegan como eventos copy/paste. */
+function onModifierKey(e: KeyboardEvent, clip: { copied: boolean; pasted: boolean }): void {
+  if (e.altKey || inMenuOrDialog(e.target)) return;
+  const ui = useUiStore.getState();
+  if (ui.canvasMode === 'interact') return;
+  const lower = e.key.toLowerCase();
+  if (lower === 'a' && !e.shiftKey) {
+    selectAllOnFloor();
+    e.preventDefault();
+  } else if (lower === 'd' && !e.shiftKey) {
+    if (selectedDeviceIds(ui).length === 0) return;
+    duplicateSelection();
+    e.preventDefault();
+  } else if (lower === 'c' && !e.shiftKey) {
+    if (selectedDeviceIds(ui).length === 0 || hasTextSelection()) return;
+    // Si el navegador no lanza el evento copy, se copia con la API del portapapeles (o en memoria).
+    clip.copied = false;
+    setTimeout(() => {
+      if (!clip.copied) void copySelection();
+    }, 0);
+  } else if (lower === 'v' && !e.shiftKey) {
+    clip.pasted = false;
+    setTimeout(() => {
+      if (!clip.pasted) pasteText(null);
+    }, 0);
+  }
 }
 
 /** Atajos del lienzo. Se ignoran con el foco en campos de texto o con un diálogo modal abierto. */
 export function useCanvasKeyboard(): void {
   useEffect(() => {
+    const clip = { copied: true, pasted: true };
+    const onCopy = (e: ClipboardEvent) => {
+      if (!canvasClipboardTarget(e) || hasTextSelection()) return;
+      const ui = useUiStore.getState();
+      const ids = selectedDeviceIds(ui);
+      const text = copyPayloadText(ids);
+      if (!text) return;
+      clip.copied = true;
+      e.clipboardData?.setData('text/plain', text);
+      e.preventDefault();
+      ui.notify(ids.length === 1 ? '1 dispositivo copiado' : `${ids.length} dispositivos copiados`, 'info');
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (!canvasClipboardTarget(e) || useUiStore.getState().canvasMode === 'interact') return;
+      clip.pasted = true;
+      const ids = pasteText(e.clipboardData?.getData('text/plain') ?? null);
+      if (ids.length > 0) e.preventDefault();
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+      if (e.defaultPrevented) return;
       if (isTypingTarget(e.target)) return;
-      if (document.querySelector('[aria-modal="true"]')) return;
+      if (modalOpen()) return;
+      if (e.ctrlKey || e.metaKey) {
+        onModifierKey(e, clip);
+        return;
+      }
+      if (e.altKey) return;
       const ui = useUiStore.getState();
       const sim = useSimulationStore.getState();
       const key = e.key;
@@ -63,6 +130,7 @@ export function useCanvasKeyboard(): void {
         else if (ui.popoverDeviceId) ui.openPopover(null);
         else if (ui.connectFromId) ui.setConnectFrom(null);
         else if (ui.canvasMode === 'room' || ui.canvasMode === 'connect' || ui.canvasMode === 'wall') ui.setCanvasMode('select');
+        else if (ui.selection.length > 0) ui.select(null);
         return;
       }
       if (inMenuOrDialog(e.target)) return;
@@ -72,6 +140,13 @@ export function useCanvasKeyboard(): void {
         return;
       }
       if (isInteractive(e.target) && (key === ' ' || key === 'Enter' || key.startsWith('Arrow'))) return;
+      if ((key === 'Delete' || key === 'Backspace') && ui.canvasMode !== 'interact') {
+        if (ui.selection.length === 0) return;
+        void deleteSelection();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
 
       if (!e.shiftKey && MODE_KEYS[lower]) {
         ui.setCanvasMode(MODE_KEYS[lower] ?? 'select');
@@ -110,6 +185,12 @@ export function useCanvasKeyboard(): void {
     };
     // Fase de captura: se adelanta al movimiento de nodos con flechas de React Flow.
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    document.addEventListener('copy', onCopy);
+    document.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('copy', onCopy);
+      document.removeEventListener('paste', onPaste);
+    };
   }, []);
 }

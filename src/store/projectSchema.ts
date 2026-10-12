@@ -28,6 +28,8 @@ import type {
   RepeatAction,
   TimelineEventStep,
   TimelineAssertStep,
+  ServiceAction,
+  ServiceTargets,
 } from '../types';
 import { INTEGRATIONS, PROTOCOLS } from '../devices/labels';
 
@@ -132,6 +134,16 @@ function room(v: unknown, path: string): Room {
   };
 }
 
+/** Valida un dispositivo suelto (portapapeles). Lanza Error en español. */
+export function parseDevice(v: unknown, path = 'dispositivo'): Device {
+  return device(v, path);
+}
+
+/** Valida una conexión suelta (portapapeles). Lanza Error en español. */
+export function parseConnection(v: unknown, path = 'conexión'): Connection {
+  return connection(v, path);
+}
+
 function device(v: unknown, path: string): Device {
   const o = obj(v, path);
   const d: Device = {
@@ -165,6 +177,13 @@ function connection(v: unknown, path: string): Connection {
 
 function trigger(v: unknown, path: string): Trigger {
   const o = obj(v, path);
+  const t = triggerBody(o, path);
+  const id = optStr(o, 'id', path);
+  if (id !== undefined) t.id = id;
+  return t;
+}
+
+function triggerBody(o: Obj, path: string): Trigger {
   const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'zone', 'device_action'] as const, path);
   if (type === 'time') return { type, at: str(o, 'at', path) };
   if (type === 'zone') {
@@ -197,7 +216,7 @@ function trigger(v: unknown, path: string): Trigger {
 
 function condition(v: unknown, path: string): Condition {
   const o = obj(v, path);
-  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'and', 'or', 'not', 'zone'] as const, path);
+  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'and', 'or', 'not', 'zone', 'trigger'] as const, path);
   switch (type) {
     case 'state': {
       const c: Condition = { type, entityId: str(o, 'entityId', path), state: stateValue(o.state, `${path}.state`) };
@@ -238,7 +257,16 @@ function condition(v: unknown, path: string): Condition {
       return { type, conditions: conditions(o.conditions, `${path}.conditions`) };
     case 'zone':
       return { type, personId: str(o, 'personId', path), zoneId: str(o, 'zoneId', path) };
+    case 'trigger':
+      return { type, ids: strList(o.ids, `${path}.ids`) };
   }
+}
+
+function strList(v: unknown, path: string): string[] {
+  return arr(v, path).map((x, i) => {
+    if (typeof x !== 'string') fail(`${path}[${i}]`, 'debe ser un texto');
+    return x;
+  });
 }
 
 function conditions(v: unknown, path: string): Condition[] {
@@ -255,8 +283,15 @@ function action(v: unknown, path: string): Action {
   );
   switch (type) {
     case 'service': {
-      const a: Action = { type, service: str(o, 'service', path), entityId: str(o, 'entityId', path) };
+      const a: ServiceAction = { type, service: str(o, 'service', path), entityId: str(o, 'entityId', path) };
       if (o.data !== undefined) a.data = stateRecord(o.data, `${path}.data`);
+      if (o.targets !== undefined) {
+        const to = obj(o.targets, `${path}.targets`);
+        const targets: ServiceTargets = {};
+        if (to.entityIds !== undefined) targets.entityIds = strList(to.entityIds, `${path}.targets.entityIds`);
+        if (to.areaIds !== undefined) targets.areaIds = strList(to.areaIds, `${path}.targets.areaIds`);
+        a.targets = targets;
+      }
       return a;
     }
     case 'scene':
@@ -559,6 +594,12 @@ export function parseProject(raw: unknown): Project {
     scenes: list(o, 'scenes', scene),
     scripts: list(o, 'scripts', script),
   };
+  // Tanda 1: revisión del guardado (los proyectos anteriores no la tienen).
+  const revision = optNum(o, 'revision', 'proyecto');
+  if (revision !== undefined) {
+    if (revision < 0 || !Number.isInteger(revision)) fail('proyecto.revision', 'debe ser un entero no negativo');
+    project.revision = revision;
+  }
   // Los proyectos anteriores a la fase 2 no tienen ajustes: se importan sin ellos.
   if (o.settings !== undefined) project.settings = settings(o.settings, 'settings');
   if (project.floors.length === 0) fail('floors', 'debe tener al menos una planta');

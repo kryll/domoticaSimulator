@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { App } from '../App';
 import { useProjectStore } from '../store/projectStore';
 import { stopSimulationLoop, useSimulationStore } from '../store/simulationStore';
-import { useUiStore } from '../store/uiStore';
+import { primarySelection, useUiStore } from '../store/uiStore';
 import { makeDevice, makeProject } from '../test/fixtures';
 import { setHoveredDevice } from './useCanvasKeyboard';
 
@@ -41,10 +41,10 @@ describe('interacción directa en el lienzo', () => {
 
     fireEvent.click(node('luz'));
     await waitFor(() => expect(state(LIGHT)?.state).toBe('on'));
-    expect(useUiStore.getState().selection).toBeNull();
+    expect(useUiStore.getState().selection).toEqual([]);
 
     fireEvent.click(node('luz'), { shiftKey: true });
-    expect(useUiStore.getState().selection).toEqual({ kind: 'device', id: 'luz' });
+    expect(primarySelection(useUiStore.getState())).toEqual({ kind: 'device', id: 'luz' });
     // Mayús+clic no cambia el estado
     await act(() => new Promise((r) => setTimeout(r, 300)));
     expect(state(LIGHT)?.state).toBe('on');
@@ -52,7 +52,7 @@ describe('interacción directa en el lienzo', () => {
 
   it('en Edición el clic selecciona y el botón ⏻ ejecuta la acción principal', async () => {
     fireEvent.click(node('luz'));
-    expect(useUiStore.getState().selection).toEqual({ kind: 'device', id: 'luz' });
+    expect(primarySelection(useUiStore.getState())).toEqual({ kind: 'device', id: 'luz' });
     expect(state(LIGHT)?.state).toBe('off');
     await userEvent.click(within(node('luz')).getByLabelText('Encender Luz salón'));
     expect(state(LIGHT)?.state).toBe('on');
@@ -85,7 +85,7 @@ describe('interacción directa en el lienzo', () => {
         expect.stringContaining('Simular movimiento'),
         'Crear automatización con este dispositivo',
         'Simular sin conexión',
-        'Duplicar',
+        expect.stringContaining('Duplicar'),
         'Conectar desde aquí',
         expect.stringContaining('Eliminar'),
       ]),

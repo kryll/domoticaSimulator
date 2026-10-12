@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useMemo } from 'react';
 import type { Automation, Condition, Trigger } from '../types';
 import { Tabs } from '../ui/Tabs';
 import { tabPanelId } from '../ui/ids';
@@ -12,6 +12,7 @@ import { AutomationYamlEditor } from './AutomationYamlEditor';
 import { conditionFactories, triggerFactories } from '../ui/automationOptions';
 import { useUiStore, type AutomationView } from '../store/uiStore';
 import { TracesView } from './TracesView';
+import { TriggerIdsContext } from './triggerIdsContext';
 
 export interface AutomationEditorProps {
   automation: Automation;
@@ -23,6 +24,10 @@ export function AutomationEditor({ automation, onChange }: AutomationEditorProps
   const prefix = `auto-${useId().replace(/:/g, '')}`;
   const view = useUiStore((s) => s.automationView);
   const setView = useUiStore((s) => s.setAutomationView);
+  const triggerIds = useMemo(
+    () => [...new Set(automation.triggers.map((t) => t.id).filter((id): id is string => typeof id === 'string' && id !== ''))],
+    [automation.triggers],
+  );
   const set = <K extends keyof Automation>(key: K, value: Automation[K]) => onChange({ ...automation, [key]: value });
 
   return (
@@ -43,6 +48,7 @@ export function AutomationEditor({ automation, onChange }: AutomationEditorProps
       {view === 'traces' ? (
         <TracesView automation={automation} />
       ) : view === 'visual' ? (
+        <TriggerIdsContext.Provider value={triggerIds}>
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto,auto] sm:items-end">
             <TextField label="Nombre de la automatización" value={automation.name} onChange={(e) => set('name', e.target.value)} />
@@ -87,6 +93,7 @@ export function AutomationEditor({ automation, onChange }: AutomationEditorProps
             <ActionListEditor actions={automation.actions} onChange={(actions) => set('actions', actions)} />
           </AutomationScope>
         </div>
+        </TriggerIdsContext.Provider>
       ) : (
         <AutomationYamlEditor automation={automation} onChange={onChange} />
       )}

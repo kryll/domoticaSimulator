@@ -10,7 +10,9 @@ import { isInfra } from '../devices/roles';
 import { offlineBlockReason } from '../simulation/availability';
 import { catalog } from '../devices/catalog';
 import { definitionOf, entitiesOfDevice } from './analysis';
-import { createAutomationForDevice, duplicateDevice } from './actions';
+import { createAutomationForDevice } from './actions';
+import { copySelection, deleteDevices, duplicateSelection, pasteFromClipboard } from './selectionActions';
+import { selectedDeviceIds } from '../store/uiStore';
 import { SCENE_DOMAINS } from '../scenes/sceneEntities';
 
 /** Menú contextual del dispositivo (clic derecho o Mayús+F10 / tecla Menú). */
@@ -80,7 +82,13 @@ function DeviceMenuBody({ deviceId, x, y }: { deviceId: string; x: number; y: nu
     });
   }
   entries.push({ kind: 'separator' });
-  entries.push({ kind: 'item', id: 'duplicate', label: 'Duplicar', onSelect: () => duplicateDevice(device.id) });
+  // Si el dispositivo forma parte de la selección múltiple, las acciones de edición van sobre toda ella.
+  const selected = selectedDeviceIds(ui);
+  const group = selected.includes(device.id) && selected.length > 1 ? selected : [device.id];
+  const suffix = group.length > 1 ? ` (${group.length})` : '';
+  entries.push({ kind: 'item', id: 'copy', label: `Copiar${suffix}`, hint: 'Ctrl+C', onSelect: () => void copySelection(group) });
+  entries.push({ kind: 'item', id: 'paste', label: 'Pegar', hint: 'Ctrl+V', onSelect: () => void pasteFromClipboard() });
+  entries.push({ kind: 'item', id: 'duplicate', label: `Duplicar${suffix}`, hint: 'Ctrl+D', onSelect: () => duplicateSelection(group) });
   entries.push({
     kind: 'item',
     id: 'connect-from', label: 'Conectar desde aquí',
@@ -92,14 +100,10 @@ function DeviceMenuBody({ deviceId, x, y }: { deviceId: string; x: number; y: nu
   });
   entries.push({
     kind: 'item',
-    id: 'delete', label: 'Eliminar',
+    id: 'delete', label: `Eliminar${suffix}`,
     danger: true,
     hint: 'Supr',
-    onSelect: () => {
-      useProjectStore.getState().removeElements({ deviceIds: [device.id] });
-      ui.select(null);
-      ui.openPopover(null);
-    },
+    onSelect: () => void deleteDevices(group),
   });
 
   return <ContextMenu x={x} y={y} label={`Acciones de ${device.name}`} entries={entries} onClose={close} />;

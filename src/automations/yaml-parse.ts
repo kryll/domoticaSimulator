@@ -1,5 +1,7 @@
 // Parser YAML mínimo (bloques, escalares, comillas, flujo simple) y conversión a Automation.
-import type { Action, Automation, ChooseOption, Condition, EntityStateValue, RepeatAction, SunEvent, Trigger } from '../types';
+import type { Action, Automation, ChooseOption, Condition, EntityStateValue, RepeatAction, ServiceAction, ServiceTargets, SunEvent, Trigger } from '../types';
+import { findRoomByArea } from '../devices/areas';
+import { collectYamlWarnings, type YamlWarning } from './yaml-warnings';
 import { isYamlMap, type YamlContext, type YamlMap, type YamlValue } from '../export/yaml';
 import { resolvePersonRef, resolveZoneRef } from '../export/yamlLogic';
 import { findScene, findScript } from '../simulation/engine';
@@ -288,12 +290,19 @@ function sunEvent(v: YamlValue, where: string): SunEvent {
 export function parseTrigger(v: YamlValue, i = 0, ctx?: Ctx): Trigger {
   const where = `el disparador ${i + 1}`;
   const m = asMap(v, where);
+  const t = parseTriggerBody(m, where, ctx);
+  if (m.id !== undefined && m.id !== null && m.id !== '') t.id = str(m.id, `${where} (id)`);
+  return t;
+}
+
+function parseTriggerBody(m: YamlMap, where: string, ctx: Ctx | undefined): Trigger {
   const platform = str(m.platform ?? m.trigger ?? null, where);
   switch (platform) {
     case 'state': {
       const t: Trigger = { type: 'state', entityId: entityIdOf(m, where) };
-      if (m.from !== undefined && m.from !== null) t.from = stateValue(m.from, where);
-      if (m.to !== undefined && m.to !== null) t.to = stateValue(m.to, where);
+      // Una lista de estados (to: [on, off]) no se admite: se ignora (collectYamlWarnings avisa).
+      if (m.from !== undefined && m.from !== null && !Array.isArray(m.from)) t.from = stateValue(m.from, where);
+      if (m.to !== undefined && m.to !== null && !Array.isArray(m.to)) t.to = stateValue(m.to, where);
       const forSeconds = durationOf(m.for, where);
       if (forSeconds !== undefined) t.for = forSeconds;
       return t;
@@ -370,6 +379,10 @@ export function parseCondition(v: YamlValue, i = 0, ctx?: Ctx): Condition {
         personId: resolvePersonRef(entityIdOf(m, where), ctx ?? {}),
         zoneId: resolveZoneRef(str(req(m, 'zone', where), where), ctx ?? {}),
       };
+    case 'trigger': {
+      const ids = list(req(m, 'id', where)).map((x) => str(x, `${where} (id)`));
+      return { type: 'trigger', ids };
+    }
     default:
       throw new Error(`Tipo de condición no soportado en ${where}: "${kind}"`);
   }
@@ -436,9 +449,33 @@ export function parseAction(v: YamlValue, i = 0, ctx?: Ctx): Action {
   if (service.startsWith('script.')) return { type: 'script', scriptId: resolveScript(service, ctx, where) };
   if (!/^[a-z_]+\.[a-z0-9_]+$/.test(service)) throw new Error(`Servicio no válido en ${where}: "${service}"`);
   const noTarget = service.startsWith('notify.') && m.entity_id === undefined && m.target === undefined;
-  const action: Action = { type: 'service', service, entityId: noTarget ? '' : entityIdOf(m, where) };
+  const action: ServiceAction = noTarget ? { type: 'service', service, entityId: '' } : serviceTarget(service, m, where, ctx);
   const data = serviceData(m, where);
   if (data) action.data = data;
+  return action;
+}
+
+/** Textos de un valor suelto o de una lista (entity_id: x o entity_id: [x, y]). */
+function textList(v: YamlValue | undefined, where: string): string[] {
+  return list(v).filter((x) => x !== null && x !== '').map((x) => str(x, where));
+}
+
+/**
+ * Destinos de una llamada a servicio: `target.entity_id` y `target.area_id` (uno o varios), o
+ * `entity_id` directo (sintaxis antigua). La primera entidad es el destino principal; el resto
+ * va a `targets.entityIds`. Las áreas se resuelven a ids de sala si hay salas en el contexto.
+ */
+function serviceTarget(service: string, m: YamlMap, where: string, ctx: Ctx | undefined): ServiceAction {
+  const target = m.target !== undefined && m.target !== null ? asMap(m.target, `${where} (target)`) : undefined;
+  const entities = [...textList(target?.entity_id, where), ...textList(m.entity_id, where)].filter((x, i, xs) => xs.indexOf(x) === i);
+  const areaRefs = textList(target?.area_id ?? m.area_id, where);
+  if (entities.length === 0 && areaRefs.length === 0) throw new Error(`Falta "entity_id" en ${where}`);
+  const [first = '', ...rest] = entities;
+  const action: ServiceAction = { type: 'service', service, entityId: first };
+  const targets: ServiceTargets = {};
+  if (rest.length > 0) targets.entityIds = rest;
+  if (areaRefs.length > 0) targets.areaIds = areaRefs.map((ref) => (ctx?.rooms ? findRoomByArea(ctx.rooms, ref)?.id ?? ref : ref));
+  if (targets.entityIds || targets.areaIds) action.targets = targets;
   return action;
 }
 
@@ -472,17 +509,39 @@ function parseRoot(text: string): YamlValue {
  * scene.<slug>/script.<slug> a ids del proyecto; sin él se usa el texto tras el punto.
  */
 export function parseAutomationYaml(text: string, ctx?: Ctx): Automation {
-  const root = parseRoot(text);
-  const items = Array.isArray(root) ? root : [root];
-  if (items.length !== 1) throw new Error(`Se esperaba una única automatización y hay ${items.length}`);
-  const [only] = items;
-  return objectToAutomation(asMap(only ?? null, 'la automatización'), ctx, crypto.randomUUID());
+  return parseAutomationYamlDetailed(text, ctx).automation;
 }
 
 /** Parsea un automations.yaml completo (lista de automatizaciones). */
 export function parseAutomationsYaml(text: string, ctx?: Ctx): Automation[] {
+  return parseAutomationsYamlDetailed(text, ctx).automations;
+}
+
+export type { YamlWarning } from './yaml-warnings';
+
+/**
+ * Como parseAutomationYaml, y además avisa de cada clave ignorada o valor no soportado
+ * (`path`: ruta en el YAML, p. ej. "triggers[0].attribute"). Lanza Error si no se puede leer.
+ */
+export function parseAutomationYamlDetailed(text: string, ctx?: Ctx): { automation: Automation; warnings: YamlWarning[] } {
   const root = parseRoot(text);
-  return list(root).map((item, i) => objectToAutomation(asMap(item, `la automatización ${i + 1}`), ctx, crypto.randomUUID()));
+  const items = Array.isArray(root) ? root : [root];
+  if (items.length !== 1) throw new Error(`Se esperaba una única automatización y hay ${items.length}`);
+  const m = asMap(items[0] ?? null, 'la automatización');
+  return { automation: objectToAutomation(m, ctx, crypto.randomUUID()), warnings: collectYamlWarnings(m, '', ctx) };
+}
+
+/** Como parseAutomationsYaml, con los avisos de todas (rutas con el índice: "[2].triggers[0].attribute"). */
+export function parseAutomationsYamlDetailed(text: string, ctx?: Ctx): { automations: Automation[]; warnings: YamlWarning[] } {
+  const root = parseRoot(text);
+  const automations: Automation[] = [];
+  const warnings: YamlWarning[] = [];
+  list(root).forEach((item, i) => {
+    const m = asMap(item, `la automatización ${i + 1}`);
+    automations.push(objectToAutomation(m, ctx, crypto.randomUUID()));
+    warnings.push(...collectYamlWarnings(m, `[${i}]`, ctx));
+  });
+  return { automations, warnings };
 }
 
 // ---------- Fase 3: zone, device, choose, if, wait_for_trigger, repeat, notify, variables ----------

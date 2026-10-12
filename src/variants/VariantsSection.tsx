@@ -19,6 +19,7 @@ import {
   type ProjectSnapshot,
   type VariantSummary,
 } from './variants';
+import { confirmDialog } from '../ui/confirm';
 
 const CURRENT = '__actual__';
 const EMPTY: ProjectVariant[] = [];
@@ -200,8 +201,13 @@ export function VariantsSection() {
               <Button
                 size="sm"
                 aria-label={`Cambiar a variante ${v.name}`}
-                onClick={() => {
-                  if (!window.confirm(`¿Cambiar a «${v.name}»? Los cambios no guardados en una variante se pueden recuperar con Deshacer.`)) return;
+                onClick={async () => {
+                  const ok = await confirmDialog({
+                    title: `¿Cambiar a «${v.name}»?`,
+                    message: 'Los cambios no guardados en una variante se pueden recuperar con Deshacer.',
+                    confirmLabel: 'Cambiar',
+                  });
+                  if (!ok) return;
                   try {
                     update((p) => applyVariant(p, v.id));
                     notify(`Ahora trabajas en «${v.name}»`, 'success');

@@ -13,7 +13,7 @@ function withFor<T extends { for?: number }>(value: T, seconds: number | undefin
   return next;
 }
 
-export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (t: Trigger) => void }) {
+function TriggerFields({ value, onChange }: { value: Trigger; onChange: (t: Trigger) => void }) {
   const header = <div className="mb-1 text-xs font-semibold text-slate-700">{TRIGGER_LABELS[value.type]}</div>;
   switch (value.type) {
     case 'state':
@@ -99,4 +99,27 @@ export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (
     case 'device_action':
       return <DeviceActionTriggerEditor value={value} onChange={onChange} />;
   }
+}
+
+/** Disparador con su «ID del disparador» opcional (`id:` de HA, para la condición «Disparado por»). */
+export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (t: Trigger) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <TriggerFields value={value} onChange={onChange} />
+      <div className="max-w-xs">
+        <TextField
+          label="ID del disparador (opcional)"
+          placeholder="p. ej. llegada"
+          value={value.id ?? ''}
+          onChange={(e) => {
+            const id = e.target.value.trim();
+            const next = { ...value };
+            if (id === '') delete next.id;
+            else next.id = id;
+            onChange(next);
+          }}
+        />
+      </div>
+    </div>
+  );
 }

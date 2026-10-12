@@ -6,6 +6,7 @@ import { useUiStore } from '../store/uiStore';
 import { Button } from './Button';
 import { Modal } from './Modal';
 import { EmptyState } from './Panel';
+import { confirmDialog } from './confirm';
 
 type Summary = Awaited<ReturnType<typeof listProjects>>[number];
 
@@ -58,7 +59,13 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }) {
                 disabled={p.id === currentId}
                 aria-label={`Borrar ${p.name}`}
                 onClick={async () => {
-                  if (!window.confirm(`¿Borrar el proyecto "${p.name}"?`)) return;
+                  const ok = await confirmDialog({
+                    title: `¿Borrar el proyecto «${p.name}»?`,
+                    message: 'Se borrará del navegador junto con su historial de versiones. No se puede deshacer.',
+                    confirmLabel: 'Borrar',
+                    danger: true,
+                  });
+                  if (!ok) return;
                   await deleteProject(p.id);
                   refresh();
                 }}

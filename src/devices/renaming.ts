@@ -9,6 +9,7 @@ import {
   mapConditionEntities,
   mapTriggerEntities,
   remapServiceDomain,
+  serviceEntityIds,
   triggerEntityIds,
   type EntityMapper,
 } from '../automations/walk';
@@ -172,7 +173,10 @@ function actionRefs(a: Action): string[] {
     if (x.service.startsWith('notify.') && x.entityId === '') return own;
     // "script.<slug>" llama al script directamente y no necesita entity_id.
     if (x.service.startsWith('script.') && x.service !== 'script.turn_on') return [...own, x.service];
-    return [...own, x.entityId];
+    // Destino principal y destinos adicionales (targets.entityIds). Una acción solo con áreas no
+    // tiene entity_id: no cuenta como referencia vacía.
+    if (x.entityId === '' && (x.targets?.entityIds?.length || x.targets?.areaIds?.length)) return [...own, ...serviceEntityIds(x)];
+    return [...own, x.entityId, ...serviceEntityIds(x).slice(x.entityId === '' ? 0 : 1)];
   });
 }
 
