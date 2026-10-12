@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
-import { captureSceneEntities } from '../simulation/scenes';
+import { captureSceneEntities, capturableEntities } from '../simulation/scenes';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { SceneCreator } from './SceneCreator';
@@ -33,9 +33,18 @@ function AddToSceneBody({ entityIds, onClose }: { entityIds: string[]; onClose: 
     }
     const scene = scenes.find((s) => s.id === choice);
     if (!scene) return;
-    const captured = captureSceneEntities(useSimulationStore.getState().sim, entityIds);
-    updateScene(scene.id, { entities: { ...scene.entities, ...captured } });
-    useUiStore.getState().notify(`Añadido a la escena «${scene.name}» con su estado actual`, 'success');
+    const { sim } = useSimulationStore.getState();
+    const { capturable, unavailable } = capturableEntities(sim, entityIds);
+    if (capturable.length === 0) {
+      useUiStore
+        .getState()
+        .notify('No se ha añadido nada: el dispositivo no está disponible. Reconéctalo y vuelve a intentarlo.', 'error');
+      onClose();
+      return;
+    }
+    updateScene(scene.id, { entities: { ...scene.entities, ...captureSceneEntities(sim, capturable) } });
+    const skipped = unavailable.length > 0 ? ` (${unavailable.length} sin disponibilidad no se han añadido)` : '';
+    useUiStore.getState().notify(`Añadido a la escena «${scene.name}» con su estado actual${skipped}`, 'success');
     onClose();
   };
 

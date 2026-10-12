@@ -9,6 +9,7 @@ import {
   activateScene,
   callService,
   createSimulationState,
+  renameEntities,
   runAutomation,
   runScript,
   setEntityState,
@@ -126,11 +127,14 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
   setSensorValue: (entityId, value) => set((s) => ({ sim: setSensorValue(s.sim, project(), entityId, value) })),
   jamLock: (entityId) => set((s) => ({ sim: jamLock(s.sim, project(), entityId) })),
   syncWithProject: (p, prev) => {
-    const current = get().sim.entities;
     const renamed = prev ? renamedEntityIds(prev, p) : new Map<string, string>();
+    // Renombrados: el motor traslada estados, temporizadores (recorridos, autoapagados) y fallos.
+    let base = get().sim;
+    if (renamed.size > 0) base = renameEntities(base, Object.fromEntries([...renamed].map(([next, old]) => [old, next])));
+    const current = base.entities;
     const initial = initialEntityStates(p, catalog);
     const entities: SimulationState['entities'] = {};
-    let changed = false;
+    let changed = base !== get().sim;
     for (const [id, init] of Object.entries(initial)) {
       const oldId = renamed.get(id);
       const kept = current[id] ?? (oldId !== undefined ? current[oldId] : undefined);
@@ -145,7 +149,7 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     }
     if (Object.keys(current).some((id) => !(id in entities))) changed = true;
     if (!changed) return;
-    set((s) => ({ sim: { ...s.sim, entities } }));
+    set({ sim: { ...base, entities } });
   },
 }));
 

@@ -41,7 +41,6 @@ function MotionWaves() {
 }
 
 function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
-  (window as unknown as { __renders: number }).__renders = ((window as unknown as { __renders?: number }).__renders ?? 0) + 1; // MEDICION-TEMPORAL
   const {
     device,
     definition,

@@ -29,7 +29,7 @@ const GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
     items: [
       ['Espacio / Intro', 'Acción principal'],
       ['↑ / ↓', '±10 % o ±0,5 °C'],
-      ['1 … 9', '10 % … 90 %'],
+      ['1 … 9', '10 % … 90 % (solo dispositivos con nivel)'],
       ['0', 'Apagar'],
       ['Supr', 'Eliminar (solo en Edición)'],
       ['Ctrl+Z / Ctrl+Y', 'Deshacer / rehacer'],

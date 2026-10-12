@@ -79,3 +79,39 @@ describe('simulationStore: reloj y renombrado', () => {
     expect(log).toContain('double');
   });
 });
+
+describe('simulationStore · renombrar', () => {
+  afterEach(() => stopSimulationLoop());
+
+  it('una persiana en movimiento renombrada termina su recorrido con el nuevo id', () => {
+    const project = makeProject({ devices: [makeDevice('shelly-2pm-gen3-cover', 'per', 0, 0, 'Persiana')] });
+    useProjectStore.getState().loadProject(project);
+    useSimulationStore.getState().setSpeed(1);
+    useSimulationStore.getState().reset(project);
+    const stop = startSimulationSync();
+    try {
+      useSimulationStore.getState().callService('cover.persiana_cover', 'open_cover');
+      useSimulationStore.getState().advance(4000);
+      expect(useSimulationStore.getState().sim.entities['cover.persiana_cover']?.state).toBe('opening');
+      useProjectStore.getState().updateDevice('per', { name: 'Estor' });
+      const s = useSimulationStore.getState().sim;
+      expect(s.entities['cover.persiana_cover']).toBeUndefined();
+      expect(s.entities['cover.estor_cover']?.state).toBe('opening');
+      useSimulationStore.getState().advance(60_000);
+      const end = useSimulationStore.getState().sim.entities['cover.estor_cover'];
+      expect(end?.state).toBe('open');
+      expect(end?.attributes?.current_position).toBe(100);
+    } finally {
+      stop();
+    }
+  });
+
+  it('renamedEntityIds devuelve nuevo → anterior solo para los renombrados', async () => {
+    const { renamedEntityIds } = await import('./simulationStore');
+    const prev = makeProject({ devices: [makeDevice('aqara-temp-hum', 'c', 0, 0, 'Clima'), makeDevice('hue-white-e27', 'l', 0, 0, 'Luz')] });
+    const next = { ...prev, devices: prev.devices.map((d) => (d.id === 'c' ? { ...d, name: 'Salón' } : d)) };
+    const map = renamedEntityIds(prev, next);
+    expect(map.get('sensor.salon_temperature')).toBe('sensor.clima_temperature');
+    expect([...map.values()].some((v) => v.startsWith('light.'))).toBe(false);
+  });
+});

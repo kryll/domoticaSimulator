@@ -3,6 +3,7 @@ import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
 import { isDeviceOffline } from '../simulation/events';
+import { capturableEntities } from '../simulation/scenes';
 import { primaryAction, stepAction } from '../devices/presentation';
 import { ContextMenu, type MenuEntry } from '../ui/ContextMenu';
 import { definitionOf, entitiesOfDevice } from './analysis';
@@ -30,34 +31,38 @@ function DeviceMenuBody({ deviceId, x, y }: { deviceId: string; x: number; y: nu
 
   if (def && !offline) {
     const primary = primaryAction(device, def, sim);
-    if (primary) entries.push({ kind: 'item', label: primary.label, hint: 'Espacio', onSelect: () => store.quickAction(device.id) });
+    if (primary) entries.push({ kind: 'item', id: 'primary', label: primary.label, hint: 'Espacio', onSelect: () => store.quickAction(device.id) });
     const up = stepAction(device, def, sim, 1);
     const down = stepAction(device, def, sim, -1);
-    if (up) entries.push({ kind: 'item', label: up.label, hint: '↑', onSelect: () => store.step(device.id, 1) });
-    if (down) entries.push({ kind: 'item', label: down.label, hint: '↓', onSelect: () => store.step(device.id, -1) });
+    if (up) entries.push({ kind: 'item', id: 'step-up', label: up.label, hint: '↑', onSelect: () => store.step(device.id, 1) });
+    if (down) entries.push({ kind: 'item', id: 'step-down', label: down.label, hint: '↓', onSelect: () => store.step(device.id, -1) });
   }
-  entries.push({ kind: 'item', label: 'Control completo…', hint: 'Doble clic', onSelect: () => ui.openPopover(device.id) });
+  entries.push({ kind: 'item', id: 'popover', label: 'Control completo…', hint: 'Doble clic', onSelect: () => ui.openPopover(device.id) });
   entries.push({ kind: 'separator' });
-  entries.push({ kind: 'item', label: 'Crear automatización con este dispositivo', onSelect: () => createAutomationForDevice(device.id) });
-  const sceneIds = entitiesOfDevice(device)
-    .filter((r) => SCENE_DOMAINS.has(r.definition.domain))
-    .map((r) => r.entityId);
+  entries.push({ kind: 'item', id: 'automation', label: 'Crear automatización con este dispositivo', onSelect: () => createAutomationForDevice(device.id) });
+  const sceneIds = capturableEntities(
+    sim,
+    entitiesOfDevice(device)
+      .filter((r) => SCENE_DOMAINS.has(r.definition.domain))
+      .map((r) => r.entityId),
+  ).capturable;
   entries.push({
     kind: 'item',
-    label: 'Añadir a escena…',
+    id: 'add-to-scene', label: 'Añadir a escena…',
     disabled: sceneIds.length === 0,
+    ...(offline ? { hint: 'sin conexión' } : {}),
     onSelect: () => ui.setAddToScene(sceneIds),
   });
   entries.push({
     kind: 'item',
-    label: offline ? 'Reconectar' : 'Simular sin conexión',
+    id: 'offline', label: offline ? 'Reconectar' : 'Simular sin conexión',
     onSelect: () => store.setDeviceOffline(device.id, !offline),
   });
   entries.push({ kind: 'separator' });
-  entries.push({ kind: 'item', label: 'Duplicar', onSelect: () => duplicateDevice(device.id) });
+  entries.push({ kind: 'item', id: 'duplicate', label: 'Duplicar', onSelect: () => duplicateDevice(device.id) });
   entries.push({
     kind: 'item',
-    label: 'Conectar desde aquí',
+    id: 'connect-from', label: 'Conectar desde aquí',
     onSelect: () => {
       ui.setCanvasMode('connect');
       ui.setConnectFrom(device.id);
@@ -66,7 +71,7 @@ function DeviceMenuBody({ deviceId, x, y }: { deviceId: string; x: number; y: nu
   });
   entries.push({
     kind: 'item',
-    label: 'Eliminar',
+    id: 'delete', label: 'Eliminar',
     danger: true,
     hint: 'Supr',
     onSelect: () => {

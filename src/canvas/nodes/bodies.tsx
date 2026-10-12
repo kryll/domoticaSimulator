@@ -159,9 +159,8 @@ export function ThermostatBody({ view, onStep }: BodyProps) {
 }
 
 export function LockBody({ view }: BodyProps) {
-  const s = view.summary.toLowerCase();
-  const jammed = s.includes('atasc');
-  const open = !jammed && view.active;
+  const jammed = view.jammed === true || view.state === 'jammed';
+  const open = !jammed && view.state !== 'locked' && view.active;
   return (
     <div className="flex items-center gap-1.5">
       <span

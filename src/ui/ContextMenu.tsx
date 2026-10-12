@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import { cx } from './cx';
 
 export type MenuEntry =
-  | { kind: 'item'; label: string; onSelect: () => void; danger?: boolean; hint?: string; disabled?: boolean }
+  | { kind: 'item'; id: string; label: string; onSelect: () => void; danger?: boolean; hint?: string; disabled?: boolean }
   | { kind: 'separator' }
   | { kind: 'header'; label: string };
 
@@ -79,7 +79,7 @@ export function ContextMenu({ x, y, label, entries, onClose }: ContextMenuProps)
           );
         return (
           <button
-            key={entry.label}
+            key={entry.id}
             type="button"
             role="menuitem"
             tabIndex={-1}
