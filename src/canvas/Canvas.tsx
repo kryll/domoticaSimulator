@@ -298,7 +298,6 @@ export function Canvas() {
         fitView
         minZoom={0.1}
         maxZoom={3}
-        proOptions={{ hideAttribution: true }}
       >
         <Background gap={20} size={1} color="#cbd5e1" />
         {showCoverage && floor && <CoverageLayer devices={floorDevices} floor={floor} />}

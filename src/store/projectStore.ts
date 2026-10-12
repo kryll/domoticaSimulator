@@ -130,7 +130,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
 
     addFloor: (name) => {
       const level = get().project.floors.reduce((max, f) => Math.max(max, f.level + 1), 0);
-      const floor: Floor = { id: newId('floor'), name, level, pixelsPerMeter: 40 };
+      const floor: Floor = { id: newId('floor'), name, level, pixelsPerMeter: 50 };
       commit((p) => ({ ...p, floors: [...p.floors, floor] }));
       return floor;
     },

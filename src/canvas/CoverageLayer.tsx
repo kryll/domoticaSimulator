@@ -24,8 +24,8 @@ export function CoverageLayer({ devices, floor }: { devices: Device[]; floor: Fl
                 top: d.position.y - r,
                 width: r * 2,
                 height: r * 2,
-                backgroundColor: `${color}12`,
-                borderColor: `${color}55`,
+                backgroundColor: `${color}08`,
+                borderColor: `${color}66`,
               }}
             />
           );

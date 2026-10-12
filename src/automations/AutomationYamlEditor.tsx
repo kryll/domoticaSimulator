@@ -29,7 +29,7 @@ export function AutomationYamlEditor({ automation, onChange }: { automation: Aut
 
   const apply = () => {
     try {
-      const parsed = parseAutomationYaml(text);
+      const parsed = parseAutomationYaml(text, { scenes, scripts });
       onChange({ ...parsed, id: automation.id });
       setDirty(false);
       setError(null);

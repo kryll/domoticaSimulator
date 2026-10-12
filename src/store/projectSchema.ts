@@ -1,0 +1,285 @@
+// Validación estructural de proyectos importados (mensajes en español).
+import type {
+  Action,
+  Automation,
+  Condition,
+  Connection,
+  Device,
+  EntityState,
+  EntityStateValue,
+  Floor,
+  Point,
+  Project,
+  Room,
+  Scene,
+  Script,
+  Trigger,
+} from '../types';
+import { INTEGRATIONS, PROTOCOLS } from '../devices/labels';
+
+type Obj = Record<string, unknown>;
+
+class SchemaError extends Error {}
+
+function fail(path: string, msg: string): never {
+  throw new SchemaError(`Proyecto no válido: ${path} ${msg}`);
+}
+
+function obj(v: unknown, path: string): Obj {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) fail(path, 'debe ser un objeto');
+  return v as Obj;
+}
+
+function arr(v: unknown, path: string): unknown[] {
+  if (!Array.isArray(v)) fail(path, 'debe ser una lista');
+  return v;
+}
+
+function str(o: Obj, key: string, path: string): string {
+  const v = o[key];
+  if (typeof v !== 'string') fail(`${path}.${key}`, 'debe ser un texto');
+  return v;
+}
+
+function optStr(o: Obj, key: string, path: string): string | undefined {
+  return o[key] === undefined ? undefined : str(o, key, path);
+}
+
+function numAt(o: Obj, key: string, path: string): number {
+  const v = o[key];
+  if (typeof v !== 'number' || !Number.isFinite(v)) fail(`${path}.${key}`, 'debe ser un número');
+  return v;
+}
+
+function optNum(o: Obj, key: string, path: string): number | undefined {
+  return o[key] === undefined ? undefined : numAt(o, key, path);
+}
+
+function oneOf<T extends string>(o: Obj, key: string, allowed: readonly T[], path: string): T {
+  const v = o[key];
+  const found = allowed.find((a) => a === v);
+  if (found === undefined) fail(`${path}.${key}`, `tiene un valor no válido (${JSON.stringify(v)})`);
+  return found;
+}
+
+function stateValue(v: unknown, path: string): EntityStateValue {
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v;
+  return fail(path, 'debe ser texto, número o booleano');
+}
+
+function optStateValue(o: Obj, key: string, path: string): EntityStateValue | undefined {
+  return o[key] === undefined ? undefined : stateValue(o[key], `${path}.${key}`);
+}
+
+function stateRecord(v: unknown, path: string): Record<string, EntityStateValue> {
+  const o = obj(v, path);
+  const result: Record<string, EntityStateValue> = {};
+  for (const [k, val] of Object.entries(o)) result[k] = stateValue(val, `${path}.${k}`);
+  return result;
+}
+
+function point(v: unknown, path: string): Point {
+  const o = obj(v, path);
+  return { x: numAt(o, 'x', path), y: numAt(o, 'y', path) };
+}
+
+function floor(v: unknown, path: string): Floor {
+  const o = obj(v, path);
+  const f: Floor = { id: str(o, 'id', path), name: str(o, 'name', path), level: numAt(o, 'level', path), pixelsPerMeter: numAt(o, 'pixelsPerMeter', path) };
+  if (f.pixelsPerMeter <= 0) fail(`${path}.pixelsPerMeter`, 'debe ser mayor que 0');
+  const bg = optStr(o, 'backgroundImage', path);
+  if (bg !== undefined) f.backgroundImage = bg;
+  return f;
+}
+
+function room(v: unknown, path: string): Room {
+  const o = obj(v, path);
+  return {
+    id: str(o, 'id', path),
+    floorId: str(o, 'floorId', path),
+    name: str(o, 'name', path),
+    polygon: arr(o.polygon, `${path}.polygon`).map((p, i) => point(p, `${path}.polygon[${i}]`)),
+  };
+}
+
+function device(v: unknown, path: string): Device {
+  const o = obj(v, path);
+  const d: Device = {
+    id: str(o, 'id', path),
+    definitionId: str(o, 'definitionId', path),
+    name: str(o, 'name', path),
+    floorId: str(o, 'floorId', path),
+    position: point(o.position, `${path}.position`),
+    protocol: oneOf(o, 'protocol', PROTOCOLS, path),
+    integration: oneOf(o, 'integration', INTEGRATIONS, path),
+  };
+  const roomId = optStr(o, 'roomId', path);
+  if (roomId !== undefined) d.roomId = roomId;
+  return d;
+}
+
+function connection(v: unknown, path: string): Connection {
+  const o = obj(v, path);
+  return { id: str(o, 'id', path), sourceId: str(o, 'sourceId', path), targetId: str(o, 'targetId', path), protocol: oneOf(o, 'protocol', PROTOCOLS, path) };
+}
+
+function trigger(v: unknown, path: string): Trigger {
+  const o = obj(v, path);
+  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun'] as const, path);
+  if (type === 'time') return { type, at: str(o, 'at', path) };
+  if (type === 'sun') {
+    const t: Trigger = { type, event: oneOf(o, 'event', ['sunrise', 'sunset'] as const, path) };
+    const off = optNum(o, 'offsetMinutes', path);
+    if (off !== undefined) t.offsetMinutes = off;
+    return t;
+  }
+  if (type === 'numeric_state') {
+    const t: Trigger = { type, entityId: str(o, 'entityId', path) };
+    const above = optNum(o, 'above', path);
+    const below = optNum(o, 'below', path);
+    if (above !== undefined) t.above = above;
+    if (below !== undefined) t.below = below;
+    return t;
+  }
+  const t: Trigger = { type, entityId: str(o, 'entityId', path) };
+  const from = optStateValue(o, 'from', path);
+  const to = optStateValue(o, 'to', path);
+  if (from !== undefined) t.from = from;
+  if (to !== undefined) t.to = to;
+  return t;
+}
+
+function condition(v: unknown, path: string): Condition {
+  const o = obj(v, path);
+  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'and', 'or'] as const, path);
+  switch (type) {
+    case 'state':
+      return { type, entityId: str(o, 'entityId', path), state: stateValue(o.state, `${path}.state`) };
+    case 'numeric_state': {
+      const c: Condition = { type, entityId: str(o, 'entityId', path) };
+      const above = optNum(o, 'above', path);
+      const below = optNum(o, 'below', path);
+      if (above !== undefined) c.above = above;
+      if (below !== undefined) c.below = below;
+      return c;
+    }
+    case 'time': {
+      const c: Condition = { type };
+      const after = optStr(o, 'after', path);
+      const before = optStr(o, 'before', path);
+      if (after !== undefined) c.after = after;
+      if (before !== undefined) c.before = before;
+      return c;
+    }
+    case 'and':
+    case 'or':
+      return { type, conditions: arr(o.conditions, `${path}.conditions`).map((c, i) => condition(c, `${path}.conditions[${i}]`)) };
+  }
+}
+
+function action(v: unknown, path: string): Action {
+  const o = obj(v, path);
+  const type = oneOf(o, 'type', ['service', 'scene', 'script', 'delay'] as const, path);
+  switch (type) {
+    case 'service': {
+      const a: Action = { type, service: str(o, 'service', path), entityId: str(o, 'entityId', path) };
+      if (o.data !== undefined) a.data = stateRecord(o.data, `${path}.data`);
+      return a;
+    }
+    case 'scene':
+      return { type, sceneId: str(o, 'sceneId', path) };
+    case 'script':
+      return { type, scriptId: str(o, 'scriptId', path) };
+    case 'delay':
+      return { type, seconds: numAt(o, 'seconds', path) };
+  }
+}
+
+function actions(v: unknown, path: string): Action[] {
+  return arr(v, path).map((a, i) => action(a, `${path}[${i}]`));
+}
+
+function automation(v: unknown, path: string): Automation {
+  const o = obj(v, path);
+  if (typeof o.enabled !== 'boolean') fail(`${path}.enabled`, 'debe ser verdadero o falso');
+  return {
+    id: str(o, 'id', path),
+    name: str(o, 'name', path),
+    enabled: o.enabled,
+    mode: oneOf(o, 'mode', ['single', 'restart', 'queued', 'parallel'] as const, path),
+    triggers: arr(o.triggers, `${path}.triggers`).map((t, i) => trigger(t, `${path}.triggers[${i}]`)),
+    conditions: arr(o.conditions, `${path}.conditions`).map((c, i) => condition(c, `${path}.conditions[${i}]`)),
+    actions: actions(o.actions, `${path}.actions`),
+  };
+}
+
+function entityState(v: unknown, path: string): EntityState {
+  const o = obj(v, path);
+  const st: EntityState = { state: stateValue(o.state, `${path}.state`) };
+  if (o.attributes !== undefined) st.attributes = stateRecord(o.attributes, `${path}.attributes`);
+  return st;
+}
+
+function scene(v: unknown, path: string): Scene {
+  const o = obj(v, path);
+  const entities: Record<string, EntityState> = {};
+  for (const [k, val] of Object.entries(obj(o.entities, `${path}.entities`))) entities[k] = entityState(val, `${path}.entities.${k}`);
+  return { id: str(o, 'id', path), name: str(o, 'name', path), entities };
+}
+
+function script(v: unknown, path: string): Script {
+  const o = obj(v, path);
+  return { id: str(o, 'id', path), name: str(o, 'name', path), sequence: actions(o.sequence, `${path}.sequence`) };
+}
+
+function list<T>(o: Obj, key: string, parse: (v: unknown, path: string) => T): T[] {
+  return arr(o[key], key).map((item, i) => parse(item, `${key}[${i}]`));
+}
+
+function checkUniqueIds(name: string, items: { id: string }[]): void {
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item.id)) fail(name, `contiene el id repetido "${item.id}"`);
+    seen.add(item.id);
+  }
+}
+
+function checkReferences(p: Project): void {
+  const floorIds = new Set(p.floors.map((f) => f.id));
+  const deviceIds = new Set(p.devices.map((d) => d.id));
+  for (const r of p.rooms) if (!floorIds.has(r.floorId)) fail(`la sala «${r.name}»`, `apunta a una planta inexistente (${r.floorId})`);
+  for (const d of p.devices) if (!floorIds.has(d.floorId)) fail(`el dispositivo «${d.name}»`, `apunta a una planta inexistente (${d.floorId})`);
+  for (const c of p.connections) {
+    if (!deviceIds.has(c.sourceId) || !deviceIds.has(c.targetId)) fail(`la conexión ${c.id}`, 'apunta a un dispositivo inexistente');
+  }
+}
+
+/** Valida y normaliza un objeto desconocido como Project. Lanza Error en español. */
+export function parseProject(raw: unknown): Project {
+  const o = obj(raw, 'el documento');
+  if (o.version !== 1) fail('version', `no soportada (${JSON.stringify(o.version)}); se esperaba 1`);
+  const project: Project = {
+    id: str(o, 'id', 'proyecto'),
+    name: str(o, 'name', 'proyecto'),
+    version: 1,
+    createdAt: str(o, 'createdAt', 'proyecto'),
+    updatedAt: str(o, 'updatedAt', 'proyecto'),
+    floors: list(o, 'floors', floor),
+    rooms: list(o, 'rooms', room),
+    devices: list(o, 'devices', device),
+    connections: list(o, 'connections', connection),
+    automations: list(o, 'automations', automation),
+    scenes: list(o, 'scenes', scene),
+    scripts: list(o, 'scripts', script),
+  };
+  if (project.floors.length === 0) fail('floors', 'debe tener al menos una planta');
+  checkUniqueIds('floors', project.floors);
+  checkUniqueIds('rooms', project.rooms);
+  checkUniqueIds('devices', project.devices);
+  checkUniqueIds('connections', project.connections);
+  checkUniqueIds('automations', project.automations);
+  checkUniqueIds('scenes', project.scenes);
+  checkUniqueIds('scripts', project.scripts);
+  checkReferences(project);
+  return project;
+}

@@ -119,7 +119,7 @@ function simpleInfraRules(ctx: Ctx): ValidationIssue[] {
 function bleWithoutProxy(ctx: Ctx): Placed[] {
   const proxies = ctx.placed.filter((p) => isBleProxy(p.def));
   return endpoints(ctx).filter(
-    (p) => p.device.protocol === 'ble' && !proxies.some((x) => isInRange(p.device, x.device, ctx.defs, ctx.project.floors)),
+    (p) => p.device.protocol === 'ble' && !proxies.some((x) => isInRange(p.device, x.device, ctx.defs, ctx.project.floors, 'ble')),
   );
 }
 

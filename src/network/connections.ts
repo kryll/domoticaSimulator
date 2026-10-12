@@ -195,7 +195,7 @@ function radioCandidates(
     if (!r.ok) continue;
     const wired = isWiredLink(device, parent, defs, r.protocol);
     if (wired && !isInfra(pd)) continue;
-    if (requireRange && !wired && !isInRange(device, parent, defs, project.floors)) continue;
+    if (requireRange && !wired && !isInRange(device, parent, defs, project.floors, r.protocol)) continue;
     result.push({ parent, protocol: r.protocol, distance: distanceOf(device, parent, project.floors), infra: isInfra(pd) });
   }
   return result;

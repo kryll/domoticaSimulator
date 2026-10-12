@@ -14,7 +14,7 @@ export function Toast() {
   }, [notice, clear]);
 
   return (
-    <div aria-live="polite" role="status" className="pointer-events-none fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
+    <div aria-live="polite" role="status" className="pointer-events-none fixed right-4 top-14 z-50 max-w-md">
       {notice && (
         <div
           className={cx(

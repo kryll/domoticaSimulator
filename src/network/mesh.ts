@@ -27,7 +27,7 @@ function linked(project: Project, defs: DeviceDefinition[], a: Device, b: Device
   const r = canConnect(a, b, defs);
   if (!r.ok) return false;
   if (isWiredLink(a, b, defs, r.protocol)) return connected(project, a.id, b.id);
-  return isInRange(a, b, defs, project.floors);
+  return isInRange(a, b, defs, project.floors, r.protocol);
 }
 
 /**

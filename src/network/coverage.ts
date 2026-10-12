@@ -49,10 +49,19 @@ export function deviceDistanceMeters(a: Device, b: Device, floors: Floor[]): num
 }
 
 /**
- * ¿Están a alcance radio? Se usa el mayor de los dos alcances, atenuado un 30 % por
- * cada planta de diferencia.
+ * Alcance de una definición para un protocolo concreto: si no es su radio principal
+ * (p. ej. el BLE de un Shelly Wi-Fi) se usa el alcance por defecto de ese protocolo.
  */
-export function isInRange(a: Device, b: Device, defs: DeviceDefinition[], floors: Floor[]): boolean {
+export function rangeForProtocol(def: DeviceDefinition, protocol?: Protocol): number {
+  if (protocol === undefined || def.protocols[0] === protocol) return rangeMeters(def);
+  return DEFAULT_RANGE_METERS[protocol];
+}
+
+/**
+ * ¿Están a alcance radio? Se usa el mayor de los dos alcances (para el protocolo del enlace,
+ * si se indica), atenuado un 30 % por cada planta de diferencia.
+ */
+export function isInRange(a: Device, b: Device, defs: DeviceDefinition[], floors: Floor[], protocol?: Protocol): boolean {
   const da = defs.find((d) => d.id === a.definitionId);
   const db = defs.find((d) => d.id === b.definitionId);
   if (!da || !db) return false;
@@ -61,6 +70,6 @@ export function isInRange(a: Device, b: Device, defs: DeviceDefinition[], floors
   const distance = deviceDistanceMeters(a, b, floors);
   if (!fa || !fb || distance === undefined) return false;
   const levels = Math.abs(fa.level - fb.level);
-  const range = Math.max(rangeMeters(da), rangeMeters(db)) * FLOOR_ATTENUATION ** levels;
+  const range = Math.max(rangeForProtocol(da, protocol), rangeForProtocol(db, protocol)) * FLOOR_ATTENUATION ** levels;
   return distance <= range;
 }
