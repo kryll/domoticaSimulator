@@ -1,7 +1,7 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
-import { useUiStore, type BottomTab } from '../store/uiStore';
+import { BOTTOM_MIN, useUiStore, type BottomTab } from '../store/uiStore';
 import { analyzeProject } from '../canvas/analysis';
 import { ValidationPanel } from '../simulation/ValidationPanel';
 import { LogbookPanel } from '../simulation/LogbookPanel';
@@ -34,12 +34,60 @@ function Count({ n, tone }: { n: number; tone: 'red' | 'slate' }) {
   );
 }
 
-/** Panel inferior plegable con validación, automatizaciones, escenas y logbook. */
+/** Asa para cambiar la altura del panel arrastrando o con las flechas. */
+function ResizeHandle() {
+  const height = useUiStore((s) => s.bottomHeight);
+  const setHeight = useUiStore((s) => s.setBottomHeight);
+  const drag = useRef<{ y: number; h: number } | null>(null);
+  const max = typeof window === 'undefined' ? 800 : Math.max(BOTTOM_MIN, window.innerHeight - 160);
+  const clamp = (h: number) => Math.min(max, Math.max(BOTTOM_MIN, h));
+
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    drag.current = { y: e.clientY, h: height };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    setHeight(clamp(drag.current.h + (drag.current.y - e.clientY)));
+  };
+  const onPointerUp = () => {
+    drag.current = null;
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowUp') setHeight(clamp(height + 40));
+    else if (e.key === 'ArrowDown') setHeight(clamp(height - 40));
+    else return;
+    e.preventDefault();
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Cambiar la altura del panel inferior"
+      aria-valuemin={BOTTOM_MIN}
+      aria-valuemax={max}
+      aria-valuenow={height}
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onKeyDown={onKeyDown}
+      className="group flex h-2 cursor-row-resize touch-none items-center justify-center focus:outline-none focus-visible:bg-sky-100"
+    >
+      <span className="h-1 w-12 rounded-full bg-slate-300 group-hover:bg-sky-400" aria-hidden="true" />
+    </div>
+  );
+}
+
+/** Panel inferior plegable y redimensionable con validación, automatizaciones, escenas y logbook. */
 export function BottomPanel() {
   const tab = useUiStore((s) => s.bottomTab);
   const open = useUiStore((s) => s.bottomOpen);
+  const height = useUiStore((s) => s.bottomHeight);
+  const maximized = useUiStore((s) => s.bottomMaximized);
   const setTab = useUiStore((s) => s.setBottomTab);
   const setOpen = useUiStore((s) => s.setBottomOpen);
+  const setMaximized = useUiStore((s) => s.setBottomMaximized);
   const project = useProjectStore((s) => s.project);
   const logCount = useSimulationStore((s) => s.sim.log.length);
   const issues = analyzeProject(project).issues;
@@ -54,20 +102,38 @@ export function BottomPanel() {
 
   return (
     <section
-      className={open ? 'flex h-72 min-h-0 flex-col border-t border-slate-200 bg-white' : 'flex flex-col border-t border-slate-200 bg-white'}
+      className={
+        maximized
+          ? 'absolute inset-0 z-30 flex min-h-0 flex-col bg-white'
+          : 'flex min-h-0 shrink-0 flex-col border-t border-slate-200 bg-white'
+      }
+      style={open && !maximized ? { height } : undefined}
       aria-label="Panel inferior"
     >
+      {open && !maximized && <ResizeHandle />}
       <div className="flex items-center justify-between px-2 pt-1">
         <Tabs<BottomTab> label="Herramientas" tabs={tabs} active={tab} onChange={setTab} idPrefix={PREFIX} />
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setOpen(!open)}
-          aria-expanded={open}
-          aria-label={open ? 'Plegar panel inferior' : 'Desplegar panel inferior'}
-        >
-          {open ? '▾' : '▴'}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setMaximized(!maximized)}
+            aria-pressed={maximized}
+            aria-label={maximized ? 'Restaurar panel inferior' : 'Maximizar panel inferior'}
+            title={maximized ? 'Restaurar' : 'Pantalla completa'}
+          >
+            {maximized ? '🗗' : '⛶'}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setOpen(!open)}
+            aria-expanded={open}
+            aria-label={open ? 'Plegar panel inferior' : 'Desplegar panel inferior'}
+          >
+            {open ? '▾' : '▴'}
+          </Button>
+        </div>
       </div>
       {open && (
         <div

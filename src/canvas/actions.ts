@@ -1,7 +1,8 @@
-import type { Device, Id, NetworkRole, Point } from '../types';
+import type { Device, EntityStateValue, Id, NetworkRole, Point, Trigger } from '../types';
 import { catalog, getDefinition } from '../devices/catalog';
+import { entitiesForDevice } from '../devices/entities';
 import { createDevice, uniqueDeviceName } from '../devices/factory';
-import { canConnect, suggestConnections } from '../network/connections';
+import { canConnect, explainUnconnected, suggestConnections } from '../network/connections';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { findFreeSpot } from './geometry';
@@ -28,7 +29,13 @@ export function addDeviceFromDefinition(definitionId: Id, position: Point): Devi
     def.name,
     store.project.devices.map((d) => d.name),
   );
-  const device = createDevice(def, { floorId, position: { x: Math.round(position.x), y: Math.round(position.y) }, name });
+  // B5: integración por defecto según el contexto (coordinador, hub, local antes que nube).
+  const device = createDevice(
+    def,
+    { floorId, position: { x: Math.round(position.x), y: Math.round(position.y) }, name },
+    store.project,
+    catalog,
+  );
   store.addDevice(device);
   ui.select({ kind: 'device', id: device.id });
   return device;
@@ -78,10 +85,18 @@ export function autoConnect(): number {
   const store = useProjectStore.getState();
   const suggested = suggestConnections(store.project, catalog);
   const added = store.addConnections(suggested);
-  useUiStore
-    .getState()
-    .notify(added > 0 ? `Se han añadido ${added} conexiones` : 'No hay conexiones nuevas que sugerir', added > 0 ? 'success' : 'info');
-  return added;
+  const ui = useUiStore.getState();
+  if (added > 0) {
+    ui.notify(added === 1 ? 'Se ha añadido 1 conexión' : `Se han añadido ${added} conexiones`, 'success');
+    return added;
+  }
+  const reasons = explainUnconnected(useProjectStore.getState().project, catalog).map((r) => r.reason);
+  ui.notify(
+    reasons.length > 0 ? 'No se ha creado ninguna conexión:' : 'Todos los dispositivos ya están conectados',
+    'info',
+    { details: reasons.slice(0, 6).concat(reasons.length > 6 ? [`… y ${reasons.length - 6} más`] : []) },
+  );
+  return 0;
 }
 
 /** Hueco libre cerca de `point` en la planta activa (para no apilar nodos). */
@@ -104,4 +119,59 @@ export function canvasCenter(screenToFlow: (p: Point) => Point): Point {
     return { x: 160 + (n % 6) * 180, y: 120 + Math.floor(n / 6) * 90 };
   }
   return screenToFlow({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+}
+
+/** Duplica un dispositivo junto al original (misma configuración, nombre nuevo). */
+export function duplicateDevice(deviceId: Id): Device | null {
+  const store = useProjectStore.getState();
+  const original = store.project.devices.find((d) => d.id === deviceId);
+  if (!original) return null;
+  const name = uniqueDeviceName(original.name, store.project.devices);
+  const occupied = store.project.devices.filter((d) => d.floorId === original.floorId).map((d) => d.position);
+  const position = findFreeSpot(occupied, { x: original.position.x + 200, y: original.position.y });
+  const copy: Device = { ...original, id: crypto.randomUUID(), name, position };
+  store.addDevice(copy);
+  useUiStore.getState().select({ kind: 'device', id: copy.id });
+  return copy;
+}
+
+/** Estado «to» sugerido para un disparador sobre la entidad. */
+function suggestedTo(domain: string, key: string): EntityStateValue | undefined {
+  if (key === 'action') return 'single';
+  switch (domain) {
+    case 'binary_sensor':
+    case 'light':
+    case 'switch':
+    case 'fan':
+      return 'on';
+    case 'cover':
+      return 'open';
+    case 'lock':
+      return 'unlocked';
+    case 'media_player':
+      return 'playing';
+    default:
+      return undefined;
+  }
+}
+
+const TRIGGER_PRIORITY = ['binary_sensor', 'sensor', 'lock', 'cover', 'light', 'switch', 'media_player', 'climate'];
+
+/** Crea una automatización con el dispositivo como disparador y la abre en el editor. */
+export function createAutomationForDevice(deviceId: Id): Id | null {
+  const store = useProjectStore.getState();
+  const device = store.project.devices.find((d) => d.id === deviceId);
+  const def = device ? getDefinition(device.definitionId, catalog) : undefined;
+  if (!device || !def) return null;
+  const entities = entitiesForDevice(device, def);
+  const rank = (domain: string, key: string) => (key === 'action' ? -1 : TRIGGER_PRIORITY.indexOf(domain) === -1 ? 99 : TRIGGER_PRIORITY.indexOf(domain));
+  const main = [...entities].sort((a, b) => rank(a.definition.domain, a.definition.key) - rank(b.definition.domain, b.definition.key))[0];
+  const trigger: Trigger = { type: 'state', entityId: main?.entityId ?? '' };
+  const to = main ? suggestedTo(main.definition.domain, main.definition.key) : undefined;
+  if (to !== undefined) trigger.to = to;
+  const automation = store.addAutomation({ name: `Cuando ${device.name}…`, triggers: [trigger] });
+  const ui = useUiStore.getState();
+  ui.selectAutomation(automation.id);
+  ui.setBottomTab('automations');
+  return automation.id;
 }

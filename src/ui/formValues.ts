@@ -90,3 +90,25 @@ export function servicesForEntity(entityId: string): string[] {
   const list = SERVICES_BY_DOMAIN[domain] ?? ['turn_on', 'turn_off'];
   return list.map((s) => `${domain}.${s}`);
 }
+
+/** Segundos -> "m:ss" (vacío si no hay valor). */
+export function durationToInput(seconds: number | undefined): string {
+  if (seconds === undefined || !Number.isFinite(seconds) || seconds <= 0) return '';
+  const s = Math.round(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * "m:ss", "h:mm:ss" o un número de segundos -> segundos. Vacío -> undefined.
+ * Devuelve null si el texto no es válido.
+ */
+export function parseDurationInput(text: string): number | undefined | null {
+  const t = text.trim();
+  if (t === '') return undefined;
+  if (/^\d+(\.\d+)?$/.test(t)) return Math.round(Number(t));
+  const parts = t.split(':');
+  if (parts.length < 2 || parts.length > 3 || parts.some((p) => !/^\d+$/.test(p))) return null;
+  const nums = parts.map(Number);
+  const total = nums.reduce((acc, n) => acc * 60 + n, 0);
+  return total > 0 ? total : undefined;
+}

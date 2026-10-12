@@ -75,7 +75,7 @@ empty:
     ['a: 1\n  b: 2\n', /línea 2.*sangría/],
     ['a: 1\na: 2\n', /clave repetida "a"/],
     ['a: "sin cerrar\n', /comillas dobles/],
-    ['a: {b: 1}\n', /mapas en línea/],
+    ['a: {b: 1\n', /mapa en línea sin cerrar/],
     ['a:\n\t- b\n', /tabuladores/],
   ])('errores en español (%#)', (text, msg) => {
     expect(() => parseYaml(text)).toThrow(msg);
@@ -159,5 +159,67 @@ describe('parseAutomationYaml', () => {
     expect(c).toEqual({ type: 'state', entityId: 'light.x', state: 'on' });
     expect(t?.type === 'state' && sameState(t.to ?? '', true) && sameState(t.from ?? '', false)).toBe(true);
     expect(c?.type === 'state' && sameState(c.state, true)).toBe(true);
+  });
+});
+
+describe('for: y datos de luz (fase 1)', () => {
+  const withFor: Automation = {
+    id: 'f1',
+    name: 'Apagar la luz del pasillo tras 2 min sin movimiento',
+    enabled: true,
+    mode: 'single',
+    triggers: [{ type: 'state', entityId: 'binary_sensor.mov_motion', to: 'off', for: 120 }],
+    conditions: [{ type: 'state', entityId: 'light.pasillo', state: 'on', for: 3725 }],
+    actions: [
+      { type: 'service', service: 'light.turn_on', entityId: 'light.pasillo', data: { brightness_pct: 60, color_temp_kelvin: 2700 } },
+      { type: 'service', service: 'light.turn_on', entityId: 'light.salon', data: { rgb_color: '[255, 120, 40]', brightness_step_pct: -10 } },
+    ],
+  };
+
+  it('exporta for en formato HH:MM:SS y rgb_color como lista', () => {
+    const yaml = automationToYaml(withFor);
+    expect(yaml).toContain('for: "00:02:00"');
+    expect(yaml).toContain('for: "01:02:05"');
+    expect(yaml).toMatch(/rgb_color:\n\s+- 255\n\s+- 120\n\s+- 40/);
+    expect(yaml).toContain('brightness_step_pct: -10');
+  });
+
+  it('ida y vuelta', () => {
+    expect(parseAutomationYaml(automationToYaml(withFor))).toEqual(withFor);
+  });
+
+  it('lee for como texto, segundos o mapa (también en línea) y rgb_color en línea', () => {
+    const text = [
+      'trigger:',
+      '  - platform: state',
+      '    entity_id: binary_sensor.a',
+      '    to: "off"',
+      '    for: {minutes: 5}',
+      '  - platform: state',
+      '    entity_id: binary_sensor.b',
+      '    for:',
+      '      hours: 1',
+      '      seconds: 30',
+      '  - platform: state',
+      '    entity_id: binary_sensor.c',
+      '    for: 45',
+      '  - platform: state',
+      '    entity_id: binary_sensor.d',
+      '    for: "00:10"',
+      'action:',
+      '  - service: light.turn_on',
+      '    target:',
+      '      entity_id: light.a',
+      '    data:',
+      '      rgb_color: [255, 0, 0]',
+      '',
+    ].join('\n');
+    const a = parseAutomationYaml(text);
+    expect(a.triggers.map((t) => (t.type === 'state' ? t.for : undefined))).toEqual([300, 3630, 45, 600]);
+    expect(a.actions[0]).toMatchObject({ data: { rgb_color: '[255, 0, 0]' } });
+  });
+
+  it('parseScalar admite mapas en línea simples', () => {
+    expect(parseScalar('{minutes: 5, seconds: "10"}')).toEqual({ minutes: 5, seconds: '10' });
   });
 });

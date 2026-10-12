@@ -1,11 +1,22 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { Device, DeviceDefinition, IssueSeverity, Protocol, Room } from '../types';
+import type { DeviceView } from '../devices/presentation';
+import type { CanvasMode } from '../store/uiStore';
 
 export type DeviceNodeData = {
   device: Device;
   definition?: DeviceDefinition;
-  /** Texto del estado principal en la simulación. */
-  stateLabel?: string;
+  /** Presentación del estado en la simulación (null si falta la definición). */
+  view: DeviceView | null;
+  /** Etiqueta de la acción principal (clic en Uso, ⏻ en Edición), si la hay. */
+  primaryLabel?: string;
+  /** Icono del dispositivo. */
+  icon: string;
+  mode: CanvasMode;
+  /** Popover de control abierto. */
+  popoverOpen: boolean;
+  /** Cambia con cada nueva entrada del registro sobre el dispositivo (para el destello). */
+  activityKey?: string;
   active: boolean;
   issueSeverity?: IssueSeverity;
   issueMessages: string[];
@@ -21,6 +32,11 @@ export type RoomNodeData = {
   deviceCount: number;
 };
 
+export type RoomLabelNodeData = {
+  name: string;
+  deviceCount: number;
+};
+
 export type PlanNodeData = {
   src: string;
 };
@@ -28,7 +44,8 @@ export type PlanNodeData = {
 export type DeviceNode = Node<DeviceNodeData, 'device'>;
 export type RoomNode = Node<RoomNodeData, 'room'>;
 export type PlanNode = Node<PlanNodeData, 'plan'>;
-export type AppNode = DeviceNode | RoomNode | PlanNode;
+export type RoomLabelNode = Node<RoomLabelNodeData, 'roomLabel'>;
+export type AppNode = DeviceNode | RoomNode | PlanNode | RoomLabelNode;
 
 export type ProtocolEdgeData = { protocol: Protocol };
 export type ProtocolEdge = Edge<ProtocolEdgeData, 'protocol'>;

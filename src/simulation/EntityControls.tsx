@@ -1,142 +1,9 @@
-import { useState } from 'react';
-import type { EntityDefinition, EntityState, EntityStateValue } from '../types';
+import type { EntityDefinition, EntityState } from '../types';
 import { useSimulationStore } from '../store/simulationStore';
-import { Button } from '../ui/Button';
-import { inputClass } from '../ui/Field';
-
-interface QuickAction {
-  label: string;
-  state: EntityStateValue;
-}
-
-function quickActions(def: EntityDefinition): QuickAction[] {
-  switch (def.domain) {
-    case 'light':
-    case 'switch':
-    case 'fan':
-      return [
-        { label: 'Encender', state: 'on' },
-        { label: 'Apagar', state: 'off' },
-      ];
-    case 'binary_sensor':
-      switch (def.deviceClass) {
-        case 'motion':
-        case 'occupancy':
-        case 'presence':
-          return [
-            { label: 'Movimiento', state: 'on' },
-            { label: 'Sin movimiento', state: 'off' },
-          ];
-        case 'door':
-        case 'window':
-        case 'opening':
-        case 'garage_door':
-          return [
-            { label: 'Abrir', state: 'on' },
-            { label: 'Cerrar', state: 'off' },
-          ];
-        case 'moisture':
-          return [
-            { label: 'Fuga de agua', state: 'on' },
-            { label: 'Seco', state: 'off' },
-          ];
-        case 'smoke':
-          return [
-            { label: 'Humo detectado', state: 'on' },
-            { label: 'Despejado', state: 'off' },
-          ];
-        default:
-          return [
-            { label: 'Activar', state: 'on' },
-            { label: 'Desactivar', state: 'off' },
-          ];
-      }
-    case 'cover':
-      return [
-        { label: 'Abrir', state: 'open' },
-        { label: 'Cerrar', state: 'closed' },
-      ];
-    case 'lock':
-      return [
-        { label: 'Bloquear', state: 'locked' },
-        { label: 'Desbloquear', state: 'unlocked' },
-      ];
-    case 'media_player':
-      return [
-        { label: 'Reproducir', state: 'playing' },
-        { label: 'Pausa', state: 'paused' },
-        { label: 'Apagar', state: 'off' },
-      ];
-    case 'vacuum':
-      return [
-        { label: 'Limpiar', state: 'cleaning' },
-        { label: 'A la base', state: 'docked' },
-      ];
-    case 'camera':
-      return [
-        { label: 'Grabar', state: 'recording' },
-        { label: 'En reposo', state: 'idle' },
-      ];
-    case 'climate':
-      return [
-        { label: 'Calefacción', state: 'heat' },
-        { label: 'Frío', state: 'cool' },
-        { label: 'Apagar', state: 'off' },
-      ];
-    default:
-      return [];
-  }
-}
-
-/** Pulsaciones de mandos inalámbricos (Aqara, IKEA...). */
-const PRESS_ACTIONS: Array<{ label: string; action: string }> = [
-  { label: 'Pulsación', action: 'single' },
-  { label: 'Doble', action: 'double' },
-  { label: 'Mantener', action: 'hold' },
-];
-
-function NumberSetter({
-  label,
-  initial,
-  unit,
-  onApply,
-}: {
-  label: string;
-  initial: number;
-  unit?: string;
-  onApply: (value: number) => void;
-}) {
-  // Controlado: si el estado cambia desde fuera (escenas, scripts, automatizaciones) se refleja.
-  const [value, setValue] = useState(String(initial));
-  const [seen, setSeen] = useState(initial);
-  if (seen !== initial) {
-    setSeen(initial);
-    setValue(String(initial));
-  }
-  return (
-    <form
-      className="flex items-center gap-1"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const n = Number(value);
-        if (Number.isFinite(n)) onApply(n);
-      }}
-    >
-      <input
-        type="number"
-        step="any"
-        aria-label={label}
-        className={`${inputClass} w-24`}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-      />
-      {unit && <span className="text-xs text-slate-500">{unit}</span>}
-      <Button type="submit" size="sm">
-        Aplicar
-      </Button>
-    </form>
-  );
-}
+import { ActuatorControl } from './controls/ActuatorControl';
+import { BinarySensorControl, NumericSensorControl, RemoteControl } from './controls/SensorControl';
+import { isRemoteEntity } from './controls/labels';
+import { useSensorEvents } from './controls/useSensorEvents';
 
 export interface EntityControlsProps {
   entityId: string;
@@ -144,85 +11,31 @@ export interface EntityControlsProps {
   state: EntityState | undefined;
 }
 
-/** Botones para simular eventos sobre una entidad. */
+function isNumeric(v: unknown): boolean {
+  return typeof v === 'number' || (typeof v === 'string' && v !== '' && !Number.isNaN(Number(v)));
+}
+
+/**
+ * Controles de simulación de una entidad. Los actuadores pasan siempre por callService (la misma
+ * vía que las automatizaciones) y los sensores por los eventos simulados; nunca se escribe el
+ * estado en crudo.
+ */
 export function EntityControls({ entityId, definition, state }: EntityControlsProps) {
-  const setEntity = useSimulationStore((s) => s.setEntity);
-  const press = useSimulationStore((s) => s.pressButton);
-  const simNow = useSimulationStore((s) => s.sim.now);
-  const apply = (next: EntityStateValue, attributes?: EntityState['attributes']) =>
-    setEntity(entityId, { state: next, attributes: { ...state?.attributes, ...attributes } });
+  const callService = useSimulationStore((s) => s.callService);
+  const events = useSensorEvents();
+  const onService = (service: string, data?: Parameters<typeof callService>[2]) => callService(entityId, service, data);
 
-  const actions = quickActions(definition);
-  const current = state?.state;
-
-  if (definition.domain === 'button') {
-    return (
-      <Button size="sm" onClick={() => apply(new Date(simNow).toISOString())}>
-        Pulsar
-      </Button>
-    );
+  if (isRemoteEntity(definition)) {
+    return <RemoteControl entityId={entityId} definition={definition} state={state} onService={onService} events={events} />;
   }
-
-  if (definition.key === 'action') {
-    return (
-      <div className="flex flex-wrap gap-1" role="group" aria-label={`Acciones de ${definition.name}`}>
-        {PRESS_ACTIONS.map((a) => (
-          <Button key={a.action} size="sm" onClick={() => press(entityId, a.action)}>
-            {a.label}
-          </Button>
-        ))}
-      </div>
-    );
+  if (definition.domain === 'binary_sensor') {
+    return <BinarySensorControl entityId={entityId} definition={definition} state={state} onService={onService} events={events} />;
   }
-
   if (definition.domain === 'sensor') {
-    const numeric = typeof current === 'number' || (typeof current === 'string' && current !== '' && !Number.isNaN(Number(current)));
-    if (numeric || definition.unit) {
-      return (
-        <NumberSetter
-          key={entityId}
-          label={`Nuevo valor de ${definition.name}`}
-          initial={Number(current ?? 0) || 0}
-          unit={definition.unit}
-          onApply={(n) => apply(n)}
-        />
-      );
+    if (isNumeric(state?.state) || isNumeric(definition.initialState) || definition.unit) {
+      return <NumericSensorControl entityId={entityId} definition={definition} state={state} onService={onService} events={events} />;
     }
     return null;
   }
-
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap gap-1">
-        {actions.map((a) => (
-          <Button
-            key={a.label}
-            size="sm"
-            variant={current === a.state ? 'primary' : 'secondary'}
-            aria-pressed={current === a.state}
-            onClick={() => apply(a.state)}
-          >
-            {a.label}
-          </Button>
-        ))}
-      </div>
-      {definition.domain === 'climate' && (
-        <NumberSetter
-          key={`${entityId}-temp`}
-          label="Temperatura objetivo"
-          initial={Number(state?.attributes?.temperature ?? 21) || 21}
-          unit="°C"
-          onApply={(n) => apply(current ?? 'heat', { temperature: n })}
-        />
-      )}
-      {definition.domain === 'light' && (
-        <NumberSetter
-          key={`${entityId}-bri`}
-          label="Brillo (0-255)"
-          initial={Number(state?.attributes?.brightness ?? 255) || 255}
-          onApply={(n) => apply(n > 0 ? 'on' : 'off', { brightness: Math.max(0, Math.min(255, Math.round(n))) })}
-        />
-      )}
-    </div>
-  );
+  return <ActuatorControl entityId={entityId} definition={definition} state={state} onService={onService} events={events} />;
 }

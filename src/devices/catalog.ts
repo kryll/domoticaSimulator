@@ -3,7 +3,9 @@ import rawDevices from '../../data/devices.json';
 import type {
   Brand,
   DeviceCategory,
+  ColorMode,
   DeviceDefinition,
+  EntityCapabilities,
   EntityDefinition,
   Id,
   IotClass,
@@ -70,6 +72,44 @@ function isStateValue(v: unknown): v is string | number | boolean {
   return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
 }
 
+const COLOR_MODES: readonly ColorMode[] = ['onoff', 'brightness', 'color_temp', 'rgb'];
+const CAPABILITY_NUMBERS = ['minKelvin', 'maxKelvin', 'minTemp', 'maxTemp', 'tempStep', 'travelSeconds', 'motionTimeoutSeconds', 'powerWatts'] as const;
+const CAPABILITY_LISTS = ['hvacModes', 'presetModes', 'sources', 'buttonActions'] as const;
+const CAPABILITY_KEYS: readonly string[] = ['colorModes', ...CAPABILITY_NUMBERS, ...CAPABILITY_LISTS];
+
+function stringList(v: unknown, key: string, where: string): string[] {
+  if (!Array.isArray(v) || v.some((x) => typeof x !== 'string' || x === '')) fail(where, `"capabilities.${key}" debe ser una lista de textos`);
+  return v.map(String);
+}
+
+/** Valida las capacidades de una entidad (todas opcionales, sin claves desconocidas). */
+export function parseCapabilities(raw: unknown, where: string): EntityCapabilities {
+  if (!isObj(raw)) fail(where, '"capabilities" debe ser un objeto');
+  const unknownKey = Object.keys(raw).find((k) => !CAPABILITY_KEYS.includes(k));
+  if (unknownKey !== undefined) fail(where, `capacidad desconocida "${unknownKey}"`);
+  const caps: EntityCapabilities = {};
+  if (raw.colorModes !== undefined) {
+    if (!Array.isArray(raw.colorModes) || raw.colorModes.length === 0) fail(where, '"capabilities.colorModes" debe ser una lista no vacía');
+    caps.colorModes = raw.colorModes.map((m) => oneOf(m, COLOR_MODES, 'capabilities.colorModes', where));
+  }
+  for (const key of CAPABILITY_NUMBERS) {
+    const v = raw[key];
+    if (v === undefined) continue;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) fail(where, `"capabilities.${key}" debe ser un número no negativo`);
+    caps[key] = v;
+  }
+  for (const key of CAPABILITY_LISTS) {
+    if (raw[key] !== undefined) caps[key] = stringList(raw[key], key, where);
+  }
+  if (caps.minKelvin !== undefined && caps.maxKelvin !== undefined && caps.minKelvin > caps.maxKelvin) {
+    fail(where, '"capabilities.minKelvin" no puede ser mayor que maxKelvin');
+  }
+  if (caps.minTemp !== undefined && caps.maxTemp !== undefined && caps.minTemp > caps.maxTemp) {
+    fail(where, '"capabilities.minTemp" no puede ser mayor que maxTemp');
+  }
+  return caps;
+}
+
 function parseEntity(raw: unknown, where: string): EntityDefinition {
   if (!isObj(raw)) fail(where, 'cada entidad debe ser un objeto');
   const key = reqString(raw, 'key', where);
@@ -86,6 +126,7 @@ function parseEntity(raw: unknown, where: string): EntityDefinition {
   const unit = optString(raw, 'unit', where);
   if (deviceClass !== undefined) entity.deviceClass = deviceClass;
   if (unit !== undefined) entity.unit = unit;
+  if (raw.capabilities !== undefined) entity.capabilities = parseCapabilities(raw.capabilities, `${where}, entidad "${key}"`);
   return entity;
 }
 

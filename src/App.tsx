@@ -3,6 +3,8 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { TopBar } from './ui/TopBar';
 import { BottomPanel } from './ui/BottomPanel';
 import { Toast } from './ui/Toast';
+import { ShortcutsHelp } from './ui/ShortcutsHelp';
+import { AddToSceneDialog } from './scenes/AddToSceneDialog';
 import { CatalogPanel } from './catalog/CatalogPanel';
 import { Canvas } from './canvas/Canvas';
 import { FloorBar } from './canvas/FloorBar';
@@ -69,7 +71,7 @@ export function App({ autoLoad = true }: AppProps) {
           <div className="hidden w-72 shrink-0 border-r border-slate-200 md:block">
             <CatalogPanel />
           </div>
-          <main className="flex min-w-0 flex-1 flex-col" aria-label="Plano">
+          <main className="relative flex min-w-0 flex-1 flex-col" aria-label="Plano">
             <FloorBar />
             <div className="min-h-0 flex-1">
               <Canvas />
@@ -81,6 +83,8 @@ export function App({ autoLoad = true }: AppProps) {
           </div>
         </div>
         <Toast />
+        <ShortcutsHelp />
+        <AddToSceneDialog />
       </div>
     </ReactFlowProvider>
   );

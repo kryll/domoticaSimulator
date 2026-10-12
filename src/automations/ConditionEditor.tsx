@@ -4,6 +4,7 @@ import { CONDITION_LABELS, conditionFactories } from '../ui/automationOptions';
 import { ListEditor } from './ListEditor';
 import { TextField } from '../ui/Field';
 import { parseNumberInput, parseStateInput, stateToInput } from '../ui/formValues';
+import { DurationField } from './DurationField';
 
 export function ConditionEditor({ value, onChange }: { value: Condition; onChange: (c: Condition) => void }) {
   const header = <div className="mb-1 text-xs font-semibold text-slate-700">{CONDITION_LABELS[value.type]}</div>;
@@ -12,12 +13,22 @@ export function ConditionEditor({ value, onChange }: { value: Condition; onChang
       return (
         <div>
           {header}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr,1fr,1fr]">
             <EntityPicker label="Entidad" value={value.entityId} onChange={(entityId) => onChange({ ...value, entityId })} />
             <TextField
               label="Estado"
               value={stateToInput(value.state)}
               onChange={(e) => onChange({ ...value, state: parseStateInput(e.target.value) ?? '' })}
+            />
+            <DurationField
+              label="Desde hace al menos (min:s)"
+              value={value.for}
+              onChange={(sec) => {
+                const next = { ...value };
+                if (sec === undefined) delete next.for;
+                else next.for = sec;
+                onChange(next);
+              }}
             />
           </div>
         </div>

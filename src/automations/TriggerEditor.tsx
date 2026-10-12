@@ -3,7 +3,14 @@ import { EntityPicker } from './EntityPicker';
 import { TRIGGER_LABELS } from '../ui/automationOptions';
 import { SelectField, TextField } from '../ui/Field';
 import { parseNumberInput, parseStateInput, stateToInput } from '../ui/formValues';
+import { DurationField } from './DurationField';
 
+function withFor<T extends { for?: number }>(value: T, seconds: number | undefined): T {
+  const next = { ...value };
+  if (seconds === undefined) delete next.for;
+  else next.for = seconds;
+  return next;
+}
 
 export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (t: Trigger) => void }) {
   const header = <div className="mb-1 text-xs font-semibold text-slate-700">{TRIGGER_LABELS[value.type]}</div>;
@@ -12,7 +19,7 @@ export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (
       return (
         <div>
           {header}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr,1fr,1fr,1fr]">
             <EntityPicker label="Entidad" value={value.entityId} onChange={(entityId) => onChange({ ...value, entityId })} />
             <TextField
               label="Desde (opcional)"
@@ -26,6 +33,7 @@ export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (
               placeholder="on, off, open…"
               onChange={(e) => onChange({ ...value, to: parseStateInput(e.target.value) })}
             />
+            <DurationField value={value.for} onChange={(sec) => onChange(withFor(value, sec))} />
           </div>
         </div>
       );

@@ -46,3 +46,16 @@ describe('formValues', () => {
     expect(servicesForEntity('raro.x')).toEqual(['raro.turn_on', 'raro.turn_off']);
   });
 });
+
+describe('duraciones', () => {
+  it('convierte m:ss y segundos', async () => {
+    const { durationToInput, parseDurationInput } = await import('./formValues');
+    expect(durationToInput(90)).toBe('1:30');
+    expect(durationToInput(undefined)).toBe('');
+    expect(parseDurationInput('1:30')).toBe(90);
+    expect(parseDurationInput('1:00:05')).toBe(3605);
+    expect(parseDurationInput('45')).toBe(45);
+    expect(parseDurationInput('')).toBeUndefined();
+    expect(parseDurationInput('1:x')).toBeNull();
+  });
+});

@@ -101,6 +101,12 @@ describe('validación del catálogo', () => {
     [{ ...valid, entities: [{ key: 'a', domain: 'tv', name: 'L', initialState: 'off' }] }, /domain/],
     [{ ...valid, entities: [{ key: 'a', domain: 'light', name: 'L' }] }, /estado inicial/],
     [{ ...valid, entities: [valid.entities[0], valid.entities[0]] }, /repetida/],
+    [{ ...valid, entities: [{ key: 'a', domain: 'light', name: 'L', initialState: 'off', capabilities: [] }] }, /capabilities/],
+    [{ ...valid, entities: [{ key: 'a', domain: 'light', name: 'L', initialState: 'off', capabilities: { colorModes: ['hs'] } }] }, /colorModes/],
+    [{ ...valid, entities: [{ key: 'a', domain: 'light', name: 'L', initialState: 'off', capabilities: { minKelvin: 6500, maxKelvin: 2000 } }] }, /minKelvin/],
+    [{ ...valid, entities: [{ key: 'a', domain: 'cover', name: 'L', initialState: 'closed', capabilities: { travelSeconds: -1 } }] }, /travelSeconds/],
+    [{ ...valid, entities: [{ key: 'a', domain: 'climate', name: 'L', initialState: 'heat', capabilities: { hvacModes: [1] } }] }, /hvacModes/],
+    [{ ...valid, entities: [{ key: 'a', domain: 'light', name: 'L', initialState: 'off', capabilities: { color: true } }] }, /capacidad desconocida/],
     ['texto', /objeto/],
   ])('rechaza definiciones mal formadas (%#)', (raw, msg) => {
     expect(() => parseDefinition(raw)).toThrow(msg);
@@ -113,6 +119,31 @@ describe('validación del catálogo', () => {
   it('rechaza ids repetidos y no listas', () => {
     expect(() => parseCatalog([valid, valid])).toThrow(/id repetido "x"/);
     expect(() => parseCatalog({})).toThrow(/se esperaba una lista/);
+  });
+});
+
+describe('capacidades del catálogo', () => {
+  const caps = (id: string, key: string) => def(id).entities.find((e) => e.key === key)?.capabilities;
+
+  it('luces: Hue White solo brillo, Hue Color rgb + color_temp, TRÅDFRI 2200-4000 K', () => {
+    expect(caps('hue-white-e27', 'light')?.colorModes).toEqual(['brightness']);
+    expect(caps('hue-white-color-e27', 'light')?.colorModes).toEqual(expect.arrayContaining(['rgb', 'color_temp']));
+    expect(caps('ikea-tradfri-e27-ws', 'light')).toMatchObject({ colorModes: ['brightness', 'color_temp'], minKelvin: 2200, maxKelvin: 4000 });
+  });
+
+  it('movimiento, persianas, termostatos, enchufes, TV y mandos', () => {
+    expect(caps('aqara-motion-p1', 'motion')?.motionTimeoutSeconds).toBe(60);
+    expect(caps('ikea-vallhorn', 'motion')?.motionTimeoutSeconds).toBe(180);
+    expect(caps('shelly-2pm-gen3-cover', 'cover')?.travelSeconds).toBe(20);
+    expect(caps('netatmo-thermostat', 'climate')).toMatchObject({ hvacModes: expect.arrayContaining(['off', 'heat']), tempStep: 0.5 });
+    expect(caps('tapo-p110', 'switch')?.powerWatts).toBeGreaterThan(0);
+    expect(caps('lg-oled-c3', 'media')?.sources?.length).toBeGreaterThan(2);
+    expect(caps('aqara-wireless-mini-switch', 'action')?.buttonActions).toContain('double');
+  });
+
+  it('todas las luces, persianas y termostatos declaran capacidades', () => {
+    const missing = catalog.flatMap((d) => d.entities.filter((e) => ['light', 'cover', 'climate'].includes(e.domain) && !e.capabilities).map((e) => `${d.id}.${e.key}`));
+    expect(missing).toEqual([]);
   });
 });
 

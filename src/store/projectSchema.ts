@@ -71,10 +71,21 @@ function optStateValue(o: Obj, key: string, path: string): EntityStateValue | un
   return o[key] === undefined ? undefined : stateValue(o[key], `${path}.${key}`);
 }
 
+/** `for` en segundos (número no negativo), opcional. */
+function optDuration(o: Obj, path: string): number | undefined {
+  const v = optNum(o, 'for', path);
+  if (v !== undefined && v < 0) fail(`${path}.for`, 'no puede ser negativo');
+  return v;
+}
+
 function stateRecord(v: unknown, path: string): Record<string, EntityStateValue> {
   const o = obj(v, path);
   const result: Record<string, EntityStateValue> = {};
-  for (const [k, val] of Object.entries(o)) result[k] = stateValue(val, `${path}.${k}`);
+  for (const [k, val] of Object.entries(o)) {
+    // Listas numéricas (rgb_color: [255, 0, 0]) se normalizan al texto "[255, 0, 0]".
+    if (Array.isArray(val) && val.length > 0 && val.every((x) => typeof x === 'number' && Number.isFinite(x))) result[k] = `[${val.join(', ')}]`;
+    else result[k] = stateValue(val, `${path}.${k}`);
+  }
   return result;
 }
 
@@ -146,6 +157,8 @@ function trigger(v: unknown, path: string): Trigger {
   const to = optStateValue(o, 'to', path);
   if (from !== undefined) t.from = from;
   if (to !== undefined) t.to = to;
+  const forSeconds = optDuration(o, path);
+  if (forSeconds !== undefined) t.for = forSeconds;
   return t;
 }
 
@@ -153,8 +166,12 @@ function condition(v: unknown, path: string): Condition {
   const o = obj(v, path);
   const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'and', 'or'] as const, path);
   switch (type) {
-    case 'state':
-      return { type, entityId: str(o, 'entityId', path), state: stateValue(o.state, `${path}.state`) };
+    case 'state': {
+      const c: Condition = { type, entityId: str(o, 'entityId', path), state: stateValue(o.state, `${path}.state`) };
+      const forSeconds = optDuration(o, path);
+      if (forSeconds !== undefined) c.for = forSeconds;
+      return c;
+    }
     case 'numeric_state': {
       const c: Condition = { type, entityId: str(o, 'entityId', path) };
       const above = optNum(o, 'above', path);
@@ -217,6 +234,8 @@ function entityState(v: unknown, path: string): EntityState {
   const o = obj(v, path);
   const st: EntityState = { state: stateValue(o.state, `${path}.state`) };
   if (o.attributes !== undefined) st.attributes = stateRecord(o.attributes, `${path}.attributes`);
+  const lastChanged = optNum(o, 'lastChanged', path);
+  if (lastChanged !== undefined) st.lastChanged = lastChanged;
   return st;
 }
 

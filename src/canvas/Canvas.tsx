@@ -20,14 +20,18 @@ import {
 import type { IssueSeverity, Project, SimulationState } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
-import { useUiStore, type Selection } from '../store/uiStore';
+import { useUiStore, type CanvasMode, type Selection } from '../store/uiStore';
+import { deviceIcon, deviceView, primaryAction } from '../devices/presentation';
 import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
 import { addDeviceFromDefinition, connectDevices } from './actions';
 import { polygonBounds } from './geometry';
-import { formatState, isActiveState } from './style';
-import { DEVICE_DRAG_MIME, type AppNode, type DeviceNode, type ProtocolEdge, type RoomNode, type PlanNode } from './types';
+import { CATEGORY_ICONS } from './style';
+import { DeviceContextMenu } from './DeviceContextMenu';
+import { setHoveredDevice, useCanvasKeyboard } from './useCanvasKeyboard';
+import { DEVICE_DRAG_MIME, type AppNode, type DeviceNode, type ProtocolEdge, type RoomNode, type PlanNode, type RoomLabelNode } from './types';
 import { DeviceNodeView } from './DeviceNodeView';
-import { RoomNodeView } from './RoomNodeView';
+import { RoomLabelNodeView, RoomNodeView } from './RoomNodeView';
+import { roomLabelPosition } from './roomLabel';
 import { PlanNodeView } from './PlanNodeView';
 import { ProtocolEdgeView } from './ProtocolEdgeView';
 import { CanvasToolbar } from './CanvasToolbar';
@@ -36,7 +40,7 @@ import { CoverageLayer } from './CoverageLayer';
 import { RoomDrawOverlay } from './RoomDrawOverlay';
 import { PROTOCOL_COLORS } from './style';
 
-const nodeTypes: NodeTypes = { device: DeviceNodeView, room: RoomNodeView, plan: PlanNodeView };
+const nodeTypes: NodeTypes = { device: DeviceNodeView, room: RoomNodeView, plan: PlanNodeView, roomLabel: RoomLabelNodeView };
 const edgeTypes: EdgeTypes = { protocol: ProtocolEdgeView };
 
 const severityRank: Record<IssueSeverity, number> = { error: 3, warning: 2, info: 1 };
@@ -45,15 +49,27 @@ function isSelected(selection: Selection | null, kind: Selection['kind'], id: st
   return selection?.kind === kind && selection.id === id;
 }
 
-function buildNodes(
-  project: Project,
-  floorId: string,
-  entities: SimulationState['entities'],
-  selection: Selection | null,
-  highlighted: string[],
-  connectMode: boolean,
-  roomsDraggable: boolean,
-): AppNode[] {
+/** entity_id -> id de su última entrada en el registro. */
+function lastLogByEntity(log: SimulationState['log']): Map<string, string> {
+  const map = new Map<string, string>();
+  for (let i = log.length - 1; i >= 0; i--) {
+    const entry = log[i];
+    if (entry?.entityId && !map.has(entry.entityId)) map.set(entry.entityId, entry.id);
+  }
+  return map;
+}
+
+interface BuildOptions {
+  selection: Selection | null;
+  highlighted: string[];
+  mode: CanvasMode;
+  popoverDeviceId: string | null;
+}
+
+function buildNodes(project: Project, floorId: string, sim: SimulationState, opts: BuildOptions): AppNode[] {
+  const { selection, highlighted, mode, popoverDeviceId } = opts;
+  const connectMode = mode === 'connect';
+  const roomsDraggable = mode === 'select';
   const floor = project.floors.find((f) => f.id === floorId);
   const analysis = analyzeProject(project);
   const highlightSet = new Set(highlighted);
@@ -75,16 +91,31 @@ function buildNodes(
     nodes.push(plan);
   }
 
+  const devicePoints = project.devices.filter((d) => d.floorId === floorId).map((d) => d.position);
   for (const room of project.rooms) {
     if (room.floorId !== floorId) continue;
     const b = polygonBounds(room.polygon);
+    const deviceCount = project.devices.filter((d) => d.roomId === room.id).length;
+    const label: RoomLabelNode = {
+      id: `label-${room.id}`,
+      type: 'roomLabel',
+      position: roomLabelPosition(b, devicePoints, room.name.length * 8 + (deviceCount > 0 ? 64 : 34)),
+      data: { name: room.name, deviceCount },
+      draggable: false,
+      selectable: false,
+      connectable: false,
+      focusable: false,
+      zIndex: 0,
+      style: { pointerEvents: 'none' },
+    };
+    nodes.push(label);
     const node: RoomNode = {
       id: room.id,
       type: 'room',
       position: { x: b.x + b.width / 2, y: b.y + b.height / 2 },
       width: b.width,
       height: b.height,
-      data: { room, deviceCount: project.devices.filter((d) => d.roomId === room.id).length },
+      data: { room, deviceCount },
       selected: isSelected(selection, 'room', room.id),
       draggable: roomsDraggable,
       connectable: false,
@@ -111,12 +142,17 @@ function buildNodes(
     }
   }
 
+  const lastLog = lastLogByEntity(sim.log);
   for (const device of project.devices) {
     if (device.floorId !== floorId) continue;
-    const refs = entitiesOfDevice(device);
-    const states = refs.map((r) => entities[r.entityId]);
-    const active = refs.some((r, i) => r.definition.domain !== 'sensor' && isActiveState(states[i]));
-    const first = refs[0];
+    const definition = definitionOf(device);
+    const view = definition ? deviceView(device, definition, sim) : null;
+    const primary = definition ? primaryAction(device, definition, sim) : null;
+    const activity = entitiesOfDevice(device)
+      .map((r) => lastLog.get(r.entityId))
+      .filter((x): x is string => x !== undefined)
+      .sort()
+      .join('|');
     const issues = analysis.issuesByDevice.get(device.id) ?? [];
     let severity: IssueSeverity | undefined;
     for (const issue of issues) {
@@ -128,9 +164,14 @@ function buildNodes(
       position: device.position,
       data: {
         device,
-        definition: definitionOf(device),
-        stateLabel: first ? formatState(states[0], first.definition.unit) : undefined,
-        active,
+        definition,
+        view,
+        icon: definition ? deviceIcon(definition) : CATEGORY_ICONS.sensor,
+        mode,
+        popoverOpen: popoverDeviceId === device.id,
+        ...(primary ? { primaryLabel: primary.label } : {}),
+        activityKey: activity || undefined,
+        active: view?.active ?? false,
         issueSeverity: severity,
         issueMessages: issues.map((i) => i.message),
         unreachable: analysis.unreachable.has(device.id),
@@ -139,8 +180,8 @@ function buildNodes(
         crossFloorLinks: crossLinks.get(device.id) ?? [],
       },
       selected: isSelected(selection, 'device', device.id),
-      draggable: !connectMode,
-      zIndex: 1,
+      draggable: mode === 'select' || mode === 'room',
+      zIndex: popoverDeviceId === device.id ? 5 : 1,
     };
     nodes.push(node);
   }
@@ -162,6 +203,14 @@ function mergeNodes(prev: AppNode[], next: AppNode[]): AppNode[] {
   });
 }
 
+/** Espera para distinguir clic de doble clic en modo Uso. */
+export const DOUBLE_CLICK_MS = 220;
+let pendingClick: ReturnType<typeof setTimeout> | undefined;
+function cancelPendingClick() {
+  if (pendingClick) clearTimeout(pendingClick);
+  pendingClick = undefined;
+}
+
 export function Canvas() {
   const project = useProjectStore((s) => s.project);
   const activeFloorId = useUiStore((s) => s.activeFloorId);
@@ -170,16 +219,19 @@ export function Canvas() {
   const mode = useUiStore((s) => s.canvasMode);
   const showCoverage = useUiStore((s) => s.showCoverage);
   const focusRequest = useUiStore((s) => s.focusRequest);
-  const entities = useSimulationStore((s) => s.sim.entities);
+  const sim = useSimulationStore((s) => s.sim);
+  const popoverDeviceId = useUiStore((s) => s.popoverDeviceId);
+  const connectFromId = useUiStore((s) => s.connectFromId);
   const { screenToFlowPosition, fitView } = useReactFlow();
+  useCanvasKeyboard();
 
   const floor = project.floors.find((f) => f.id === activeFloorId) ?? project.floors[0];
   const floorId = floor?.id ?? '';
-  const connectMode = mode === 'connect';
+  const interact = mode === 'interact';
 
   const derived = useMemo(
-    () => buildNodes(project, floorId, entities, selection, highlighted, connectMode, mode === 'select'),
-    [project, floorId, entities, selection, highlighted, connectMode, mode],
+    () => buildNodes(project, floorId, sim, { selection, highlighted, mode, popoverDeviceId }),
+    [project, floorId, sim, selection, highlighted, mode, popoverDeviceId],
   );
   const [nodes, setNodes] = useState<AppNode[]>(derived);
   useEffect(() => setNodes((prev) => mergeNodes(prev, derived)), [derived]);
@@ -211,12 +263,63 @@ export function Canvas() {
 
   const select = useUiStore((s) => s.select);
   const onNodeClick: NodeMouseHandler<AppNode> = useCallback(
-    (_e, node) => {
-      if (node.type === 'device') select({ kind: 'device', id: node.id });
-      else if (node.type === 'room') select({ kind: 'room', id: node.id });
+    (e, node) => {
+      const ui = useUiStore.getState();
+      ui.openContextMenu(null);
+      if (node.type === 'device') {
+        if (ui.connectFromId) {
+          if (ui.connectFromId !== node.id) {
+            connectDevices(ui.connectFromId, node.id);
+            ui.setConnectFrom(null);
+            ui.setCanvasMode('select');
+          }
+          return;
+        }
+        const usar = ui.canvasMode === 'interact';
+        if (usar && !e.shiftKey) {
+          // Se espera un instante por si es un doble clic (que abre el control completo).
+          if (e.detail > 1) return;
+          cancelPendingClick();
+          const id = node.id;
+          pendingClick = setTimeout(() => {
+            pendingClick = undefined;
+            const done = useSimulationStore.getState().quickAction(id);
+            if (!done) useUiStore.getState().openPopover(id);
+          }, DOUBLE_CLICK_MS);
+          return;
+        }
+        if (e.altKey && ui.canvasMode === 'select') {
+          useSimulationStore.getState().quickAction(node.id);
+          return;
+        }
+        select({ kind: 'device', id: node.id });
+      } else if (node.type === 'room') {
+        if (ui.canvasMode !== 'interact') select({ kind: 'room', id: node.id });
+      }
     },
     [select],
   );
+  const onNodeDoubleClick: NodeMouseHandler<AppNode> = useCallback((_e, node) => {
+    cancelPendingClick();
+    if (node.type !== 'device' || useUiStore.getState().canvasMode === 'connect') return;
+    useUiStore.getState().openPopover(node.id);
+  }, []);
+  const onNodeContextMenu: NodeMouseHandler<AppNode> = useCallback((e, node) => {
+    if (node.type !== 'device') return;
+    e.preventDefault();
+    useUiStore.getState().openContextMenu({ deviceId: node.id, x: e.clientX, y: e.clientY });
+  }, []);
+  const onNodeMouseEnter: NodeMouseHandler<AppNode> = useCallback((_e, node) => {
+    if (node.type === 'device') setHoveredDevice(node.id);
+  }, []);
+  const onNodeMouseLeave: NodeMouseHandler<AppNode> = useCallback(() => setHoveredDevice(null), []);
+  const onPaneClick = useCallback(() => {
+    const ui = useUiStore.getState();
+    ui.select(null);
+    ui.openPopover(null);
+    ui.openContextMenu(null);
+    if (ui.connectFromId) ui.setConnectFrom(null);
+  }, []);
   const onEdgeClick: EdgeMouseHandler<ProtocolEdge> = useCallback(
     (_e, edge) => select({ kind: 'connection', id: edge.id }),
     [select],
@@ -282,15 +385,6 @@ export function Canvas() {
     return () => clearTimeout(t);
   }, [focusRequest, fitView]);
 
-  useEffect(() => {
-    if (mode !== 'room') return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') useUiStore.getState().setCanvasMode('select');
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [mode]);
-
   const floorDevices = useMemo(() => project.devices.filter((d) => d.floorId === floorId), [project, floorId]);
 
   return (
@@ -303,14 +397,25 @@ export function Canvas() {
         nodeOrigin={[0.5, 0.5]}
         onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
+        onNodeContextMenu={onNodeContextMenu}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
         onEdgeClick={onEdgeClick}
-        onPaneClick={() => select(null)}
+        onPaneClick={onPaneClick}
+        onPaneContextMenu={(e) => {
+          e.preventDefault();
+          useUiStore.getState().openContextMenu(null);
+        }}
+        nodesDraggable={!interact}
+        nodeDragThreshold={4}
+        zoomOnDoubleClick={false}
         onNodeDragStop={onNodeDragStop}
         onDelete={onDelete}
         onConnect={onConnect}
         connectionMode={ConnectionMode.Loose}
         connectionRadius={40}
-        deleteKeyCode={['Delete', 'Backspace']}
+        deleteKeyCode={interact ? null : ['Delete', 'Backspace']}
         panOnDrag={mode !== 'room'}
         selectionOnDrag={false}
         fitView
@@ -328,7 +433,15 @@ export function Canvas() {
           <Legend protocols={usedProtocols.length > 0 ? usedProtocols : undefined} />
         </FlowPanel>
         {mode === 'room' && floorId && <RoomDrawOverlay floorId={floorId} />}
+        {connectFromId && (
+          <FlowPanel position="top-right">
+            <p className="rounded-md bg-sky-700/95 px-2 py-1 text-xs font-medium text-white shadow" role="status">
+              Elige el dispositivo de destino · Esc cancela
+            </p>
+          </FlowPanel>
+        )}
       </ReactFlow>
+      <DeviceContextMenu />
     </div>
   );
 }

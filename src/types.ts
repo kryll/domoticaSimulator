@@ -89,6 +89,39 @@ export type NetworkRole =
 
 export type PowerSource = 'mains' | 'battery' | 'usb' | 'poe';
 
+/** Modos de color de una luz (subconjunto de los de HA). */
+export type ColorMode = 'onoff' | 'brightness' | 'color_temp' | 'rgb';
+
+/**
+ * Capacidades de una entidad (catálogo). Todas opcionales: si faltan, el motor usa valores
+ * por defecto razonables por dominio (ver src/devices/capabilities.ts).
+ */
+export interface EntityCapabilities {
+  /** light: modos admitidos. Sin 'brightness' no se regula; sin 'rgb' no admite color. */
+  colorModes?: ColorMode[];
+  /** light: rango de temperatura de color en kelvin. */
+  minKelvin?: number;
+  maxKelvin?: number;
+  /** climate: modos HVAC admitidos ('off', 'heat', 'cool', 'auto', 'heat_cool'...). */
+  hvacModes?: string[];
+  /** climate: presets ('eco', 'away', 'comfort', 'boost'...). */
+  presetModes?: string[];
+  /** climate: límites y paso de la consigna en °C. */
+  minTemp?: number;
+  maxTemp?: number;
+  tempStep?: number;
+  /** cover: segundos para recorrer del 0 al 100 %. */
+  travelSeconds?: number;
+  /** binary_sensor de movimiento: segundos hasta volver a 'off' sin nuevo movimiento. */
+  motionTimeoutSeconds?: number;
+  /** switch/light: potencia nominal de la carga o máxima del enchufe, en vatios. */
+  powerWatts?: number;
+  /** media_player: fuentes seleccionables. */
+  sources?: string[];
+  /** sensor de acción de un mando: acciones posibles ('single', 'double', 'hold'...). */
+  buttonActions?: string[];
+}
+
 export interface EntityDefinition {
   /** Sufijo del entity_id, p. ej. "temperature" -> sensor.<nombre>_temperature */
   key: string;
@@ -99,6 +132,7 @@ export interface EntityDefinition {
   unit?: string;
   /** Estado inicial en la simulación. */
   initialState: EntityStateValue;
+  capabilities?: EntityCapabilities;
 }
 
 /** Entrada del catálogo (data/devices.json). */
@@ -184,13 +218,15 @@ export interface Connection {
 // ---------- Automatizaciones ----------
 
 export type Trigger =
-  | { type: 'state'; entityId: string; to?: EntityStateValue; from?: EntityStateValue }
+  /** `for`: segundos que el nuevo estado debe mantenerse antes de disparar. */
+  | { type: 'state'; entityId: string; to?: EntityStateValue; from?: EntityStateValue; for?: number }
   | { type: 'numeric_state'; entityId: string; above?: number; below?: number }
   | { type: 'time'; at: string } // "HH:MM"
   | { type: 'sun'; event: 'sunrise' | 'sunset'; offsetMinutes?: number };
 
 export type Condition =
-  | { type: 'state'; entityId: string; state: EntityStateValue }
+  /** `for`: segundos mínimos que la entidad lleva en ese estado. */
+  | { type: 'state'; entityId: string; state: EntityStateValue; for?: number }
   | { type: 'numeric_state'; entityId: string; above?: number; below?: number }
   | { type: 'time'; after?: string; before?: string }
   | { type: 'and'; conditions: Condition[] }
@@ -244,9 +280,19 @@ export interface Project {
 
 export type EntityStateValue = string | number | boolean;
 
+/**
+ * Datos de una llamada a servicio. Admite listas numéricas (rgb_color: [255, 0, 0]).
+ * En `Action.data` y en los atributos de estado, rgb_color se guarda como texto "[255, 0, 0]"
+ * (EntityStateValue) para no cambiar esos tipos; el YAML lo exporta como lista.
+ */
+export type ServiceDataValue = EntityStateValue | number[];
+export type ServiceData = Record<string, ServiceDataValue>;
+
 export interface EntityState {
   state: EntityStateValue;
   attributes?: Record<string, EntityStateValue>;
+  /** Hora simulada (ms) del último cambio de `state` (last_changed de HA). Sin valor: desde el inicio. */
+  lastChanged?: number;
 }
 
 export interface SimulationState {
@@ -262,7 +308,21 @@ export interface SimulationState {
   /** Ejecuciones encoladas de automatizaciones en modo 'queued' que esperan a que termine la anterior. */
   queue?: PendingAction[];
   log: LogEntry[];
+  /**
+   * Dispositivos simulados como desconectados: deviceId -> estado de sus entidades antes del
+   * fallo, para restaurarlo al recuperarse.
+   */
+  offline?: Record<Id, Record<string, EntityState>>;
 }
+
+/** Temporizador interno del motor (no es una espera de una automatización). */
+export type SimTimer =
+  /** Fija estados al vencer (p. ej. autoapagado del movimiento). */
+  | { kind: 'set_states'; setStates: Record<string, EntityState>; reason?: string }
+  /** Siguiente paso del recorrido de una persiana hacia `target` (0-100). */
+  | { kind: 'cover_step'; entityId: string; target: number }
+  /** Disparador de estado con `for:` pendiente de confirmar. */
+  | { kind: 'state_for'; entityId: string; automationId: Id; triggerIndex: number };
 
 export interface PendingAction {
   id: Id;
@@ -270,6 +330,10 @@ export interface PendingAction {
   automationId?: Id;
   scriptId?: Id;
   actions: Action[];
+  /** Si existe, es un temporizador interno: `actions` va vacío y no cuenta como espera. */
+  timer?: SimTimer;
+  /** Clave única del temporizador: uno nuevo con la misma clave sustituye al anterior. */
+  key?: string;
 }
 
 export type LogLevel = 'info' | 'warning' | 'error';

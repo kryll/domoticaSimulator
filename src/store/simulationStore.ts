@@ -1,10 +1,19 @@
 import { create } from 'zustand';
-import type { EntityState, EntityStateValue, Id, Project, SimulationState } from '../types';
+import type { EntityState, EntityStateValue, Id, Project, ServiceData, SimulationState } from '../types';
 import { entitiesForDevice, initialEntityStates } from '../devices/entities';
 import { catalog, getDefinition } from '../devices/catalog';
+import { applyQuickAction, primaryAction, setLevelAction, stepAction, type QuickAction } from '../devices/presentation';
 import { simNowFromLocalDate } from '../simulation/clock';
-import { pressButton } from '../simulation/events';
-import { activateScene, createSimulationState, runScript, setEntityState, tick } from '../simulation/engine';
+import { jamLock, motionPulse, openDoor, pressButton, setDeviceOffline, setSensorValue } from '../simulation/events';
+import {
+  activateScene,
+  callService,
+  createSimulationState,
+  runAutomation,
+  runScript,
+  setEntityState,
+  tick,
+} from '../simulation/engine';
 import { useProjectStore } from './projectStore';
 
 export const SPEEDS = [1, 10, 60, 600] as const;
@@ -31,6 +40,24 @@ export interface SimulationStoreState {
   pressButton: (entityId: string, action: string) => void;
   activateScene: (sceneId: Id) => void;
   runScript: (scriptId: Id) => void;
+  /** Llama a un servicio de HA ("turn_on" o "light.turn_on") sobre una entidad. */
+  callService: (entityId: string, service: string, data?: ServiceData) => void;
+  /** Acción principal del dispositivo (encender/apagar, abrir/cerrar...). Devuelve si hizo algo. */
+  quickAction: (deviceId: Id) => boolean;
+  /** Sube (+1) o baja (-1) el nivel: brillo, posición, volumen o consigna. */
+  step: (deviceId: Id, direction: 1 | -1) => boolean;
+  /** Fija el nivel en % (0 = apagar / cerrar). */
+  setLevel: (deviceId: Id, pct: number) => boolean;
+  /** Ejecuta una automatización a mano (opcionalmente sin comprobar condiciones). */
+  runAutomation: (automationId: Id, skipConditions?: boolean) => void;
+  /** Simula que un dispositivo pierde (o recupera) la conexión. */
+  setDeviceOffline: (deviceId: Id, offline: boolean) => void;
+  /** Movimiento detectado con autoapagado según el modelo. */
+  motionPulse: (entityId: string, seconds?: number) => void;
+  /** Sensor binario a on/off (puerta, fuga, humo...). */
+  setBinary: (entityId: string, on: boolean) => void;
+  setSensorValue: (entityId: string, value: number) => void;
+  jamLock: (entityId: string) => void;
   /**
    * Ajusta las entidades de la simulación al proyecto: añade las nuevas, quita las que ya no
    * existen y traslada el estado de las renombradas (comparando con `prev`).
@@ -85,6 +112,19 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
   pressButton: (entityId, action) => set((s) => ({ sim: pressButton(s.sim, project(), entityId, action) })),
   activateScene: (sceneId) => set((s) => ({ sim: activateScene(s.sim, project(), sceneId) })),
   runScript: (scriptId) => set((s) => ({ sim: runScript(s.sim, project(), scriptId) })),
+  callService: (entityId, service, data) =>
+    set((s) => ({ sim: callService(s.sim, project(), entityId, normalizeService(entityId, service), data) })),
+  quickAction: (deviceId) => applyDeviceAction(deviceId, (device, def, sim) => primaryAction(device, def, sim)),
+  step: (deviceId, direction) => applyDeviceAction(deviceId, (device, def, sim) => stepAction(device, def, sim, direction)),
+  setLevel: (deviceId, pct) =>
+    applyDeviceAction(deviceId, (device, def, sim) => setLevelAction(device, def, sim, Math.max(0, Math.min(100, pct)))),
+  runAutomation: (automationId, skipConditions = false) =>
+    set((s) => ({ sim: runAutomation(s.sim, project(), automationId, { skipConditions }) })),
+  setDeviceOffline: (deviceId, offline) => set((s) => ({ sim: setDeviceOffline(s.sim, project(), deviceId, offline) })),
+  motionPulse: (entityId, seconds) => set((s) => ({ sim: motionPulse(s.sim, project(), entityId, seconds) })),
+  setBinary: (entityId, on) => set((s) => ({ sim: openDoor(s.sim, project(), entityId, on) })),
+  setSensorValue: (entityId, value) => set((s) => ({ sim: setSensorValue(s.sim, project(), entityId, value) })),
+  jamLock: (entityId) => set((s) => ({ sim: jamLock(s.sim, project(), entityId) })),
   syncWithProject: (p, prev) => {
     const current = get().sim.entities;
     const renamed = prev ? renamedEntityIds(prev, p) : new Map<string, string>();
@@ -108,6 +148,32 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     set((s) => ({ sim: { ...s.sim, entities } }));
   },
 }));
+
+/** "turn_on" -> "light.turn_on" (el motor recibe siempre dominio.servicio). */
+export function normalizeService(entityId: string, service: string): string {
+  if (service.includes('.')) return service;
+  const dot = entityId.indexOf('.');
+  return dot === -1 ? service : `${entityId.slice(0, dot)}.${service}`;
+}
+
+type ActionPicker = (
+  device: Project['devices'][number],
+  def: NonNullable<ReturnType<typeof getDefinition>>,
+  sim: SimulationState,
+) => QuickAction | null | undefined;
+
+/** Calcula una acción rápida sobre un dispositivo y la aplica. */
+function applyDeviceAction(deviceId: Id, pick: ActionPicker): boolean {
+  const p = project();
+  const device = p.devices.find((d) => d.id === deviceId);
+  const def = device ? getDefinition(device.definitionId, catalog) : undefined;
+  if (!device || !def) return false;
+  const { sim } = useSimulationStore.getState();
+  const action = pick(device, def, sim);
+  if (!action) return false;
+  useSimulationStore.setState({ sim: applyQuickAction(sim, p, action) });
+  return true;
+}
 
 /** entity_id nuevo -> entity_id anterior de los dispositivos cuyo nombre ha cambiado. */
 export function renamedEntityIds(prev: Project, next: Project): Map<string, string> {

@@ -1,6 +1,7 @@
 // Serializador YAML propio (sin dependencias) y exportación al formato de Home Assistant.
 import type { Action, Automation, Condition, EntityStateValue, Project, Scene, Script, Trigger } from '../types';
 import { slugify } from '../devices/entities';
+import { sceneEntityState } from '../simulation/scenes';
 
 export type YamlScalar = string | number | boolean | null;
 export type YamlValue = YamlScalar | YamlValue[] | YamlMap;
@@ -120,12 +121,34 @@ function formatOffset(minutes: number): string {
   return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}:00`;
 }
 
+/** Segundos -> "HH:MM:SS" (formato de `for:` y `delay:` en HA). */
+export function formatHms(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+}
+
+/** Lista numérica escrita como texto ("[255, 0, 0]") -> lista YAML; el resto, tal cual. */
+function dataValueToYaml(v: EntityStateValue): YamlValue {
+  if (typeof v === 'string' && /^\[\s*-?[\d.]+(\s*,\s*-?[\d.]+)*\s*\]$/.test(v.trim())) {
+    return v.trim().slice(1, -1).split(',').map((x) => Number(x.trim()));
+  }
+  return v;
+}
+
+function dataToYaml(data: Record<string, EntityStateValue>): YamlMap {
+  const m: YamlMap = {};
+  for (const [k, v] of Object.entries(data)) m[k] = dataValueToYaml(v);
+  return m;
+}
+
 export function triggerToYaml(t: Trigger): YamlMap {
   switch (t.type) {
     case 'state': {
       const m: YamlMap = { platform: 'state', entity_id: t.entityId };
       if (t.from !== undefined) m.from = stateToYaml(t.from);
       if (t.to !== undefined) m.to = stateToYaml(t.to);
+      if (t.for !== undefined && t.for > 0) m.for = formatHms(t.for);
       return m;
     }
     case 'numeric_state': {
@@ -146,8 +169,11 @@ export function triggerToYaml(t: Trigger): YamlMap {
 
 export function conditionToYaml(c: Condition): YamlMap {
   switch (c.type) {
-    case 'state':
-      return { condition: 'state', entity_id: c.entityId, state: stateToYaml(c.state) };
+    case 'state': {
+      const m: YamlMap = { condition: 'state', entity_id: c.entityId, state: stateToYaml(c.state) };
+      if (c.for !== undefined && c.for > 0) m.for = formatHms(c.for);
+      return m;
+    }
     case 'numeric_state': {
       const m: YamlMap = { condition: 'numeric_state', entity_id: c.entityId };
       if (c.above !== undefined) m.above = c.above;
@@ -170,7 +196,7 @@ export function actionToYaml(a: Action, ctx: YamlContext = {}): YamlMap {
   switch (a.type) {
     case 'service': {
       const m: YamlMap = { service: a.service, target: { entity_id: a.entityId } };
-      if (a.data && Object.keys(a.data).length > 0) m.data = { ...a.data };
+      if (a.data && Object.keys(a.data).length > 0) m.data = dataToYaml(a.data);
       return m;
     }
     case 'scene':
@@ -201,13 +227,17 @@ export function automationsToYaml(project: Project): string {
   return toYaml(project.automations.map((a) => automationToObject(a, project)));
 }
 
-/** scenes.yaml: los atributos se aplanan junto a state, como en HA. */
+/**
+ * scenes.yaml: los atributos se aplanan junto a state, como en HA. Solo se exportan los
+ * atributos relevantes por dominio (sin friendly_name, unidades ni device_class).
+ */
 export function scenesToYaml(project: Project): string {
   return toYaml(
     project.scenes.map((s) => {
       const entities: YamlMap = {};
-      for (const [entityId, st] of Object.entries(s.entities)) {
-        entities[entityId] = { state: typeof st.state === 'boolean' ? stateToYaml(st.state) : st.state, ...st.attributes };
+      for (const [entityId, raw] of Object.entries(s.entities)) {
+        const st = sceneEntityState(entityId, raw);
+        entities[entityId] = { state: typeof st.state === 'boolean' ? stateToYaml(st.state) : st.state, ...dataToYaml(st.attributes ?? {}) };
       }
       return { id: s.id, name: s.name, entities };
     }),

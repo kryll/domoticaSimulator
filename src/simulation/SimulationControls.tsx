@@ -1,4 +1,5 @@
 import { useSimulationStore, SPEEDS, type Speed } from '../store/simulationStore';
+import { useUiStore } from '../store/uiStore';
 import { formatSimDate, formatSimTime } from './clock';
 import { Button } from '../ui/Button';
 
@@ -11,17 +12,37 @@ export function SimulationControls() {
   const pause = useSimulationStore((s) => s.pause);
   const reset = useSimulationStore((s) => s.reset);
   const setSpeed = useSimulationStore((s) => s.setSpeed);
+  const waits = useSimulationStore((s) => s.sim.pending.filter((p) => !p.timer).length);
+
+  const onStart = () => {
+    start();
+    const ui = useUiStore.getState();
+    if (ui.canvasMode !== 'interact' && !ui.interactOffered) {
+      ui.setInteractOffered(true);
+      ui.notify('Simulación en marcha. ¿Quieres controlar los dispositivos con un clic?', 'info', {
+        action: { label: 'Activar modo Uso (U)', run: () => useUiStore.getState().setCanvasMode('interact') },
+      });
+    }
+  };
 
   return (
     <div className="flex items-center gap-1" role="group" aria-label="Simulación">
       {running ? (
-        <Button size="sm" onClick={pause} aria-label="Pausar simulación" title="Pausar">
+        <Button size="sm" onClick={pause} aria-label="Pausar simulación" title="Pausar (P)">
           ⏸ Pausar
         </Button>
       ) : (
-        <Button size="sm" variant="primary" onClick={start} aria-label="Iniciar simulación" title="Iniciar">
+        <Button size="sm" variant="primary" onClick={onStart} aria-label="Iniciar simulación" title="Iniciar (P)">
           ▶ Simular
         </Button>
+      )}
+      {!running && waits > 0 && (
+        <span
+          className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+          title="Hay acciones con espera (delay) pendientes que no avanzan mientras la simulación está en pausa"
+        >
+          ⏳ {waits} en espera
+        </span>
       )}
       <Button
         size="sm"

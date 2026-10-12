@@ -5,6 +5,7 @@ import { analyzeMesh } from '../network/mesh';
 import { validateProject } from '../network/validator';
 import { createSimulationState, runScript, setEntityState, tick } from '../simulation/engine';
 import { DAY_MS } from '../simulation/clock';
+import { motionPulse } from '../simulation/events';
 import type { Action, Condition, Project, Trigger } from '../types';
 import {
   createDemoProject,
@@ -46,7 +47,7 @@ describe('createDemoProject', () => {
     expect(demo.rooms.length).toBeGreaterThanOrEqual(6);
     expect(demo.devices.length).toBeGreaterThanOrEqual(15);
     expect(demo.connections.length).toBeGreaterThanOrEqual(demo.devices.length - 1);
-    expect(demo.automations).toHaveLength(3);
+    expect(demo.automations).toHaveLength(5);
     expect(demo.scenes).toHaveLength(2);
     expect(demo.scripts).toHaveLength(1);
   });
@@ -99,6 +100,17 @@ describe('createDemoProject', () => {
     expect(sim.log.some((l) => l.level === 'error')).toBe(false);
   });
 
+  it('luz del pasillo: se enciende con movimiento y se apaga 2 min después (for:)', () => {
+    let sim = createSimulationState(demo, catalog, Date.UTC(2026, 9, 12, 12, 0));
+    sim = motionPulse(sim, demo, 'binary_sensor.movimiento_pasillo_motion');
+    expect(sim.entities['light.luz_pasillo']).toMatchObject({ state: 'on', attributes: { color_temp_kelvin: 3000 } });
+    sim = tick(sim, demo, 60_000 + 119_000);
+    expect(sim.entities['light.luz_pasillo']?.state).toBe('on');
+    sim = tick(sim, demo, 1_000);
+    expect(sim.entities['light.luz_pasillo']?.state).toBe('off');
+    expect(sim.log.some((l) => l.level !== 'info')).toBe(false);
+  });
+
   it('cada llamada devuelve una copia independiente', () => {
     const other = createDemoProject();
     expect(other.id).not.toBe(demo.id);
@@ -111,6 +123,18 @@ describe('JSON', () => {
   it('exporta e importa sin pérdidas', () => {
     const demo = createDemoProject();
     expect(importProjectJson(exportProjectJson(demo))).toEqual(demo);
+  });
+
+  it('conserva for: y normaliza rgb_color en lista a texto', () => {
+    const demo = createDemoProject();
+    const raw = JSON.parse(exportProjectJson(demo)) as { automations: { triggers: { for?: number }[]; actions: { data?: Record<string, unknown> }[] }[] };
+    const first = raw.automations[0]!;
+    first.actions[0]!.data = { rgb_color: [255, 0, 0] };
+    const imported = importProjectJson(JSON.stringify(raw));
+    expect(imported.automations[0]?.actions[0]).toMatchObject({ data: { rgb_color: '[255, 0, 0]' } });
+    expect(imported.automations.find((a) => a.id === 'demo-auto-pasillo-off')?.triggers[0]).toMatchObject({ for: 120 });
+    first.triggers[0]!.for = -5;
+    expect(() => importProjectJson(JSON.stringify(raw))).toThrow(/for no puede ser negativo/);
   });
 
   it('importa proyectos con campos opcionales', () => {

@@ -1,0 +1,100 @@
+import { useEffect, useMemo, useRef, type SyntheticEvent } from 'react';
+import { useProjectStore } from '../store/projectStore';
+import { useSimulationStore } from '../store/simulationStore';
+import { useUiStore } from '../store/uiStore';
+import { EntityControls } from '../simulation/EntityControls';
+import { entitiesOfDevice } from './analysis';
+import { formatState } from './style';
+
+/** Dominios de diagnóstico que se muestran al final y plegados. */
+const DIAGNOSTIC_KEYS = new Set(['battery', 'linkquality', 'rssi', 'signal_strength', 'voltage']);
+
+function stop(e: SyntheticEvent) {
+  e.stopPropagation();
+}
+
+/**
+ * Control completo de un dispositivo, anclado al nodo con NodeToolbar. Los eventos no se
+ * propagan al nodo (el portal de React los haría llegar a React Flow).
+ */
+export function DevicePopover({ deviceId }: { deviceId: string }) {
+  const device = useProjectStore((s) => s.project.devices.find((d) => d.id === deviceId));
+  const entities = useSimulationStore((s) => s.sim.entities);
+  const close = () => useUiStore.getState().openPopover(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const refs = useMemo(() => (device ? entitiesOfDevice(device) : []), [device]);
+  const main = refs.filter((r) => !DIAGNOSTIC_KEYS.has(r.definition.key) && !DIAGNOSTIC_KEYS.has(r.definition.deviceClass ?? ''));
+  const diag = refs.filter((r) => !main.includes(r));
+
+  useEffect(() => {
+    const first =
+      ref.current?.querySelector<HTMLElement>('ul button, ul input, ul select') ?? ref.current?.querySelector<HTMLElement>('button');
+    first?.focus({ preventScroll: true });
+  }, []);
+
+  if (!device) return null;
+  const single = refs.length === 1;
+
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label={`Control de ${device.name}`}
+      className="nodrag nopan nowheel w-72 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl"
+      onClick={stop}
+      onDoubleClick={stop}
+      onContextMenu={stop}
+      onPointerDown={stop}
+      onMouseDown={stop}
+      onWheel={stop}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Escape') close();
+      }}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="truncate text-sm font-semibold text-slate-800">{device.name}</h2>
+        <button
+          type="button"
+          onClick={close}
+          aria-label="Cerrar control"
+          className="rounded px-1.5 text-sm text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+        >
+          ✕
+        </button>
+      </div>
+      {refs.length === 0 && <p className="text-xs text-slate-500">Este dispositivo no expone entidades.</p>}
+      <ul className="flex max-h-[60vh] flex-col gap-3 overflow-auto">
+        {main.map((r) => (
+          <li key={r.entityId}>
+            {!single && (
+              <div className="mb-1 flex items-baseline justify-between gap-2">
+                <span className="truncate text-xs font-semibold text-slate-700" title={r.entityId}>
+                  {r.definition.name}
+                </span>
+                <span className="text-xs tabular-nums text-slate-500">{formatState(entities[r.entityId], r.definition.unit)}</span>
+              </div>
+            )}
+            <EntityControls entityId={r.entityId} definition={r.definition} state={entities[r.entityId]} />
+          </li>
+        ))}
+      </ul>
+      {diag.length > 0 && (
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer text-slate-500">Diagnóstico</summary>
+          <ul className="mt-1 flex flex-col gap-2">
+            {diag.map((r) => (
+              <li key={r.entityId}>
+                <div className="mb-0.5 flex justify-between text-slate-600">
+                  <span>{r.definition.name}</span>
+                  <span className="tabular-nums">{formatState(entities[r.entityId], r.definition.unit)}</span>
+                </div>
+                <EntityControls entityId={r.entityId} definition={r.definition} state={entities[r.entityId]} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}

@@ -215,12 +215,13 @@ describe('runActions y servicios', () => {
       { type: 'service', service: 'media_player.volume_set', entityId: 'media_player.tele', data: { volume_level: 0.5 } },
       { type: 'service', service: 'vacuum.start', entityId: 'vacuum.robot_vacuum' },
     ]);
-    expect(sim.entities['cover.persiana_cover']).toMatchObject({ state: 'open', attributes: { current_position: 100 } });
+    expect(sim.entities['cover.persiana_cover']).toMatchObject({ state: 'opening', attributes: { current_position: 0 } });
+    expect(tick(sim, p, 20_000).entities['cover.persiana_cover']).toMatchObject({ state: 'open', attributes: { current_position: 100 } });
     expect(state(sim, 'lock.cerradura_lock')).toBe('unlocked');
     expect(sim.entities['climate.termo_climate']).toMatchObject({ state: 'heat', attributes: { temperature: 23 } });
     expect(sim.entities['media_player.tele']).toMatchObject({ state: 'on', attributes: { volume_level: 0.5 } });
     expect(state(sim, 'vacuum.robot_vacuum')).toBe('cleaning');
-    const after = run(
+    const after = tick(run(
       [
         { type: 'service', service: 'cover.close', entityId: 'cover.persiana_cover' },
         { type: 'service', service: 'lock.lock', entityId: 'lock.cerradura_lock' },
@@ -228,8 +229,8 @@ describe('runActions y servicios', () => {
         { type: 'service', service: 'media_player.media_play', entityId: 'media_player.tele' },
         { type: 'service', service: 'vacuum.return_to_base', entityId: 'vacuum.robot_vacuum' },
       ],
-      sim,
-    );
+      tick(sim, p, 20_000),
+    ), p, 30_000);
     expect(state(after, 'cover.persiana_cover')).toBe('closed');
     expect(state(after, 'lock.cerradura_lock')).toBe('locked');
     expect(state(after, 'climate.termo_climate')).toBe('off');
@@ -338,8 +339,9 @@ describe('tick', () => {
     const p = home({
       automations: [auto('sol', { triggers: [{ type: 'sun', event: 'sunset', offsetMinutes: -30 }], actions: [{ type: 'service', service: 'cover.close_cover', entityId: 'cover.persiana_cover' }] })],
     });
-    const open = runActions(start(p, at(19)), p, [{ type: 'service', service: 'cover.open_cover', entityId: 'cover.persiana_cover' }]);
+    const open = tick(runActions(start(p, at(19)), p, [{ type: 'service', service: 'cover.open_cover', entityId: 'cover.persiana_cover' }]), p, 20_000);
     expect(state(tick(open, p, 29 * MINUTE_MS), 'cover.persiana_cover')).toBe('open');
+    expect(state(tick(open, p, 29 * MINUTE_MS + 50_000), 'cover.persiana_cover')).toBe('closing');
     expect(state(tick(open, p, 30 * MINUTE_MS), 'cover.persiana_cover')).toBe('closed');
     expect(state(tick(open, p, 30 * MINUTE_MS, { sun: { sunrise: '07:00', sunset: '21:00' } }), 'cover.persiana_cover')).toBe('open');
   });

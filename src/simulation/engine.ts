@@ -13,12 +13,25 @@ import type {
   Project,
   Scene,
   Script,
+  ServiceData,
+  SimTimer,
   SimulationState,
   Trigger,
 } from '../types';
-import { entityDomain, initialEntityStates, slugify } from '../devices/entities';
-import { DAY_MS, DEFAULT_SUN, isTimeBetween, MINUTE_MS, parseHHMM, startOfDay, sunTimes, type SunConfig } from './clock';
-import { applyService } from './services';
+import { entitiesForDevice, entityDomain, initialEntityStates, slugify } from '../devices/entities';
+import { entityCapabilities, findEntityOwner } from '../devices/capabilities';
+import { DAY_MS, DEFAULT_SUN, isTimeBetween, MINUTE_MS, parseHHMM, SECOND_MS, startOfDay, sunTimes, type SunConfig } from './clock';
+import {
+  applyService,
+  coverPosition,
+  coverStep,
+  coverStepSeconds,
+  describeServiceData,
+  sceneServiceCalls,
+  updateClimateCurrentTemperature,
+} from './services';
+
+export { captureSceneEntities } from './scenes';
 
 /** Profundidad máxima de llamadas anidadas (automatización → acción → automatización...). */
 export const MAX_DEPTH = 10;
@@ -46,6 +59,16 @@ function nextSeq(log: LogEntry[]): number {
   const last = log[log.length - 1];
   const n = last ? Number(last.id.replace(/^log-/, '')) : 0;
   return Number.isFinite(n) ? n + 1 : log.length + 1;
+}
+
+/** Añade una entrada al registro (id secuencial, registro acotado). */
+export function appendLog(
+  sim: SimulationState,
+  level: LogLevel,
+  message: string,
+  extra: { entityId?: string; automationId?: Id } = {},
+): SimulationState {
+  return addLog(sim, level, message, extra);
 }
 
 function addLog(
@@ -90,14 +113,66 @@ function isEntityState(v: EntityState | EntityStateValue): v is EntityState {
   return typeof v === 'object' && v !== null && 'state' in v;
 }
 
-function merge(prev: EntityState, next: EntityState | EntityStateValue): EntityState {
-  if (!isEntityState(next)) return { ...prev, state: next };
+function merge(prev: EntityState, next: EntityState | EntityStateValue, replace: boolean): EntityState {
+  if (!isEntityState(next)) return { state: next, attributes: { ...prev.attributes } };
+  if (replace) return { state: next.state, attributes: { ...next.attributes } };
   return { state: next.state, attributes: { ...prev.attributes, ...next.attributes } };
 }
 
 function friendly(sim: SimulationState, entityId: string): string {
   const name = sim.entities[entityId]?.attributes?.friendly_name;
   return name === undefined ? entityId : String(name);
+}
+
+/** "2 min", "1 h 5 min", "30 s"... */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const parts: string[] = [];
+  if (h) parts.push(`${h} h`);
+  if (m) parts.push(`${m} min`);
+  if (sec || parts.length === 0) parts.push(`${sec} s`);
+  return parts.join(' ');
+}
+
+// ---------- Temporizadores internos ----------
+
+/** Clave del temporizador propio de una entidad (autoapagado, recorrido, vuelta a la base). */
+export function entityTimerKey(entityId: string): string {
+  return `entity:${entityId}`;
+}
+
+/** ¿Es un temporizador interno del motor (no una espera de automatización o script)? */
+export function isTimer(p: PendingAction): boolean {
+  return p.timer !== undefined;
+}
+
+/** Esperas (delay) de automatizaciones y scripts, sin los temporizadores internos. */
+export function userWaits(sim: SimulationState): PendingAction[] {
+  return sim.pending.filter((p) => !isTimer(p));
+}
+
+/** Programa un temporizador interno; sustituye al que tenga la misma clave. */
+export function scheduleTimer(sim: SimulationState, key: string, dueAt: number, timer: SimTimer): SimulationState {
+  const pending = sim.pending.filter((p) => p.key !== key);
+  return { ...sim, pending: [...pending, { id: `timer:${key}`, dueAt, actions: [], timer, key }] };
+}
+
+export function cancelTimer(sim: SimulationState, key: string): SimulationState {
+  if (!sim.pending.some((p) => p.key === key)) return sim;
+  return { ...sim, pending: sim.pending.filter((p) => p.key !== key) };
+}
+
+/** Temporizador interno con esa clave, si existe. */
+export function findTimer(sim: SimulationState, key: string): PendingAction | undefined {
+  return sim.pending.find((p) => p.key === key);
+}
+
+function cancelStateFor(sim: SimulationState, entityId: string): SimulationState {
+  const keep = sim.pending.filter((p) => !(p.timer?.kind === 'state_for' && p.timer.entityId === entityId));
+  return keep.length === sim.pending.length ? sim : { ...sim, pending: keep };
 }
 
 // ---------- Creación ----------
@@ -121,7 +196,8 @@ export function evaluateCondition(c: Condition, sim: SimulationState): boolean {
   switch (c.type) {
     case 'state': {
       const current = sim.entities[c.entityId];
-      return current !== undefined && sameState(current.state, c.state);
+      if (current === undefined || !sameState(current.state, c.state)) return false;
+      return !c.for || current.lastChanged === undefined || sim.now - current.lastChanged >= c.for * SECOND_MS;
     }
     case 'numeric_state':
       return inNumericRange(sim.entities[c.entityId]?.state, c.above, c.below);
@@ -166,8 +242,20 @@ function drainQueue(sim: SimulationState, project: Project, a: Automation, exec:
   return drainQueue(ran, project, a, inner);
 }
 
-function runAutomation(sim: SimulationState, project: Project, a: Automation, exec: Exec, reason: string): SimulationState {
-  if (!a.enabled) return sim;
+interface RunOpts {
+  skipConditions?: boolean;
+  manual?: boolean;
+}
+
+function runAutomationInternal(
+  sim: SimulationState,
+  project: Project,
+  a: Automation,
+  exec: Exec,
+  reason: string,
+  opts: RunOpts = {},
+): SimulationState {
+  if (!a.enabled && !opts.manual) return sim;
   const extra = { automationId: a.id };
   if (exec.depth > MAX_DEPTH) {
     return addLog(sim, 'error', `Automatización «${a.name}» no ejecutada: posible bucle infinito (límite de ${MAX_DEPTH} niveles)`, extra);
@@ -176,7 +264,7 @@ function runAutomation(sim: SimulationState, project: Project, a: Automation, ex
   if (busy && a.mode === 'single') {
     return addLog(sim, 'warning', `Automatización «${a.name}» ya está en ejecución (modo single): se ignora el disparo`, extra);
   }
-  if (!a.conditions.every((c) => evaluateCondition(c, sim))) {
+  if (!opts.skipConditions && !a.conditions.every((c) => evaluateCondition(c, sim))) {
     return addLog(sim, 'info', `Automatización «${a.name}»: condiciones no cumplidas`, extra);
   }
   if (busy && a.mode === 'queued') return enqueue(sim, a);
@@ -209,8 +297,37 @@ function fireStateTriggers(
 ): SimulationState {
   let result = sim;
   for (const a of project.automations) {
-    if (a.triggers.some((t) => stateTriggerMatches(t, entityId, prev, next))) {
-      result = runAutomation(result, project, a, exec, `cambio de ${entityId}`);
+    let immediate = false;
+    for (const [i, t] of a.triggers.entries()) {
+      if (!stateTriggerMatches(t, entityId, prev, next)) continue;
+      if (t.type === 'state' && t.for !== undefined && t.for > 0) {
+        const timer: SimTimer = { kind: 'state_for', entityId, automationId: a.id, triggerIndex: i };
+        result = scheduleTimer(result, `for:${a.id}:${i}`, result.now + t.for * SECOND_MS, timer);
+      } else {
+        immediate = true;
+      }
+    }
+    if (immediate) result = runAutomationInternal(result, project, a, exec, `cambio de ${entityId}`);
+  }
+  return result;
+}
+
+/** Si cambia un sensor de temperatura, actualiza current_temperature del climate de su dispositivo. */
+function syncClimate(sim: SimulationState, project: Project, entityId: string, st: EntityState): SimulationState {
+  if (entityDomain(entityId) !== 'sensor' || st.attributes?.device_class !== 'temperature') return sim;
+  const celsius = toNumber(st.state);
+  const owner = findEntityOwner(project, entityId);
+  if (celsius === undefined || !owner) return sim;
+  let result = sim;
+  for (const e of entitiesForDevice(owner.device, owner.def)) {
+    const climate = result.entities[e.entityId];
+    if (e.definition.domain !== 'climate' || !climate || climate.state === 'unavailable') continue;
+    const updated = updateClimateCurrentTemperature(climate, celsius);
+    result = { ...result, entities: { ...result.entities, [e.entityId]: updated } };
+    const before = climate.attributes?.hvac_action;
+    const after = updated.attributes?.hvac_action;
+    if (before !== after && after !== undefined) {
+      result = addLog(result, 'info', `${friendly(result, e.entityId)}: ${String(before ?? '—')} → ${String(after)} (${celsius} °C)`, { entityId: e.entityId });
     }
   }
   return result;
@@ -222,24 +339,34 @@ function applyChange(
   entityId: string,
   next: EntityState | EntityStateValue,
   exec: Exec,
+  replace = false,
 ): SimulationState {
   const prev = sim.entities[entityId];
   if (!prev) return addLog(sim, 'warning', `Entidad desconocida: ${entityId}`, { entityId });
-  const merged = merge(prev, next);
+  const merged = merge(prev, next, replace);
+  const changed = !sameState(prev.state, merged.state);
+  const lastChanged = changed ? sim.now : prev.lastChanged;
+  if (lastChanged !== undefined) merged.lastChanged = lastChanged;
   let result: SimulationState = { ...sim, entities: { ...sim.entities, [entityId]: merged } };
-  if (sameState(prev.state, merged.state)) return result;
+  if (!changed) return syncClimate(result, project, entityId, merged);
   result = addLog(result, 'info', `${friendly(result, entityId)}: ${normalize(prev.state)} → ${normalize(merged.state)}`, { entityId });
+  result = cancelStateFor(result, entityId);
+  result = syncClimate(result, project, entityId, merged);
   return fireStateTriggers(result, project, entityId, prev.state, merged.state, exec);
 }
 
-/** Cambia el estado de una entidad, lo registra y dispara las automatizaciones afectadas. */
+/**
+ * Cambia el estado de una entidad (evento físico o manual), lo registra y dispara las
+ * automatizaciones afectadas. Por defecto fusiona atributos; con `replace` los sustituye.
+ */
 export function setEntityState(
   sim: SimulationState,
   project: Project,
   entityId: string,
   next: EntityState | EntityStateValue,
+  opts: { replace?: boolean } = {},
 ): SimulationState {
-  return applyChange(sim, project, entityId, next, ROOT);
+  return applyChange(sim, project, entityId, next, ROOT, opts.replace ?? false);
 }
 
 // ---------- Escenas y scripts ----------
@@ -263,7 +390,12 @@ function activateSceneInternal(sim: SimulationState, project: Project, sceneId: 
   let result = addLog(sim, 'info', `Escena «${scene.name}» activada`);
   const inner = { depth: exec.depth + 1, chain: exec.chain };
   for (const [entityId, state] of Object.entries(scene.entities)) {
-    result = applyChange(result, project, entityId, state, inner);
+    const calls = result.entities[entityId] ? sceneServiceCalls(entityId, state) : undefined;
+    if (!calls) {
+      result = applyChange(result, project, entityId, state, inner);
+      continue;
+    }
+    for (const c of calls) result = callServiceInternal(result, project, entityId, c.service, c.data, {}, inner);
   }
   return result;
 }
@@ -290,29 +422,81 @@ export function runScript(sim: SimulationState, project: Project, scriptId: Id):
 
 // ---------- Acciones ----------
 
-function callService(
+function callServiceInternal(
   sim: SimulationState,
   project: Project,
-  action: Extract<Action, { type: 'service' }>,
+  entityId: string,
+  fullService: string,
+  data: ServiceData | undefined,
   ctx: RunCtx,
   exec: Exec,
 ): SimulationState {
-  const [domain = '', service = ''] = action.service.split('.');
-  if (domain === 'scene' && service === 'turn_on') return activateSceneInternal(sim, project, action.entityId, exec);
+  const target = entityDomain(entityId);
+  const [domain = '', service = ''] = fullService.includes('.') ? fullService.split('.') : [target, fullService];
+  const name = `${domain}.${service}`;
+  if (domain === 'scene' && service === 'turn_on') return activateSceneInternal(sim, project, entityId, exec);
   if (domain === 'script') {
-    const ref = service === 'turn_on' ? action.entityId : action.service;
+    const ref = service === 'turn_on' ? entityId : name;
     return runScriptInternal(sim, project, ref, ctx, exec);
   }
-  const current = sim.entities[action.entityId];
-  if (!current) return addLog(sim, 'warning', `Servicio ${action.service}: entidad desconocida ${action.entityId}`, { entityId: action.entityId });
-  const target = entityDomain(action.entityId);
+  const logExtra = { entityId, ...ctx };
+  const current = sim.entities[entityId];
+  if (!current) return addLog(sim, 'warning', `Servicio ${name}: entidad desconocida ${entityId}`, logExtra);
   if (domain !== target && domain !== 'homeassistant') {
-    return addLog(sim, 'warning', `El servicio ${action.service} no aplica a ${action.entityId}`, { entityId: action.entityId });
+    return addLog(sim, 'warning', `El servicio ${name} no aplica a ${entityId}`, logExtra);
   }
-  const next = applyService(target, service, current, action.data, sim.now);
-  if (!next) return addLog(sim, 'warning', `Servicio no soportado en la simulación: ${action.service}`, { entityId: action.entityId });
-  const logged = addLog(sim, 'info', `Servicio ${action.service} → ${action.entityId}`, { entityId: action.entityId, ...ctx });
-  return applyChange(logged, project, action.entityId, next, exec);
+  if (current.state === 'unavailable') {
+    return addLog(sim, 'warning', `Servicio ${name}: ${friendly(sim, entityId)} no está disponible`, logExtra);
+  }
+  const caps = entityCapabilities(project, entityId);
+  const res = applyService(target, service, current, data, { now: sim.now, capabilities: caps });
+  if (!res) return addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra);
+  const desc = describeServiceData(data);
+  let next = addLog(sim, 'info', `Servicio ${name} → ${friendly(sim, entityId)}${desc ? ` (${desc})` : ''}`, logExtra);
+  for (const w of res.warnings) next = addLog(next, 'warning', `${friendly(sim, entityId)}: ${w}`, logExtra);
+  next = cancelTimer(next, entityTimerKey(entityId));
+  next = applyChange(next, project, entityId, res.state, exec, true);
+  if (res.coverTarget !== undefined) {
+    const seconds = coverStepSeconds(coverPosition(res.state), res.coverTarget, caps);
+    next = scheduleTimer(next, entityTimerKey(entityId), next.now + seconds * SECOND_MS, { kind: 'cover_step', entityId, target: res.coverTarget });
+  }
+  if (res.after) {
+    const timer: SimTimer = { kind: 'set_states', setStates: { [entityId]: res.after.state } };
+    next = scheduleTimer(next, entityTimerKey(entityId), next.now + res.after.seconds * SECOND_MS, timer);
+  }
+  return next;
+}
+
+/**
+ * Llama a un servicio de HA sobre una entidad: vía única para el usuario y las automatizaciones.
+ * `service` puede ser "light.turn_on" o solo "turn_on" (se usa el dominio de la entidad).
+ * Siempre registra la llamada, aunque el estado no cambie, y dispara las automatizaciones.
+ * rgb_color admite [r, g, b] o el texto "[r, g, b]".
+ */
+export function callService(
+  sim: SimulationState,
+  project: Project,
+  entityId: string,
+  service: string,
+  data?: ServiceData,
+): SimulationState {
+  return callServiceInternal(sim, project, entityId, service, data, {}, ROOT);
+}
+
+/**
+ * Ejecuta una automatización a mano (botón «Ejecutar»): aunque esté desactivada y, con
+ * skipConditions, sin evaluar sus condiciones (como «Ejecutar acciones» en HA).
+ */
+export function runAutomation(
+  sim: SimulationState,
+  project: Project,
+  automationId: Id,
+  opts: { skipConditions?: boolean } = {},
+): SimulationState {
+  const a = project.automations.find((x) => x.id === automationId);
+  if (!a) return addLog(sim, 'warning', `Automatización desconocida: ${automationId}`);
+  const reason = opts.skipConditions ? 'ejecución manual sin condiciones' : 'ejecución manual';
+  return runAutomationInternal(sim, project, a, ROOT, reason, { manual: true, skipConditions: opts.skipConditions ?? false });
 }
 
 function schedule(sim: SimulationState, rest: Action[], seconds: number, ctx: RunCtx): SimulationState {
@@ -334,7 +518,7 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
       case 'delay':
         return schedule(result, actions.slice(i + 1), Math.max(0, action.seconds), ctx);
       case 'service':
-        result = callService(result, project, action, ctx, exec);
+        result = callServiceInternal(result, project, action.entityId, action.service, action.data, ctx, exec);
         break;
       case 'scene':
         result = activateSceneInternal(result, project, action.sceneId, exec);
@@ -400,8 +584,42 @@ function earliestPending(sim: SimulationState, to: number): PendingAction | unde
   return best;
 }
 
+function runTimer(sim: SimulationState, project: Project, timer: SimTimer): SimulationState {
+  switch (timer.kind) {
+    case 'set_states': {
+      let result = sim;
+      for (const [entityId, st] of Object.entries(timer.setStates)) {
+        if (result.entities[entityId]?.state === 'unavailable') continue;
+        result = applyChange(result, project, entityId, st, ROOT);
+      }
+      return result;
+    }
+    case 'cover_step': {
+      const current = sim.entities[timer.entityId];
+      if (!current || (current.state !== 'opening' && current.state !== 'closing')) return sim;
+      const step = coverStep(current, timer.target);
+      const result = applyChange(sim, project, timer.entityId, step.state, ROOT, true);
+      if (step.done) return result;
+      const caps = entityCapabilities(project, timer.entityId);
+      const seconds = coverStepSeconds(coverPosition(step.state), timer.target, caps);
+      return scheduleTimer(result, entityTimerKey(timer.entityId), result.now + seconds * SECOND_MS, timer);
+    }
+    case 'state_for': {
+      const a = project.automations.find((x) => x.id === timer.automationId);
+      const t = a?.triggers[timer.triggerIndex];
+      const current = sim.entities[timer.entityId];
+      if (!a || !current || t?.type !== 'state' || t.entityId !== timer.entityId || !t.for) return sim;
+      if (t.to !== undefined && !sameState(current.state, t.to)) return sim;
+      if (current.lastChanged !== undefined && sim.now - current.lastChanged < t.for * SECOND_MS) return sim;
+      const reason = `${timer.entityId} lleva ${formatDuration(t.for)} en ${normalize(current.state)}`;
+      return runAutomationInternal(sim, project, a, ROOT, reason);
+    }
+  }
+}
+
 function runPending(sim: SimulationState, project: Project, p: PendingAction): SimulationState {
   const rest = { ...sim, now: Math.max(sim.now, p.dueAt), pending: sim.pending.filter((x) => x.id !== p.id) };
+  if (p.timer) return runTimer(rest, project, p.timer);
   const ctx: RunCtx = {};
   if (p.automationId !== undefined) ctx.automationId = p.automationId;
   if (p.scriptId !== undefined) ctx.scriptId = p.scriptId;
@@ -433,7 +651,7 @@ export function tick(sim: SimulationState, project: Project, deltaMs: number, op
       result = runPending(result, project, pending);
     } else if (event) {
       idx++;
-      result = runAutomation({ ...result, now: event.at }, project, event.automation, ROOT, event.reason);
+      result = runAutomationInternal({ ...result, now: event.at }, project, event.automation, ROOT, event.reason);
     }
   }
   return addLog({ ...result, now: to }, 'error', 'Demasiados eventos en un solo avance del reloj; se han descartado los restantes');

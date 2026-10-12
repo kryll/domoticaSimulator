@@ -280,7 +280,17 @@
         "key": "light",
         "domain": "light",
         "name": "Luz",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 2000,
+          "maxKelvin": 6500,
+          "powerWatts": 9
+        }
       }
     ],
     "icon": "bulb"
@@ -309,7 +319,13 @@
         "key": "light",
         "domain": "light",
         "name": "Luz",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness"
+          ],
+          "powerWatts": 9
+        }
       }
     ],
     "icon": "bulb"
@@ -338,7 +354,17 @@
         "key": "light",
         "domain": "light",
         "name": "Luz",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 2000,
+          "maxKelvin": 6500,
+          "powerWatts": 20
+        }
       }
     ],
     "icon": "bulb"
@@ -367,7 +393,16 @@
         "key": "light",
         "domain": "light",
         "name": "Luz",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 8
+        }
       }
     ],
     "icon": "bulb"
@@ -396,7 +431,16 @@
         "key": "light",
         "domain": "light",
         "name": "Luz",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 5
+        }
       }
     ],
     "icon": "bulb"
@@ -422,7 +466,17 @@
         "key": "light",
         "domain": "light",
         "name": "Luz",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 1800,
+          "maxKelvin": 6500,
+          "powerWatts": 8
+        }
       }
     ],
     "icon": "bulb"
@@ -451,7 +505,16 @@
         "key": "light",
         "domain": "light",
         "name": "Luz",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp"
+          ],
+          "minKelvin": 2700,
+          "maxKelvin": 6500,
+          "powerWatts": 9
+        }
       }
     ],
     "icon": "bulb"
@@ -477,7 +540,17 @@
         "key": "light",
         "domain": "light",
         "name": "Luz",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 1700,
+          "maxKelvin": 6500,
+          "powerWatts": 9
+        }
       }
     ],
     "icon": "bulb"
@@ -503,7 +576,17 @@
         "key": "light",
         "domain": "light",
         "name": "Luz",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 2700,
+          "maxKelvin": 6500,
+          "powerWatts": 9
+        }
       }
     ],
     "icon": "bulb"
@@ -529,7 +612,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Enchufe",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
       }
     ],
     "icon": "plug"
@@ -556,7 +642,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Enchufe",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2300
+        }
       }
     ],
     "icon": "plug"
@@ -583,7 +672,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Enchufe",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2500
+        }
       },
       {
         "key": "power",
@@ -625,7 +717,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Enchufe",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
       },
       {
         "key": "power",
@@ -669,7 +764,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Enchufe",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
       },
       {
         "key": "power",
@@ -711,7 +809,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Enchufe",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
       },
       {
         "key": "power",
@@ -756,7 +857,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Enchufe",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
       }
     ],
     "icon": "plug"
@@ -782,7 +886,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Enchufe",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
       },
       {
         "key": "power",
@@ -827,7 +934,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Enchufe",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2300
+        }
       },
       {
         "key": "power",
@@ -870,7 +980,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Relé",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
       },
       {
         "key": "power",
@@ -913,13 +1026,19 @@
         "key": "switch_0",
         "domain": "switch",
         "name": "Canal 1",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2300
+        }
       },
       {
         "key": "switch_1",
         "domain": "switch",
         "name": "Canal 2",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2300
+        }
       },
       {
         "key": "power",
@@ -961,7 +1080,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Relé",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
       },
       {
         "key": "power",
@@ -995,7 +1117,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Relé",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
       }
     ],
     "icon": "switch"
@@ -1022,7 +1147,10 @@
         "key": "switch",
         "domain": "switch",
         "name": "Relé",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 500
+        }
       }
     ],
     "icon": "switch"
@@ -1051,7 +1179,15 @@
         "key": "action",
         "domain": "sensor",
         "name": "Acción",
-        "initialState": "none"
+        "initialState": "none",
+        "capabilities": {
+          "buttonActions": [
+            "single",
+            "double",
+            "hold",
+            "release"
+          ]
+        }
       },
       {
         "key": "battery",
@@ -1088,7 +1224,17 @@
         "key": "action",
         "domain": "sensor",
         "name": "Acción",
-        "initialState": "none"
+        "initialState": "none",
+        "capabilities": {
+          "buttonActions": [
+            "on",
+            "off",
+            "brightness_move_up",
+            "brightness_move_down",
+            "arrow_left_click",
+            "arrow_right_click"
+          ]
+        }
       },
       {
         "key": "battery",
@@ -1164,7 +1310,10 @@
         "domain": "binary_sensor",
         "name": "Movimiento",
         "deviceClass": "motion",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 60
+        }
       },
       {
         "key": "illuminance",
@@ -1335,7 +1484,10 @@
         "domain": "binary_sensor",
         "name": "Movimiento",
         "deviceClass": "motion",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 60
+        }
       },
       {
         "key": "illuminance",
@@ -1378,7 +1530,10 @@
         "domain": "binary_sensor",
         "name": "Presencia",
         "deviceClass": "occupancy",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
       },
       {
         "key": "illuminance",
@@ -1416,7 +1571,10 @@
         "domain": "binary_sensor",
         "name": "Movimiento",
         "deviceClass": "motion",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 180
+        }
       },
       {
         "key": "illuminance",
@@ -1497,7 +1655,10 @@
         "domain": "binary_sensor",
         "name": "Movimiento",
         "deviceClass": "motion",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 180
+        }
       },
       {
         "key": "illuminance",
@@ -1586,7 +1747,10 @@
         "domain": "binary_sensor",
         "name": "Movimiento",
         "deviceClass": "motion",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 60
+        }
       },
       {
         "key": "battery",
@@ -1684,7 +1848,10 @@
         "domain": "binary_sensor",
         "name": "Movimiento",
         "deviceClass": "motion",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
       }
     ],
     "icon": "sensor"
@@ -1905,7 +2072,22 @@
         "key": "climate",
         "domain": "climate",
         "name": "Termostato",
-        "initialState": "heat"
+        "initialState": "heat",
+        "capabilities": {
+          "hvacModes": [
+            "off",
+            "heat",
+            "auto"
+          ],
+          "presetModes": [
+            "away",
+            "frost_guard",
+            "schedule"
+          ],
+          "minTemp": 7,
+          "maxTemp": 30,
+          "tempStep": 0.5
+        }
       },
       {
         "key": "temperature",
@@ -1913,7 +2095,7 @@
         "name": "Temperatura",
         "deviceClass": "temperature",
         "unit": "°C",
-        "initialState": 20
+        "initialState": 21.5
       }
     ],
     "icon": "thermostat"
@@ -1942,7 +2124,22 @@
         "key": "climate",
         "domain": "climate",
         "name": "Termostato",
-        "initialState": "heat"
+        "initialState": "heat",
+        "capabilities": {
+          "hvacModes": [
+            "off",
+            "heat",
+            "auto"
+          ],
+          "presetModes": [
+            "manual",
+            "away",
+            "auto"
+          ],
+          "minTemp": 5,
+          "maxTemp": 30,
+          "tempStep": 0.5
+        }
       },
       {
         "key": "battery",
@@ -1977,7 +2174,23 @@
         "key": "climate",
         "domain": "climate",
         "name": "Termostato",
-        "initialState": "heat"
+        "initialState": "heat",
+        "capabilities": {
+          "hvacModes": [
+            "off",
+            "heat",
+            "auto"
+          ],
+          "presetModes": [
+            "eco",
+            "comfort",
+            "boost",
+            "away"
+          ],
+          "minTemp": 5,
+          "maxTemp": 35,
+          "tempStep": 0.5
+        }
       },
       {
         "key": "battery",
@@ -2012,7 +2225,10 @@
         "domain": "cover",
         "name": "Persiana",
         "deviceClass": "shutter",
-        "initialState": "closed"
+        "initialState": "closed",
+        "capabilities": {
+          "travelSeconds": 25
+        }
       },
       {
         "key": "power",
@@ -2048,7 +2264,10 @@
         "domain": "cover",
         "name": "Persiana",
         "deviceClass": "shutter",
-        "initialState": "closed"
+        "initialState": "closed",
+        "capabilities": {
+          "travelSeconds": 20
+        }
       },
       {
         "key": "power",
@@ -2086,7 +2305,10 @@
         "domain": "cover",
         "name": "Estor",
         "deviceClass": "shutter",
-        "initialState": "closed"
+        "initialState": "closed",
+        "capabilities": {
+          "travelSeconds": 30
+        }
       },
       {
         "key": "battery",
@@ -2124,7 +2346,10 @@
         "domain": "cover",
         "name": "Estor",
         "deviceClass": "shutter",
-        "initialState": "closed"
+        "initialState": "closed",
+        "capabilities": {
+          "travelSeconds": 35
+        }
       },
       {
         "key": "battery",
@@ -2233,7 +2458,10 @@
         "domain": "binary_sensor",
         "name": "Movimiento",
         "deviceClass": "motion",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
       }
     ],
     "icon": "camera"
@@ -2266,7 +2494,10 @@
         "domain": "binary_sensor",
         "name": "Movimiento",
         "deviceClass": "motion",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
       }
     ],
     "icon": "camera"
@@ -2298,14 +2529,20 @@
         "domain": "binary_sensor",
         "name": "Movimiento",
         "deviceClass": "motion",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
       },
       {
         "key": "visitor",
         "domain": "binary_sensor",
         "name": "Timbre",
         "deviceClass": "occupancy",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
       }
     ],
     "icon": "camera"
@@ -2331,7 +2568,13 @@
         "key": "media",
         "domain": "media_player",
         "name": "Altavoz",
-        "initialState": "idle"
+        "initialState": "idle",
+        "capabilities": {
+          "sources": [
+            "Line-in",
+            "Bluetooth"
+          ]
+        }
       }
     ],
     "icon": "speaker"
@@ -2358,7 +2601,13 @@
         "key": "media",
         "domain": "media_player",
         "name": "Barra de sonido",
-        "initialState": "idle"
+        "initialState": "idle",
+        "capabilities": {
+          "sources": [
+            "TV",
+            "Line-in"
+          ]
+        }
       }
     ],
     "icon": "speaker"
@@ -2410,7 +2659,15 @@
         "key": "media",
         "domain": "media_player",
         "name": "Chromecast",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "sources": [
+            "Google TV",
+            "Netflix",
+            "YouTube",
+            "Disney+"
+          ]
+        }
       }
     ],
     "icon": "tv"
@@ -2463,7 +2720,17 @@
         "key": "media",
         "domain": "media_player",
         "name": "Televisor",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "sources": [
+            "TV",
+            "HDMI 1",
+            "HDMI 2",
+            "HDMI 3",
+            "Netflix",
+            "YouTube"
+          ]
+        }
       }
     ],
     "icon": "tv"
@@ -2490,7 +2757,18 @@
         "key": "media",
         "domain": "media_player",
         "name": "Televisor",
-        "initialState": "off"
+        "initialState": "off",
+        "capabilities": {
+          "sources": [
+            "Live TV",
+            "HDMI 1",
+            "HDMI 2",
+            "HDMI 3",
+            "HDMI 4",
+            "Netflix",
+            "YouTube"
+          ]
+        }
       }
     ],
     "icon": "tv"

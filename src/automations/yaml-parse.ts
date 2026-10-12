@@ -88,7 +88,16 @@ export function parseScalar(raw: string, no = 0): YamlValue {
     return splitFlow(s.slice(1, -1)).map((p) => parseScalar(p, no));
   }
   if (s === '{}') return {};
-  if (s.startsWith('{')) throw err(no, 'los mapas en línea no están soportados');
+  if (s.startsWith('{')) {
+    if (!s.endsWith('}')) throw err(no, `mapa en línea sin cerrar: ${s}`);
+    const map: YamlMap = {};
+    for (const part of splitFlow(s.slice(1, -1))) {
+      const kv = splitKey(part, no);
+      if (!kv) throw err(no, `se esperaba "clave: valor" en el mapa en línea: ${part}`);
+      map[kv.key] = parseScalar(kv.rest, no);
+    }
+    return map;
+  }
   if (s === '' || s === 'null' || s === '~') return null;
   if (s === 'true' || s === 'True') return true;
   if (s === 'false' || s === 'False') return false;
@@ -276,6 +285,8 @@ export function parseTrigger(v: YamlValue, i = 0): Trigger {
       const t: Trigger = { type: 'state', entityId: entityIdOf(m, where) };
       if (m.from !== undefined && m.from !== null) t.from = stateValue(m.from, where);
       if (m.to !== undefined && m.to !== null) t.to = stateValue(m.to, where);
+      const forSeconds = durationOf(m.for, where);
+      if (forSeconds !== undefined) t.for = forSeconds;
       return t;
     }
     case 'numeric_state': {
@@ -305,8 +316,12 @@ export function parseCondition(v: YamlValue, i = 0): Condition {
   const m = asMap(v, where);
   const kind = str(req(m, 'condition', where), where);
   switch (kind) {
-    case 'state':
-      return { type: 'state', entityId: entityIdOf(m, where), state: stateValue(req(m, 'state', where), where) };
+    case 'state': {
+      const c: Condition = { type: 'state', entityId: entityIdOf(m, where), state: stateValue(req(m, 'state', where), where) };
+      const forSeconds = durationOf(m.for, where);
+      if (forSeconds !== undefined) c.for = forSeconds;
+      return c;
+    }
     case 'numeric_state': {
       const c: Condition = { type: 'numeric_state', entityId: entityIdOf(m, where) };
       const above = num(m.above, where);
@@ -329,7 +344,14 @@ export function parseCondition(v: YamlValue, i = 0): Condition {
   }
 }
 
-function delaySeconds(v: YamlValue, where: string): number {
+/** `for:` opcional ("00:05:00", segundos o {minutes: 5}) -> segundos; 0 o ausente -> undefined. */
+function durationOf(v: YamlValue | undefined, where: string): number | undefined {
+  if (v === undefined || v === null) return undefined;
+  const seconds = delaySeconds(v, `${where} (for)`);
+  return seconds > 0 ? seconds : undefined;
+}
+
+export function delaySeconds(v: YamlValue, where: string): number {
   if (typeof v === 'number') return v;
   if (typeof v === 'string') {
     const m = /^(\d+):(\d{2})(?::(\d{2}(?:\.\d+)?))?$/.exec(v.trim());
@@ -345,7 +367,11 @@ function serviceData(m: YamlMap, where: string): Record<string, EntityStateValue
   const data = m.data;
   if (data === undefined || data === null) return undefined;
   const result: Record<string, EntityStateValue> = {};
-  for (const [k, v] of Object.entries(asMap(data, where))) result[k] = stateValue(v, `${where} (data.${k})`);
+  for (const [k, v] of Object.entries(asMap(data, where))) {
+    // Listas numéricas (rgb_color: [255, 0, 0]) se guardan como texto "[255, 0, 0]".
+    if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'number')) result[k] = `[${v.join(', ')}]`;
+    else result[k] = stateValue(v, `${where} (data.${k})`);
+  }
   return result;
 }
 

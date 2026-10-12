@@ -1,5 +1,7 @@
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
+import { useSimulationStore } from '../store/simulationStore';
+import { formatSimTime } from '../simulation/clock';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { EmptyState } from '../ui/Panel';
@@ -15,6 +17,12 @@ export function AutomationsPanel() {
   const selectedId = useUiStore((s) => s.selectedAutomationId);
   const selectAutomation = useUiStore((s) => s.selectAutomation);
   const selected = automations.find((a) => a.id === selectedId) ?? automations[0];
+  const runAutomation = useSimulationStore((s) => s.runAutomation);
+  const running = useSimulationStore((s) => s.running);
+  const pending = useSimulationStore((s) => s.sim.pending);
+  const notify = useUiStore((s) => s.notify);
+  const waits = selected ? pending.filter((p) => !p.timer && p.automationId === selected.id) : [];
+  const nextDue = waits.reduce<number | undefined>((min, p) => (min === undefined || p.dueAt < min ? p.dueAt : min), undefined);
 
   return (
     <div className="flex h-full min-h-0">
@@ -43,7 +51,14 @@ export function AutomationsPanel() {
                 )}
               >
                 <span className="truncate">{a.name}</span>
-                {!a.enabled && <Badge>Apagada</Badge>}
+                <span className="flex shrink-0 items-center gap-1">
+                  {pending.some((p) => !p.timer && p.automationId === a.id) && (
+                    <span title="Tiene esperas pendientes" aria-label="Tiene esperas pendientes">
+                      ⏳
+                    </span>
+                  )}
+                  {!a.enabled && <Badge>Apagada</Badge>}
+                </span>
               </button>
             </li>
           ))}
@@ -52,7 +67,31 @@ export function AutomationsPanel() {
       <div className="min-w-0 flex-1 overflow-auto p-3">
         {selected ? (
           <>
-            <div className="mb-2 flex justify-end">
+            <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+              {waits.length > 0 && (
+                <p
+                  className={cx(
+                    'mr-auto rounded-md px-2 py-1 text-xs',
+                    running ? 'bg-sky-50 text-sky-800' : 'bg-amber-50 text-amber-900',
+                  )}
+                  role="status"
+                >
+                  ⏳ {waits.length === 1 ? '1 espera pendiente' : `${waits.length} esperas pendientes`}
+                  {nextDue !== undefined && <> (siguiente a las {formatSimTime(nextDue, { seconds: true })})</>}
+                  {!running && ' · la simulación está en pausa: pulsa Simular para que avancen'}
+                </p>
+              )}
+              <Button
+                size="sm"
+                variant="primary"
+                title="Ejecuta las acciones ahora, sin comprobar las condiciones"
+                onClick={() => {
+                  runAutomation(selected.id, true);
+                  notify(`Ejecutada «${selected.name}»${running ? '' : '. La simulación está en pausa: las esperas no avanzarán'}`, 'success');
+                }}
+              >
+                ▶ Ejecutar ahora
+              </Button>
               <Button
                 size="sm"
                 variant="danger"
