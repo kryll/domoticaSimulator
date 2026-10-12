@@ -11,6 +11,7 @@ import { cx } from '../ui/cx';
 import { automationDeviceIds } from '../ui/entityDevices';
 import { ACTION_STATUS, TRACE_RESULT, traceTriggerText, waitStatusText } from '../ui/traceLabels';
 import { describeTrigger } from '../simulation/trace';
+import { nextTimedOccurrence, sunSourceOf } from '../simulation/engine';
 
 const EMPTY: AutomationTrace[] = [];
 
@@ -48,7 +49,11 @@ function TraceDetail({ trace, automation }: { trace: AutomationTrace; automation
     const action = automation.actions[index];
     if (status !== 'waiting' || action?.type !== 'wait_for_trigger') return fallback;
     const sim = useSimulationStore.getState().sim;
-    return waitStatusText(action.triggers, (t) => describeTrigger(t, sim));
+    const text = waitStatusText(action.triggers, (t) => describeTrigger(t, sim));
+    // Con sol, la hora exacta de la próxima vez (cambia cada día).
+    if (!action.triggers.some((t) => t.type === 'sun')) return text;
+    const next = nextTimedOccurrence(action.triggers, trace.actions[index]?.at ?? sim.now, sunSourceOf(useProjectStore.getState().project));
+    return next === undefined ? text : `${text} (próxima a las ${formatSimTime(next)})`;
   };
   return (
     <div className="flex flex-col gap-3 text-sm" aria-label="Detalle de la traza">

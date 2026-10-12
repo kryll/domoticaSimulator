@@ -287,7 +287,7 @@ export function AdvancedActionEditor({ value, onChange }: { value: AdvancedActio
       return <WaitEditor value={value} onChange={onChange} />;
     case 'repeat':
       return (
-        <NestedScope repeat>
+        <NestedScope repeat count={value.count !== undefined && value.while === undefined && value.until === undefined}>
           <RepeatEditor value={value} onChange={onChange} />
         </NestedScope>
       );

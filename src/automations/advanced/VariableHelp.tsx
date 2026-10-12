@@ -10,9 +10,15 @@ export function ScopeItem({ actions, index, children }: { actions: Action[]; ind
 }
 
 /** Secuencia anidada (choose, if, repeat...): un nivel más; `repeat` añade repeat.index. */
-export function NestedScope({ repeat, children }: { repeat?: boolean; children: ReactNode }) {
+export function NestedScope({ repeat, count, children }: { repeat?: boolean; count?: boolean; children: ReactNode }) {
   const parent = useActionScope();
-  const scope: ActionScope = { ...parent, depth: parent.depth + 1, inRepeat: parent.inRepeat || repeat === true };
+  // Las variables de un bloque anterior no se ven en este (son locales a su bloque).
+  const scope: ActionScope = {
+    ...parent,
+    depth: parent.depth + 1,
+    inRepeat: parent.inRepeat || repeat === true,
+    repeatCount: repeat === true ? count === true : parent.repeatCount,
+  };
   return <ActionScopeContext.Provider value={scope}>{children}</ActionScopeContext.Provider>;
 }
 

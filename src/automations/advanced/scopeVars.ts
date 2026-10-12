@@ -6,8 +6,12 @@ export interface ActionScope {
   topLevel: string[];
   /** Variables de las acciones «Variables» de las secuencias anidadas que lo contienen. */
   local: string[];
-  /** Dentro de un «Repetir»: existe repeat.index. */
+  /** Dentro de un «Repetir»: existen repeat.index y repeat.first. */
   inRepeat: boolean;
+  /** Repetir un número de veces: existe además repeat.last. */
+  repeatCount?: boolean;
+  /** Hay un «Esperar a un disparador» antes en la ejecución: existe wait.trigger.*. */
+  afterWait?: boolean;
   /** Tipos de disparador de la automatización (vacío en scripts: no hay trigger.*). */
   triggerTypes: Array<Trigger['type']>;
   /** Profundidad de la secuencia (0 = acciones de la automatización o del script). */
@@ -32,22 +36,23 @@ export function definedBefore(actions: Action[], index: number): string[] {
 /** Ámbito de la acción `index` de una secuencia, a partir del ámbito de la secuencia. */
 export function scopeForItem(parent: ActionScope, actions: Action[], index: number): ActionScope {
   const names = definedBefore(actions, index);
-  return parent.depth === 0 ? { ...parent, topLevel: [...parent.topLevel, ...names] } : { ...parent, local: [...parent.local, ...names] };
+  const afterWait = parent.afterWait === true || actions.slice(0, index).some((a) => a.type === 'wait_for_trigger');
+  return parent.depth === 0
+    ? { ...parent, afterWait, topLevel: [...parent.topLevel, ...names] }
+    : { ...parent, afterWait, local: [...parent.local, ...names] };
 }
 
 const STATE_TRIGGERS = new Set<Trigger['type']>(['state', 'numeric_state', 'device_action']);
 
-/** Variables trigger.* según los tipos de disparador. */
+/** Variables trigger.* según los tipos de disparador (las que resuelve el motor). */
 export function triggerVariables(types: Array<Trigger['type']>): ScopeVariable[] {
   if (types.length === 0) return [];
   const out: ScopeVariable[] = [{ name: 'trigger.platform', kind: 'trigger', hint: 'Tipo de disparador' }];
-  if (types.some((t) => STATE_TRIGGERS.has(t) || t === 'zone')) out.push({ name: 'trigger.entity_id', kind: 'trigger', hint: 'Entidad que disparó' });
-  if (types.some((t) => STATE_TRIGGERS.has(t))) {
+  if (types.some((t) => STATE_TRIGGERS.has(t) || t === 'zone')) {
+    out.push({ name: 'trigger.entity_id', kind: 'trigger', hint: 'Entidad que disparó' });
     out.push({ name: 'trigger.from_state.state', kind: 'trigger', hint: 'Estado anterior' });
     out.push({ name: 'trigger.to_state.state', kind: 'trigger', hint: 'Estado nuevo' });
   }
-  if (types.includes('zone')) out.push({ name: 'trigger.zone', kind: 'trigger', hint: 'Zona' });
-  if (types.includes('device_action')) out.push({ name: 'trigger.action', kind: 'trigger', hint: 'Acción del mando' });
   return out;
 }
 
@@ -62,7 +67,15 @@ export function availableVariables(scope: ActionScope): ScopeVariable[] {
   };
   for (const n of [...scope.local].reverse()) add({ name: n, kind: 'local', hint: 'Variable local' });
   for (const n of scope.topLevel) add({ name: n, kind: 'top', hint: 'Variable de la automatización' });
-  if (scope.inRepeat) add({ name: 'repeat.index', kind: 'repeat', hint: 'Vuelta actual (desde 1)' });
+  if (scope.inRepeat) {
+    add({ name: 'repeat.index', kind: 'repeat', hint: 'Vuelta actual (desde 1)' });
+    add({ name: 'repeat.first', kind: 'repeat', hint: '¿Primera vuelta?' });
+    if (scope.repeatCount) add({ name: 'repeat.last', kind: 'repeat', hint: '¿Última vuelta?' });
+  }
+  if (scope.afterWait) {
+    add({ name: 'wait.trigger.entity_id', kind: 'trigger', hint: 'Entidad que terminó la espera' });
+    add({ name: 'wait.trigger.to_state.state', kind: 'trigger', hint: 'Estado que terminó la espera' });
+  }
   for (const v of triggerVariables(scope.triggerTypes)) add(v);
   return out;
 }
