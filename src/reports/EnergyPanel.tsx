@@ -1,51 +1,10 @@
-import { useEffect, useState } from 'react';
 import { useProjectStore } from '../store/projectStore';
-import { useSimulationStore } from '../store/simulationStore';
-import { catalog } from '../devices/catalog';
-import { energySummary, type EnergySummary } from '../simulation/energy';
+import { useThrottledEnergy } from './useThrottledEnergy';
 import { formatSimDate, formatSimTime } from '../simulation/clock';
 import { BarChart } from '../ui/BarChart';
 import { formatKwh, formatMoney, formatWatts, formatDecimal } from '../ui/money';
 import { EmptyState } from '../ui/Panel';
 import { cx } from '../ui/cx';
-
-/** Intervalo mínimo entre recálculos del panel mientras corre el reloj. */
-export const ENERGY_THROTTLE_MS = 500;
-
-function compute(): EnergySummary {
-  return energySummary(useSimulationStore.getState().sim, useProjectStore.getState().project, catalog);
-}
-
-/** Resumen de energía recalculado como mucho cada 500 ms (el reloj cambia en cada tick). */
-export function useThrottledEnergy(): EnergySummary {
-  const [summary, setSummary] = useState(compute);
-  useEffect(() => {
-    let last = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const refresh = () => {
-      timer = undefined;
-      last = performance.now();
-      setSummary(compute());
-    };
-    const schedule = () => {
-      if (timer) return;
-      const wait = Math.max(0, ENERGY_THROTTLE_MS - (performance.now() - last));
-      timer = setTimeout(refresh, wait);
-    };
-    const unsubSim = useSimulationStore.subscribe((s, prev) => {
-      if (s.sim !== prev.sim) schedule();
-    });
-    const unsubProject = useProjectStore.subscribe((s, prev) => {
-      if (s.project !== prev.project) schedule();
-    });
-    return () => {
-      unsubSim();
-      unsubProject();
-      if (timer) clearTimeout(timer);
-    };
-  }, []);
-  return summary;
-}
 
 function Stat({ label, value, tone = 'slate' }: { label: string; value: string; tone?: 'slate' | 'amber' | 'sky' }) {
   return (

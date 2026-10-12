@@ -89,10 +89,14 @@ describe('AutomationEditor', () => {
 });
 
 describe('ActionListEditor', () => {
-  it('al reordenar, el campo Datos sigue a su acción', async () => {
+  beforeEach(() => {
+    useProjectStore.getState().loadProject(makeProject({ devices: [makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz salón')] }));
+  });
+
+  it('al reordenar, los datos tipados siguen a su acción', async () => {
     let actions: Action[] = [
-      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness: 10 } },
-      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness: 200 } },
+      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness_pct: 10 } },
+      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness_pct: 80 } },
     ];
     function ListHarness() {
       const [list, setList] = useState(actions);
@@ -107,15 +111,28 @@ describe('ActionListEditor', () => {
       );
     }
     render(<ListHarness />);
-    const fields = () => screen.getAllByLabelText('Datos (clave=valor)').map((el) => (el as HTMLInputElement).value);
-    expect(fields()).toEqual(['brightness=10', 'brightness=200']);
+    const sliders = () => screen.getAllByLabelText('Brillo').map((el) => (el as HTMLInputElement).value);
+    expect(sliders()).toEqual(['10', '80']);
     await userEvent.click(screen.getByRole('button', { name: 'Bajar elemento 1 de Acciones' }));
-    expect(fields()).toEqual(['brightness=200', 'brightness=10']);
-    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness : null))).toEqual([200, 10]);
+    expect(sliders()).toEqual(['80', '10']);
+    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness_pct : null))).toEqual([80, 10]);
     // editar el primero modifica solo esa acción
-    fireEvent.change(screen.getAllByLabelText('Datos (clave=valor)')[0] as HTMLElement, { target: { value: 'brightness=50' } });
-    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness : null))).toEqual([50, 10]);
+    fireEvent.change(screen.getAllByLabelText('Brillo')[0] as HTMLElement, { target: { value: '50' } });
+    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness_pct : null))).toEqual([50, 10]);
     await userEvent.click(screen.getByRole('button', { name: 'Eliminar elemento 1 de Acciones' }));
-    expect(fields()).toEqual(['brightness=10']);
+    expect(sliders()).toEqual(['10']);
+  });
+
+  it('filtra los servicios por el dominio de la entidad y ofrece el modo avanzado', async () => {
+    let actions: Action[] = [{ type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon' }];
+    render(<ActionListEditor actions={actions} onChange={(next) => (actions = next)} />);
+    const select = screen.getByLabelText('Servicio') as HTMLSelectElement;
+    const options = [...select.options].map((o) => o.value).filter(Boolean);
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.every((o) => o.startsWith('light.'))).toBe(true);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Incluir Brillo' }));
+    expect(actions[0]).toMatchObject({ data: { brightness_pct: 100 } });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Avanzado (texto libre)' }));
+    expect(screen.getByLabelText('Datos (clave=valor)')).toBeInTheDocument();
   });
 });

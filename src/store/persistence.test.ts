@@ -6,7 +6,7 @@ import { validateProject } from '../network/validator';
 import { callService, createSimulationState, runScript, setEntityState, tick } from '../simulation/engine';
 import { DAY_MS } from '../simulation/clock';
 import { motionPulse, pressButton, setLeak } from '../simulation/events';
-import type { Action, Condition, Project, Trigger } from '../types';
+import { defaultSettings, type Action, type Condition, type Project, type Trigger } from '../types';
 import {
   createDemoProject,
   createEmptyProject,
@@ -153,6 +153,32 @@ describe('JSON', () => {
     const p = createEmptyProject('x');
     const withBg = { ...p, floors: [{ ...p.floors[0]!, backgroundImage: 'data:image/png;base64,AA' }] };
     expect(importProjectJson(JSON.stringify(withBg))).toEqual(withBg);
+  });
+
+  it('los proyectos antiguos sin ajustes siguen importando; los nuevos conservan ajustes, SAI, carga y condición de sol', () => {
+    const demo = createDemoProject();
+    expect(demo.settings).toEqual(defaultSettings());
+    const old = { ...demo } as Partial<Project>;
+    delete old.settings;
+    const imported = importProjectJson(JSON.stringify(old));
+    expect(imported.settings).toBeUndefined();
+    expect(createEmptyProject('x').settings).toEqual(defaultSettings());
+    const rich: Project = {
+      ...demo,
+      settings: { ...defaultSettings(), prices: { 'ha-green': 99 }, batteryAcceleration: 50 },
+      devices: demo.devices.map((d, i) => (i === 0 ? { ...d, ups: true, loadWatts: 10 } : d)),
+      automations: [{ ...demo.automations[0]!, conditions: [{ type: 'sun', after: 'sunset', afterOffsetMinutes: -30, before: 'sunrise' }] }],
+    };
+    expect(importProjectJson(exportProjectJson(rich))).toEqual(rich);
+  });
+
+  it('valida los ajustes con mensajes en español', () => {
+    const base = JSON.parse(exportProjectJson(createDemoProject())) as Record<string, unknown>;
+    const withSettings = (settings: unknown) => () => importProjectJson(JSON.stringify({ ...base, settings }));
+    expect(withSettings({ latitude: 100, longitude: 0, electricityPriceEurKwh: 0.1 })).toThrow(/settings\.latitude debe estar entre -90 y 90/);
+    expect(withSettings({ latitude: 40, longitude: 0 })).toThrow(/electricityPriceEurKwh debe ser un número/);
+    expect(withSettings({ latitude: 40, longitude: 0, electricityPriceEurKwh: 0.1, prices: { x: -1 } })).toThrow(/prices\.x no puede ser negativo/);
+    expect(withSettings({ latitude: 40, longitude: 0, electricityPriceEurKwh: 0.1, currency: 'USD' })).toThrow(/currency/);
   });
 
   it.each([

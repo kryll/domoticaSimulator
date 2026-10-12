@@ -66,8 +66,11 @@ function lastLogByEntity(log: SimulationState['log']): Map<string, string> {
 /** Potencia con carga activa y nivel de batería para el nodo (no dependen del reloj). */
 function powerBadges(device: Device, def: DeviceDefinition, sim: SimulationState): { watts?: number; batteryPct?: number } {
   if (def.power === 'battery') {
-    const battery = entitiesOfDevice(device).find((r) => r.definition.deviceClass === 'battery');
-    const raw = battery ? sim.entities[battery.entityId]?.state : undefined;
+    const refs = entitiesOfDevice(device);
+    const battery = refs.find((r) => r.definition.deviceClass === 'battery');
+    const raw = battery
+      ? sim.entities[battery.entityId]?.state
+      : refs.map((r) => sim.entities[r.entityId]?.attributes?.battery_level).find((v) => v !== undefined);
     const level = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
     return Number.isFinite(level) ? { batteryPct: Math.round(level) } : {};
   }

@@ -2,30 +2,18 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/simulationStore';
 import { useProjectStore, projectSettings } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
-import { DAY_MS, HOUR_MS, MINUTE_MS, formatSimDate, formatSimTime, parseHHMM, startOfDay, sunTimes } from './clock';
+import { HOUR_MS, formatSimDate, formatSimTime, startOfDay, sunTimes } from './clock';
+import { nextSunEvent, nextTimeOfDay } from '../ui/sunJump';
 import { Button } from '../ui/Button';
 import { inputClass } from '../ui/Field';
 
 /** Amanecer y atardecer del día simulado que contiene `dayStart`, según los ajustes del proyecto. */
-export function useSunToday(dayStart: number): { sunrise: number; sunset: number } {
+function useSunToday(dayStart: number): { sunrise: number; sunset: number } {
   const settings = useProjectStore((s) => s.project.settings);
   return useMemo(() => {
     const st = projectSettings({ settings });
     return sunTimes(dayStart, st.latitude, st.longitude, st.timeZone);
   }, [dayStart, settings]);
-}
-
-/** Próximo atardecer (o amanecer) estrictamente posterior a `now`. */
-export function nextSunEvent(now: number, event: 'sunrise' | 'sunset', at: (day: number) => { sunrise: number; sunset: number }): number {
-  const today = at(startOfDay(now))[event];
-  if (today > now) return today;
-  return at(startOfDay(now) + DAY_MS)[event];
-}
-
-/** Próxima vez que el reloj marque `hhmm` (hoy si aún no ha pasado, si no mañana). */
-export function nextTimeOfDay(now: number, hhmm: string): number {
-  const target = startOfDay(now) + Math.round(parseHHMM(hhmm) * MINUTE_MS);
-  return target > now ? target : target + DAY_MS;
 }
 
 function JumpPopover({ onClose }: { onClose: () => void }) {

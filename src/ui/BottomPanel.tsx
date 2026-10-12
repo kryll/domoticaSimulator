@@ -130,7 +130,7 @@ export function BottomPanel() {
     >
       {open && !maximized && <ResizeHandle />}
       <div className="flex items-center justify-between px-2 pt-1">
-        <Tabs<BottomTab> label="Herramientas" tabs={tabs} active={tab} onChange={setTab} idPrefix={PREFIX} />
+        <Tabs<BottomTab> label="Herramientas" tabs={tabs} active={tab} onChange={setTab} idPrefix={PREFIX} className="min-w-0 overflow-x-auto whitespace-nowrap" />
         <div className="flex items-center gap-1">
           <Button
             size="sm"
