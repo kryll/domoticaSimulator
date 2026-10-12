@@ -1,4 +1,6 @@
-# Entorno emulado con Home Assistant real
+# Laboratorio domótico tipo GNS3: entorno emulado con Home Assistant real
+
+**Visión:** un laboratorio en casa para hacer pruebas, nunca un entorno real. El orquestador hace de «servidor GNS3» y la app de cliente gráfico. Los dispositivos emulados son los nodos que se arrancan, se paran, se rompen y se restauran.
 
 Diseño para que los dispositivos del simulador aparezcan en un Home Assistant real, con su panel, a través de las integraciones reales siempre que sea posible.
 
@@ -73,6 +75,13 @@ Caddy sirve la app y hace de proxy de /orchestrator y /mqtt en el mismo origen (
 | RF 433 | 50 ms | 10 % (sin acuse) | — | — | — | nunca (sin estado) |
 
 Interferencia: el canal Wi-Fi 1 solapa con los Zigbee/Thread 11-14, el 6 con los 16-19 y el 11 con los 21-24. Penalización por defecto: +3 % de pérdida.
+
+## Controles de laboratorio
+
+- Ciclo de vida por dispositivo: arrancar y parar (estados: parado, arrancando, en marcha, error). También «Arrancar todo» y «Parar todo».
+- «Resetear lab»: limpia los mensajes retenidos, vuelve a publicar todo y restaura los estados iniciales.
+- Snapshots: proyecto y `ha-config` (sin base de datos ni logs), guardados en `emulator/snapshots/`.
+- Inspector de tráfico: mensajes del lab con dirección, hora, dispositivo, filtros y exportación.
 
 ## Plan por tandas (E = emulación)
 

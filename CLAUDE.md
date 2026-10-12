@@ -1,6 +1,11 @@
 # HA Simulator
 
-Aplicación web para diseñar y simular instalaciones domóticas basadas en Home Assistant: lienzo con plano de la casa, dispositivos reales de varias marcas, conexiones de red, automatizaciones, escenas y un motor de simulación.
+Laboratorio domótico tipo GNS3 para hacer pruebas en casa sin tocar nunca un entorno real. Funciona de dos maneras:
+
+- **En el navegador:** lienzo con el plano de la casa, dispositivos reales de varias marcas, conexiones de red y un motor que simula el mundo físico (personas, clima, sol, consumo, fallos), con un modo rápido de automatizaciones propio.
+- **Como laboratorio:** un orquestador opcional (`emulator/`) levanta un Home Assistant real con su panel y conecta a él los dispositivos emulados a través de sus integraciones reales (MQTT con formato Zigbee2MQTT, Z-Wave JS, Matter, ESPHome, Shelly). Desde la app los dispositivos se arrancan, se paran, se rompen y se restauran, y hay snapshots e inspector de tráfico.
+
+Visión y límites en docs/EMULACION.md. Plan en docs/ROADMAP.md.
 
 ## Stack
 - React 18 + TypeScript (strict) + Vite

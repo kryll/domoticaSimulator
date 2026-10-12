@@ -1,6 +1,30 @@
 # Hoja de ruta
 
-**Estado:** las tres fases están implementadas, revisadas y publicadas en `main`.
+**Estado:** las fases 1-3 y las tandas 1-2 están publicadas en `main`. La tanda 3 y la emulación E1 están en curso.
+
+## Visión (octubre 2026): laboratorio domótico tipo GNS3
+
+El producto se reorienta: es un **laboratorio en casa para hacer pruebas, nunca un entorno real**. Igual que GNS3 ejecuta software de red real sobre una topología virtual, aquí corre un Home Assistant real, con su panel, y software real (Zigbee2MQTT, Z-Wave JS, servidor Matter, ESPHome) conectado a dispositivos emulados que se dibujan en el plano, se arrancan, se paran, se rompen y se restauran.
+
+| GNS3 | Laboratorio domótico |
+|---|---|
+| Servidor GNS3 | Orquestador `emulator/` en un PC Linux con Docker |
+| Cliente gráfico | La app: plano, dispositivos y enlaces |
+| Imágenes reales | HA, Z2M, Z-Wave JS, Matter, ESPHome (firmware real en modo `host`) |
+| Apagar un nodo o tirar un cable | Arrancar o parar un dispositivo; fallos inyectados con Docker |
+| Snapshots | Snapshots del proyecto y de la configuración de HA |
+| Wireshark | Inspector de tráfico (MQTT, Z-Wave, Matter) |
+
+**Prioridades a partir de ahora:**
+1. **E1, base del laboratorio:** orquestador, HA real, MQTT al estilo de Zigbee2MQTT, ciclo de vida de los dispositivos, resetear el lab, snapshots e inspector de tráfico.
+2. **E2:** ESPHome `host` (firmware real) y Z-Wave con el mock-server oficial.
+3. **E3:** Matter con matter.js y emulador Shelly.
+4. **E4:** inyección de fallos real (red, coordinador, Internet, latencia con `tc netem`).
+5. **E5:** el mundo físico alimenta el laboratorio: día típico, personas, clima y consumo, que generan la vida de la casa a la que reacciona el HA real.
+
+**Pierde peso:** el motor de automatizaciones propio (editor, trazas, escenas). Sigue como «modo rápido» sin Docker, pero en el laboratorio las automatizaciones corren en el HA real. Tampoco se invierte más en PWA, en el diseño para móvil ni en helpers propios, porque los aporta HA.
+
+**Límites honestos:** Zigbee no tiene coordinador emulable (se imita con el formato exacto de Z2M y sin radio real); Thread solo de forma experimental con OpenThread; el laboratorio va en tiempo real, como GNS3.
 
 Resultado de la revisión de producto (recorrido real de la app en navegador). Las referencias `B#` y `C#` se usan en commits y en los informes de los agentes.
 
