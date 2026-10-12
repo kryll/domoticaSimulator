@@ -222,7 +222,11 @@ export type Trigger =
   | { type: 'state'; entityId: string; to?: EntityStateValue; from?: EntityStateValue; for?: number }
   | { type: 'numeric_state'; entityId: string; above?: number; below?: number }
   | { type: 'time'; at: string } // "HH:MM"
-  | { type: 'sun'; event: 'sunrise' | 'sunset'; offsetMinutes?: number };
+  | { type: 'sun'; event: 'sunrise' | 'sunset'; offsetMinutes?: number }
+  // Fase 3 (B9): una persona entra en una zona o sale de ella.
+  | ZoneTrigger
+  // Fase 3 (B9): evento de un mando (acción del sensor `*_action`: single, double, hold...).
+  | DeviceActionTrigger;
 
 export type Condition =
   /** `for`: segundos mínimos que la entidad lleva en ese estado. */
@@ -230,13 +234,24 @@ export type Condition =
   | { type: 'numeric_state'; entityId: string; above?: number; below?: number }
   | { type: 'time'; after?: string; before?: string }
   | { type: 'and'; conditions: Condition[] }
-  | { type: 'or'; conditions: Condition[] };
+  | { type: 'or'; conditions: Condition[] }
+  // Fase 3 (B11): ninguna de las condiciones se cumple.
+  | NotCondition
+  // Fase 3 (B9): la persona está en la zona.
+  | ZoneCondition;
 
 export type Action =
   | { type: 'service'; service: string; entityId: string; data?: Record<string, EntityStateValue> }
   | { type: 'scene'; sceneId: Id }
   | { type: 'script'; scriptId: Id }
-  | { type: 'delay'; seconds: number };
+  | { type: 'delay'; seconds: number }
+  // Fase 3 (B11): lógica de scripts de HA.
+  | ChooseAction
+  | IfAction
+  | WaitForTriggerAction
+  | RepeatAction
+  | NotifyAction
+  | VariablesAction;
 
 export interface Automation {
   id: Id;
@@ -324,7 +339,9 @@ export type SimTimer =
   /** Siguiente paso del recorrido de una persiana hacia `target` (0-100). */
   | { kind: 'cover_step'; entityId: string; target: number }
   /** Disparador de estado con `for:` pendiente de confirmar. */
-  | { kind: 'state_for'; entityId: string; automationId: Id; triggerIndex: number };
+  | { kind: 'state_for'; entityId: string; automationId: Id; triggerIndex: number }
+  // Fase 3 (B22): llamada a servicio retrasada por la latencia simulada.
+  | ServiceCallTimer;
 
 export interface PendingAction {
   id: Id;
@@ -360,4 +377,314 @@ export interface ValidationIssue {
   code: string;
   message: string;
   deviceIds: Id[];
+}
+
+// ---- Fase 3 ----
+// Tipos nuevos de la Fase 3. Los campos opcionales que se añaden a interfaces existentes
+// (Project, Device, Floor, SimulationState, PendingAction, LogEntry) se declaran aquí por
+// fusión de interfaces de TypeScript, para no tocar sus definiciones originales.
+
+// B9: personas y zonas
+
+export interface Person {
+  id: Id;
+  name: string;
+  /** Color CSS para pintarla en la interfaz. */
+  color?: string;
+}
+
+export type ZoneKind = 'home' | 'work' | 'other';
+
+export interface Zone {
+  id: Id;
+  name: string;
+  kind: ZoneKind;
+}
+
+export interface ZoneTrigger {
+  type: 'zone';
+  personId: Id;
+  zoneId: Id;
+  event: 'enter' | 'leave';
+}
+
+export interface DeviceActionTrigger {
+  type: 'device_action';
+  /** Sensor de acción del mando (sensor.<mando>_action). */
+  entityId: string;
+  /** Acción: 'single', 'double', 'hold'... */
+  action: string;
+}
+
+export interface ZoneCondition {
+  type: 'zone';
+  personId: Id;
+  zoneId: Id;
+}
+
+// B11: más lógica
+
+export interface NotCondition {
+  type: 'not';
+  conditions: Condition[];
+}
+// TODO(integración Fase 2): la condición `sun` (after/before sunrise/sunset) la define la Fase 2.
+
+export interface ChooseOption {
+  conditions: Condition[];
+  sequence: Action[];
+}
+
+export interface ChooseAction {
+  type: 'choose';
+  choices: ChooseOption[];
+  /** Secuencia si no se cumple ninguna opción. */
+  default?: Action[];
+}
+
+export interface IfAction {
+  type: 'if';
+  conditions: Condition[];
+  then: Action[];
+  else?: Action[];
+}
+
+export interface WaitForTriggerAction {
+  type: 'wait_for_trigger';
+  triggers: Trigger[];
+  /** Segundos máximos de espera (sin valor: espera indefinida). */
+  timeoutSeconds?: number;
+  /** Si vence el tiempo: true (por defecto, como HA) sigue con las acciones; false las aborta. */
+  continueOnTimeout?: boolean;
+}
+
+/** Repetición: exactamente una de count, while o until. */
+export interface RepeatAction {
+  type: 'repeat';
+  count?: number;
+  /** Repite mientras se cumplan (se evalúan antes de cada vuelta). */
+  while?: Condition[];
+  /** Repite hasta que se cumplan (se evalúan tras cada vuelta). */
+  until?: Condition[];
+  sequence: Action[];
+}
+
+export interface NotifyAction {
+  type: 'notify';
+  title?: string;
+  message: string;
+  /** Servicio de HA al exportar (por defecto notify.notify). */
+  service?: string;
+}
+
+/** Variables simples; se sustituyen como {{ nombre }} en textos de notificaciones y datos de servicios. */
+export interface VariablesAction {
+  type: 'variables';
+  variables: Record<string, EntityStateValue>;
+}
+
+export interface SimNotification {
+  id: Id;
+  /** Hora simulada (ms). */
+  at: number;
+  title: string;
+  message: string;
+  read: boolean;
+}
+
+/** Espera de un wait_for_trigger guardada en una PendingAction. */
+export interface WaitState {
+  triggers: Trigger[];
+  continueOnTimeout: boolean;
+  /** true si no hay tiempo límite (dueAt queda en WAIT_FOREVER). */
+  forever?: boolean;
+}
+
+// B13: entorno (modelo térmico e iluminancia)
+
+export interface EnvironmentSettings {
+  /** Activa el modelo térmico y de iluminancia en la simulación. */
+  enabled: boolean;
+  /** Temperatura exterior media diaria (°C). */
+  outdoorMean: number;
+  /** Amplitud de la oscilación diaria (°C). Máximo a las 15:00, mínimo a las 03:00. */
+  outdoorAmplitude: number;
+  /** Constante de tiempo de pérdidas con todo cerrado (horas). */
+  tauHours?: number;
+  /** Factor por el que se multiplican las pérdidas con una ventana abierta. */
+  windowFactor?: number;
+  /** Potencia de la calefacción/refrigeración en °C por hora. */
+  hvacRatePerHour?: number;
+}
+
+export interface RoomEnvironment {
+  temperature: number;
+  illuminance: number;
+}
+
+export interface EnvironmentState {
+  outdoorTemperature: number;
+  rooms: Record<Id, RoomEnvironment>;
+}
+
+// B14: línea de tiempo
+
+export type TimelineEventKind = 'state' | 'service' | 'motion' | 'button' | 'door' | 'person' | 'scene' | 'script';
+
+export interface TimelineEventStep {
+  /** "HH:MM" o "HH:MM:SS" relativo al día de inicio; si va antes que el paso previo, es del día siguiente. */
+  at: string;
+  kind: 'event';
+  event: TimelineEventKind;
+  entityId?: string;
+  /** state: nuevo estado; button: acción; door: true abre, false cierra. */
+  value?: EntityStateValue;
+  service?: string;
+  data?: Record<string, EntityStateValue>;
+  personId?: Id;
+  /** person: zona destino (sin valor o '' = fuera de casa). */
+  zoneId?: Id;
+  sceneId?: Id;
+  scriptId?: Id;
+}
+
+export type AssertOp = 'eq' | 'ne' | 'gt' | 'lt' | 'gte' | 'lte';
+
+export interface TimelineAssertStep {
+  at: string;
+  kind: 'assert';
+  entityId: string;
+  expect: EntityStateValue;
+  /** Por defecto 'eq'. */
+  op?: AssertOp;
+  /** Compara este atributo en lugar del estado. */
+  attribute?: string;
+}
+
+export type TimelineStep = TimelineEventStep | TimelineAssertStep;
+
+export interface Timeline {
+  id: Id;
+  name: string;
+  steps: TimelineStep[];
+}
+
+/** Evento de usuario anotado en el registro (para recordTimeline). */
+export type RecordedEvent =
+  | { kind: 'state'; entityId: string; value: EntityStateValue }
+  | { kind: 'service'; entityId: string; service: string; data?: Record<string, EntityStateValue> }
+  /** Evento físico con efectos propios (autoapagado del movimiento, pulsación y vuelta a reposo). */
+  | { kind: 'physical'; event: 'motion' | 'button' | 'door'; entityId: string; value?: EntityStateValue }
+  /** Persona que cambia de zona (zoneId null: fuera de casa). */
+  | { kind: 'person'; personId: Id; zoneId: Id | null };
+
+// B17: variantes
+
+export interface ProjectVariant {
+  id: Id;
+  name: string;
+  snapshot: Omit<Project, 'variants'>;
+}
+
+// B19: grupos
+
+export type GroupDomain = 'light' | 'switch' | 'cover';
+
+export interface EntityGroup {
+  id: Id;
+  name: string;
+  domain: GroupDomain;
+  entityIds: string[];
+}
+
+// B21: paredes
+
+export type WallMaterial = 'drywall' | 'brick' | 'concrete' | 'glass';
+
+export interface Wall {
+  a: Point;
+  b: Point;
+  material: WallMaterial;
+}
+
+// B22: latencia y fiabilidad
+
+export interface ReliabilitySettings {
+  /** Aplica la latencia simulada por integración (nube 1-3 s, local ~100 ms). */
+  latency: boolean;
+  /** Probabilidad (0-1) de que falle una llamada a un servicio en la nube. */
+  failureRate?: number;
+  /** Semilla del generador pseudoaleatorio (determinista). */
+  seed?: number;
+}
+
+export interface ServiceCallTimer {
+  kind: 'service_call';
+  entityId: string;
+  /** "dominio.servicio" */
+  service: string;
+  data?: ServiceData;
+  automationId?: Id;
+}
+
+// B23: historial
+
+export interface HistorySample {
+  /** Hora simulada (ms). */
+  t: number;
+  /** Estado (texto o número). */
+  v: string | number;
+}
+
+// ---- Ampliaciones de interfaces existentes (fusión de declaraciones) ----
+
+export interface Project {
+  /** B9 */
+  people?: Person[];
+  zones?: Zone[];
+  /** B13 */
+  environment?: EnvironmentSettings;
+  /** B14 */
+  timelines?: Timeline[];
+  /** B17 */
+  variants?: ProjectVariant[];
+  /** B19 */
+  groups?: EntityGroup[];
+  /** B22 */
+  reliability?: ReliabilitySettings;
+}
+
+export interface Device {
+  /** B19: «Mostrar relé como luz»: cambia el dominio de la entidad principal (switch ↔ light). */
+  showAs?: 'light' | 'switch';
+}
+
+export interface Floor {
+  /** B21: paredes como segmentos en coordenadas del lienzo. */
+  walls?: Wall[];
+}
+
+export interface SimulationState {
+  /** B11: bandeja de notificaciones. */
+  notifications?: SimNotification[];
+  /** B13: temperatura e iluminancia por sala. */
+  environment?: EnvironmentState;
+  /** B23: muestras por entidad. */
+  history?: Record<string, HistorySample[]>;
+  /** B22: estado del generador pseudoaleatorio. */
+  rngState?: number;
+}
+
+export interface PendingAction {
+  /** B11: wait_for_trigger en curso. */
+  wait?: WaitState;
+  /** B11: variables de la ejecución. */
+  variables?: Record<string, EntityStateValue>;
+}
+
+export interface LogEntry {
+  /** B14: evento de usuario (setEntityState/callService desde fuera). */
+  event?: RecordedEvent;
+  /** B14: cambio de estado registrado. */
+  change?: { from: EntityStateValue; to: EntityStateValue };
 }

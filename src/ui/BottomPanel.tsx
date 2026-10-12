@@ -8,6 +8,8 @@ import { LogbookPanel } from '../simulation/LogbookPanel';
 import { Tabs } from './Tabs';
 import { Button } from './Button';
 import { tabPanelId } from './ids';
+import { EXTRA_TABS } from './extraTabs';
+import { ExtraTabPanel } from './ExtraTabPanel';
 
 const PREFIX = 'bottom';
 
@@ -98,6 +100,7 @@ export function BottomPanel() {
     { key: 'automations', label: <>Automatizaciones<Count n={project.automations.length} tone="slate" /></> },
     { key: 'scenes', label: <>Escenas y scripts<Count n={project.scenes.length + project.scripts.length} tone="slate" /></> },
     { key: 'logbook', label: <>Registro<Count n={logCount} tone="slate" /></> },
+    ...EXTRA_TABS,
   ];
 
   return (
@@ -111,8 +114,8 @@ export function BottomPanel() {
       aria-label="Panel inferior"
     >
       {open && !maximized && <ResizeHandle />}
-      <div className="flex items-center justify-between px-2 pt-1">
-        <Tabs<BottomTab> label="Herramientas" tabs={tabs} active={tab} onChange={setTab} idPrefix={PREFIX} />
+      <div className="flex items-center justify-between gap-2 px-2 pt-1">
+        <Tabs<BottomTab> label="Herramientas" tabs={tabs} active={tab} onChange={setTab} idPrefix={PREFIX} className="min-w-0 overflow-x-auto" />
         <div className="flex items-center gap-1">
           <Button
             size="sm"
@@ -148,6 +151,7 @@ export function BottomPanel() {
             {tab === 'scenes' && <ScenesPanel />}
           </Suspense>
           {tab === 'logbook' && <LogbookPanel />}
+          <ExtraTabPanel tab={tab} />
         </div>
       )}
     </section>

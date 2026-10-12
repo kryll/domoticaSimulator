@@ -3,6 +3,7 @@ import { createDemoProject, listProjects, loadProject, saveProject } from './per
 import { useProjectStore } from './projectStore';
 import { useSimulationStore } from './simulationStore';
 import { useUiStore } from './uiStore';
+import { useExtrasStore } from './extrasStore';
 
 const LAST_PROJECT_KEY = 'ha-simulator:last-project-id';
 
@@ -27,6 +28,9 @@ export function rememberLastProjectId(id: string): void {
 export function openProject(project: Project): void {
   useProjectStore.getState().loadProject(project);
   useUiStore.getState().reset();
+  // Lo que depende del proyecto anterior (routers sugeridos, menú de planta) no se conserva.
+  useExtrasStore.getState().setRouterSuggestion(null);
+  useExtrasStore.getState().openFloorMenu(null);
   useUiStore.getState().setActiveFloor(project.floors[0]?.id ?? null);
   useSimulationStore.getState().reset(project);
   rememberLastProjectId(project.id);

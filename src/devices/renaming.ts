@@ -1,6 +1,16 @@
 // Renombrado de dispositivos: mantiene coherentes las referencias a entity_id del proyecto.
-import type { Action, Automation, Condition, Device, DeviceDefinition, EntityState, Project, Script, Trigger } from '../types';
+import type { Action, Automation, Device, DeviceDefinition, EntityState, Project, Script } from '../types';
 import { entityIdsForDevice } from './entities';
+import {
+  actionConditions,
+  conditionEntityIds,
+  flattenActions,
+  mapActionEntities,
+  mapConditionEntities,
+  mapTriggerEntities,
+  triggerEntityIds,
+  type EntityMapper,
+} from '../automations/walk';
 
 /**
  * entity_id antiguo -> nuevo al renombrar un dispositivo. Solo incluye los que cambian.
@@ -16,28 +26,29 @@ export function entityIdMappingForRename(device: Device, def: DeviceDefinition, 
   return mapping;
 }
 
-type Mapper = (entityId: string) => string;
-
-function mapTrigger(t: Trigger, map: Mapper): Trigger {
-  return t.type === 'state' || t.type === 'numeric_state' ? { ...t, entityId: map(t.entityId) } : t;
+/**
+ * Fase 3 (B19): entity_id antiguo -> nuevo al cambiar «Mostrar como» (switch ↔ light).
+ * Úsalo con renameEntityRefs y renameEntities como al renombrar.
+ */
+export function entityIdMappingForShowAs(device: Device, def: DeviceDefinition, showAs: Device['showAs']): Record<string, string> {
+  const before = entityIdsForDevice(device, def);
+  const next: Device = { ...device };
+  if (showAs === undefined) delete next.showAs;
+  else next.showAs = showAs;
+  const after = entityIdsForDevice(next, def);
+  const mapping: Record<string, string> = {};
+  before.forEach((oldId, i) => {
+    const newId = after[i];
+    if (newId !== undefined && newId !== oldId) mapping[oldId] = newId;
+  });
+  return mapping;
 }
 
-function mapCondition(c: Condition, map: Mapper): Condition {
-  switch (c.type) {
-    case 'state':
-    case 'numeric_state':
-      return { ...c, entityId: map(c.entityId) };
-    case 'and':
-    case 'or':
-      return { ...c, conditions: c.conditions.map((x) => mapCondition(x, map)) };
-    case 'time':
-      return c;
-  }
-}
+type Mapper = EntityMapper;
 
-function mapAction(a: Action, map: Mapper): Action {
-  return a.type === 'service' ? { ...a, entityId: map(a.entityId) } : a;
-}
+const mapTrigger = mapTriggerEntities;
+const mapCondition = mapConditionEntities;
+const mapAction = mapActionEntities;
 
 function mapAutomation(a: Automation, map: Mapper): Automation {
   return {
@@ -70,7 +81,21 @@ export function renameEntityRefs(project: Project, mapping: Record<string, strin
     automations: project.automations.map((a) => mapAutomation(a, map)),
     scripts: project.scripts.map((s) => mapScript(s, map)),
     scenes: project.scenes.map((s) => ({ ...s, entities: mapSceneEntities(s.entities, map) })),
+    ...renameFase3Refs(project, map),
   };
+}
+
+/** Fase 3: miembros de los grupos y entidades de las líneas de tiempo. */
+function renameFase3Refs(project: Project, map: Mapper): Partial<Project> {
+  const result: Partial<Project> = {};
+  if (project.groups) result.groups = project.groups.map((g) => ({ ...g, entityIds: g.entityIds.map(map) }));
+  if (project.timelines) {
+    result.timelines = project.timelines.map((t) => ({
+      ...t,
+      steps: t.steps.map((step) => (step.entityId === undefined ? step : { ...step, entityId: map(step.entityId) })),
+    }));
+  }
+  return result;
 }
 
 /** Todos los entity_id referenciados por automatizaciones, escenas y scripts, con su origen. */
@@ -81,23 +106,24 @@ export interface EntityReference {
   ownerName: string;
 }
 
-function conditionRefs(c: Condition): string[] {
-  if (c.type === 'and' || c.type === 'or') return c.conditions.flatMap(conditionRefs);
-  return c.type === 'time' ? [] : [c.entityId];
-}
+const conditionRefs = conditionEntityIds;
 
 function actionRefs(a: Action): string[] {
-  if (a.type !== 'service') return [];
-  // "script.<slug>" llama al script directamente y no necesita entity_id.
-  if (a.service.startsWith('script.') && a.service !== 'script.turn_on') return [a.service];
-  return [a.entityId];
+  return flattenActions([a]).flatMap((x) => {
+    const own = [...actionConditions(x).flatMap(conditionEntityIds)];
+    if (x.type === 'wait_for_trigger') own.push(...x.triggers.flatMap(triggerEntityIds));
+    if (x.type !== 'service') return own;
+    // "script.<slug>" llama al script directamente y no necesita entity_id.
+    if (x.service.startsWith('script.') && x.service !== 'script.turn_on') return [...own, x.service];
+    return [...own, x.entityId];
+  });
 }
 
 export function collectEntityRefs(project: Project): EntityReference[] {
   const refs: EntityReference[] = [];
   for (const a of project.automations) {
     const ids = [
-      ...a.triggers.flatMap((t) => (t.type === 'state' || t.type === 'numeric_state' ? [t.entityId] : [])),
+      ...a.triggers.flatMap(triggerEntityIds),
       ...a.conditions.flatMap(conditionRefs),
       ...a.actions.flatMap(actionRefs),
     ];

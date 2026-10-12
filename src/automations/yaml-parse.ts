@@ -1,6 +1,7 @@
 // Parser YAML mínimo (bloques, escalares, comillas, flujo simple) y conversión a Automation.
-import type { Action, Automation, Condition, EntityStateValue, Trigger } from '../types';
+import type { Action, Automation, ChooseOption, Condition, EntityStateValue, RepeatAction, Trigger } from '../types';
 import { isYamlMap, type YamlContext, type YamlMap, type YamlValue } from '../export/yaml';
+import { resolvePersonRef, resolveZoneRef } from '../export/yamlLogic';
 import { findScene, findScript } from '../simulation/engine';
 import { parseHHMM } from '../simulation/clock';
 
@@ -276,7 +277,7 @@ function offsetMinutes(v: YamlValue, where: string): number {
   return m[1] === '-' ? -total : total;
 }
 
-export function parseTrigger(v: YamlValue, i = 0): Trigger {
+export function parseTrigger(v: YamlValue, i = 0, ctx?: Ctx): Trigger {
   const where = `el disparador ${i + 1}`;
   const m = asMap(v, where);
   const platform = str(m.platform ?? m.trigger ?? null, where);
@@ -306,12 +307,15 @@ export function parseTrigger(v: YamlValue, i = 0): Trigger {
       if (m.offset !== undefined && m.offset !== null) t.offsetMinutes = offsetMinutes(m.offset, where);
       return t;
     }
+    case 'zone':
+    case 'device':
+      return parseFase3Trigger(platform, m, where, ctx ?? {});
     default:
       throw new Error(`Tipo de disparador no soportado en ${where}: "${platform}"`);
   }
 }
 
-export function parseCondition(v: YamlValue, i = 0): Condition {
+export function parseCondition(v: YamlValue, i = 0, ctx?: Ctx): Condition {
   const where = `la condición ${i + 1}`;
   const m = asMap(v, where);
   const kind = str(req(m, 'condition', where), where);
@@ -338,7 +342,15 @@ export function parseCondition(v: YamlValue, i = 0): Condition {
     }
     case 'and':
     case 'or':
-      return { type: kind, conditions: list(m.conditions).map(parseCondition) };
+      return { type: kind, conditions: list(m.conditions).map((x, j) => parseCondition(x, j, ctx)) };
+    case 'not':
+      return { type: 'not', conditions: list(m.conditions).map((x, j) => parseCondition(x, j, ctx)) };
+    case 'zone':
+      return {
+        type: 'zone',
+        personId: resolvePersonRef(entityIdOf(m, where), ctx ?? {}),
+        zoneId: resolveZoneRef(str(req(m, 'zone', where), where), ctx ?? {}),
+      };
     default:
       throw new Error(`Tipo de condición no soportado en ${where}: "${kind}"`);
   }
@@ -395,6 +407,8 @@ export function parseAction(v: YamlValue, i = 0, ctx?: Ctx): Action {
   const where = `la acción ${i + 1}`;
   const m = asMap(v, where);
   if (m.delay !== undefined && m.delay !== null) return { type: 'delay', seconds: delaySeconds(m.delay, where) };
+  const logic = parseFase3Action(m, where, ctx);
+  if (logic) return logic;
   if (typeof m.scene === 'string') return { type: 'scene', sceneId: resolveScene(m.scene, ctx, where) };
   const service = str(m.service ?? m.action ?? null, where);
   if (service === 'scene.turn_on') return { type: 'scene', sceneId: resolveScene(entityIdOf(m, where), ctx, where) };
@@ -413,7 +427,7 @@ function objectToAutomation(m: YamlMap, ctx: Ctx | undefined, fallbackId: string
   const mode = m.mode === undefined || m.mode === null ? 'single' : str(m.mode, 'mode');
   const validMode = MODES.find((x) => x === mode);
   if (!validMode) throw new Error(`Modo no válido: "${mode}" (single, restart, queued o parallel)`);
-  const triggers = list(m.trigger ?? m.triggers).map(parseTrigger);
+  const triggers = list(m.trigger ?? m.triggers).map((t, i) => parseTrigger(t, i, ctx));
   if (triggers.length === 0) throw new Error('La automatización necesita al menos un disparador ("trigger")');
   return {
     id: m.id === undefined || m.id === null ? fallbackId : str(m.id, 'id'),
@@ -421,7 +435,7 @@ function objectToAutomation(m: YamlMap, ctx: Ctx | undefined, fallbackId: string
     enabled: m.initial_state !== false,
     mode: validMode,
     triggers,
-    conditions: list(m.condition ?? m.conditions).map(parseCondition),
+    conditions: list(m.condition ?? m.conditions).map((c, i) => parseCondition(c, i, ctx)),
     actions: list(m.action ?? m.actions).map((a, i) => parseAction(a, i, ctx)),
   };
 }
@@ -448,4 +462,83 @@ export function parseAutomationYaml(text: string, ctx?: Ctx): Automation {
 export function parseAutomationsYaml(text: string, ctx?: Ctx): Automation[] {
   const root = parseRoot(text);
   return list(root).map((item, i) => objectToAutomation(asMap(item, `la automatización ${i + 1}`), ctx, crypto.randomUUID()));
+}
+
+// ---------- Fase 3: zone, device, choose, if, wait_for_trigger, repeat, notify, variables ----------
+
+function parseFase3Trigger(platform: string, m: YamlMap, where: string, ctx: Ctx): Trigger {
+  if (platform === 'zone') {
+    const event = str(req(m, 'event', where), where);
+    if (event !== 'enter' && event !== 'leave') throw new Error(`Evento de zona no válido en ${where}: "${event}"`);
+    return {
+      type: 'zone',
+      personId: resolvePersonRef(entityIdOf(m, where), ctx),
+      zoneId: resolveZoneRef(str(req(m, 'zone', where), where), ctx),
+      event,
+    };
+  }
+  const action = m.subtype ?? m.action;
+  if (action === undefined || action === null) throw new Error(`Falta "subtype" en ${where}`);
+  return { type: 'device_action', entityId: entityIdOf(m, where), action: str(action, where) };
+}
+
+function conditionList(v: YamlValue | undefined, ctx: Ctx | undefined): Condition[] {
+  return list(v).map((c, i) => parseCondition(c, i, ctx));
+}
+
+function actionList(v: YamlValue | undefined, ctx: Ctx | undefined): Action[] {
+  return list(v).map((a, i) => parseAction(a, i, ctx));
+}
+
+function textOf(v: YamlValue | undefined, where: string): string | undefined {
+  return v === undefined || v === null ? undefined : str(v, where);
+}
+
+/** Acciones de la Fase 3; undefined si el mapa no es ninguna de ellas. */
+function parseFase3Action(m: YamlMap, where: string, ctx: Ctx | undefined): Action | undefined {
+  if (m.choose !== undefined) {
+    const choices: ChooseOption[] = list(m.choose).map((o, i) => {
+      const om = asMap(o, `${where} (opción ${i + 1})`);
+      return { conditions: conditionList(om.conditions, ctx), sequence: actionList(om.sequence, ctx) };
+    });
+    const a: Action = { type: 'choose', choices };
+    if (m.default !== undefined && m.default !== null) a.default = actionList(m.default, ctx);
+    return a;
+  }
+  if (m.if !== undefined) {
+    const a: Action = { type: 'if', conditions: conditionList(m.if, ctx), then: actionList(m.then, ctx) };
+    if (m.else !== undefined && m.else !== null) a.else = actionList(m.else, ctx);
+    return a;
+  }
+  if (m.wait_for_trigger !== undefined) {
+    const a: Action = { type: 'wait_for_trigger', triggers: list(m.wait_for_trigger).map((t, i) => parseTrigger(t, i, ctx)) };
+    if (m.timeout !== undefined && m.timeout !== null) a.timeoutSeconds = delaySeconds(m.timeout, `${where} (timeout)`);
+    if (m.continue_on_timeout === false) a.continueOnTimeout = false;
+    return a;
+  }
+  if (m.repeat !== undefined) {
+    const r = asMap(m.repeat, `${where} (repeat)`);
+    const a: RepeatAction = { type: 'repeat', sequence: actionList(r.sequence, ctx) };
+    const count = num(r.count, `${where} (repeat.count)`);
+    if (count !== undefined) a.count = count;
+    if (r.while !== undefined && r.while !== null) a.while = conditionList(r.while, ctx);
+    if (r.until !== undefined && r.until !== null) a.until = conditionList(r.until, ctx);
+    if (a.count === undefined && !a.while && !a.until) throw new Error(`repeat necesita count, while o until en ${where}`);
+    return a;
+  }
+  if (m.variables !== undefined) {
+    const variables: Record<string, EntityStateValue> = {};
+    for (const [k, v] of Object.entries(asMap(m.variables, `${where} (variables)`))) variables[k] = stateValue(v, `${where} (variables.${k})`);
+    return { type: 'variables', variables };
+  }
+  const service = m.service ?? m.action;
+  if (typeof service === 'string' && (service.startsWith('notify.') || service === 'persistent_notification.create')) {
+    const data = m.data === undefined || m.data === null ? {} : asMap(m.data, `${where} (data)`);
+    const a: Action = { type: 'notify', message: textOf(data.message, where) ?? '' };
+    const title = textOf(data.title, where);
+    if (title !== undefined) a.title = title;
+    if (service !== 'notify.notify') a.service = service;
+    return a;
+  }
+  return undefined;
 }

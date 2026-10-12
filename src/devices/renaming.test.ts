@@ -105,3 +105,29 @@ describe('collectEntityRefs', () => {
     ]);
   });
 });
+
+describe('renameEntityRefs (Fase 3)', () => {
+  it('renombra miembros de grupos, pasos de líneas de tiempo y acciones anidadas', () => {
+    const p = project([], {
+      groups: [{ id: 'g', name: 'G', domain: 'light', entityIds: ['light.a', 'light.b'] }],
+      timelines: [{ id: 't', name: 'T', steps: [{ at: '08:00', kind: 'assert', entityId: 'light.a', expect: 'on' }, { at: '08:00', kind: 'event', event: 'person', personId: 'x' }] }],
+      automations: [
+        { id: 'a', name: 'A', enabled: true, mode: 'single', triggers: [{ type: 'device_action', entityId: 'light.a', action: 'x' }], conditions: [{ type: 'not', conditions: [{ type: 'state', entityId: 'light.a', state: 'on' }] }], actions: [{ type: 'if', conditions: [], then: [{ type: 'service', service: 'light.turn_on', entityId: 'light.a' }] }] },
+      ],
+    });
+    const r = renameEntityRefs(p, { 'light.a': 'light.z' });
+    expect(r.groups?.[0]?.entityIds).toEqual(['light.z', 'light.b']);
+    expect(r.timelines?.[0]?.steps[0]).toMatchObject({ entityId: 'light.z' });
+    expect(JSON.stringify(r.automations)).not.toContain('light.a');
+    expect(collectEntityRefs(r).map((x) => x.entityId)).toEqual(['light.z', 'light.z', 'light.z']);
+  });
+});
+
+describe('entityIdMappingForShowAs', () => {
+  it('switch ↔ light de la entidad principal', async () => {
+    const { entityIdMappingForShowAs } = await import('./renaming');
+    const relay = dev('r', 'shelly-1pm-gen3', undefined, { name: 'Rele' });
+    expect(entityIdMappingForShowAs(relay, def('shelly-1pm-gen3'), 'light')).toEqual({ 'switch.rele_switch': 'light.rele_switch' });
+    expect(entityIdMappingForShowAs({ ...relay, showAs: 'light' }, def('shelly-1pm-gen3'), undefined)).toEqual({ 'light.rele_switch': 'switch.rele_switch' });
+  });
+});

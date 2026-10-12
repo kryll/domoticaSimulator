@@ -3,7 +3,7 @@ import type { EntityState, Id, Project, SimulationState } from '../types';
 import { catalog } from '../devices/catalog';
 import { entityCapabilities } from '../devices/capabilities';
 import { entitiesForDevice } from '../devices/entities';
-import { appendLog, cancelTimer, entityTimerKey, scheduleTimer, setEntityState } from './engine';
+import { appendLog, cancelTimer, entityTimerKey, markRecordedEvent, scheduleTimer, setEntityState } from './engine';
 import { SECOND_MS } from './clock';
 
 function warn(sim: SimulationState, message: string, entityId?: string): SimulationState {
@@ -24,7 +24,7 @@ export function motionPulse(sim: SimulationState, project: Project, entityId: st
   const stop = blocked(sim, entityId, 'el movimiento');
   if (stop) return stop;
   const timeout = seconds ?? entityCapabilities(project, entityId).motionTimeoutSeconds ?? 60;
-  const on = setEntityState(sim, project, entityId, 'on');
+  const on = markRecordedEvent(sim, setEntityState(sim, project, entityId, 'on'), { kind: 'physical', event: 'motion', entityId });
   return scheduleTimer(on, entityTimerKey(entityId), on.now + Math.max(0, timeout) * SECOND_MS, {
     kind: 'set_states',
     setStates: { [entityId]: { state: 'off' } },
@@ -76,7 +76,7 @@ export function pressButton(sim: SimulationState, project: Project, entityId: st
   const stop = blocked(sim, entityId, 'la pulsación');
   if (stop) return stop;
   const pressed = setEntityState(sim, project, entityId, action);
-  return setEntityState(pressed, project, entityId, 'none');
+  return markRecordedEvent(sim, setEntityState(pressed, project, entityId, 'none'), { kind: 'physical', event: 'button', entityId, value: action });
 }
 
 /** Cerradura atascada: solo se fuerza con este evento; lock/unlock la desatascan. */

@@ -2,6 +2,7 @@
 import type { Action, Automation, Condition, EntityStateValue, Project, Scene, Script, Trigger } from '../types';
 import { slugify } from '../devices/entities';
 import { sceneEntityState } from '../simulation/scenes';
+import { fase3ActionToYaml, fase3ConditionToYaml, fase3TriggerToYaml, type PeopleContext } from './yamlLogic';
 
 export type YamlScalar = string | number | boolean | null;
 export type YamlValue = YamlScalar | YamlValue[] | YamlMap;
@@ -94,7 +95,7 @@ export function toYaml(value: YamlValue): string {
 // ---------- Home Assistant ----------
 
 /** Escenas y scripts para resolver entity_id legibles (scene.<slug>, script.<slug>). */
-export interface YamlContext {
+export interface YamlContext extends PeopleContext {
   scenes?: Scene[];
   scripts?: Script[];
 }
@@ -142,7 +143,7 @@ function dataToYaml(data: Record<string, EntityStateValue>): YamlMap {
   return m;
 }
 
-export function triggerToYaml(t: Trigger): YamlMap {
+export function triggerToYaml(t: Trigger, ctx: YamlContext = {}): YamlMap {
   switch (t.type) {
     case 'state': {
       const m: YamlMap = { platform: 'state', entity_id: t.entityId };
@@ -164,10 +165,13 @@ export function triggerToYaml(t: Trigger): YamlMap {
       if (t.offsetMinutes) m.offset = formatOffset(t.offsetMinutes);
       return m;
     }
+    case 'zone':
+    case 'device_action':
+      return fase3TriggerToYaml(t, ctx);
   }
 }
 
-export function conditionToYaml(c: Condition): YamlMap {
+export function conditionToYaml(c: Condition, ctx: YamlContext = {}): YamlMap {
   switch (c.type) {
     case 'state': {
       const m: YamlMap = { condition: 'state', entity_id: c.entityId, state: stateToYaml(c.state) };
@@ -188,7 +192,10 @@ export function conditionToYaml(c: Condition): YamlMap {
     }
     case 'and':
     case 'or':
-      return { condition: c.type, conditions: c.conditions.map(conditionToYaml) };
+      return { condition: c.type, conditions: c.conditions.map((x) => conditionToYaml(x, ctx)) };
+    case 'not':
+    case 'zone':
+      return fase3ConditionToYaml(c, ctx);
   }
 }
 
@@ -205,14 +212,16 @@ export function actionToYaml(a: Action, ctx: YamlContext = {}): YamlMap {
       return { service: 'script.turn_on', target: { entity_id: scriptEntity(a.scriptId, ctx) } };
     case 'delay':
       return { delay: { seconds: a.seconds } };
+    default:
+      return fase3ActionToYaml(a, ctx);
   }
 }
 
 export function automationToObject(a: Automation, ctx: YamlContext = {}): YamlMap {
   const m: YamlMap = { id: a.id, alias: a.name, mode: a.mode };
   if (!a.enabled) m.initial_state = false;
-  m.trigger = a.triggers.map(triggerToYaml);
-  m.condition = a.conditions.map(conditionToYaml);
+  m.trigger = a.triggers.map((t) => triggerToYaml(t, ctx));
+  m.condition = a.conditions.map((c) => conditionToYaml(c, ctx));
   m.action = a.actions.map((x) => actionToYaml(x, ctx));
   return m;
 }

@@ -4,6 +4,7 @@ import { TRIGGER_LABELS } from '../ui/automationOptions';
 import { SelectField, TextField } from '../ui/Field';
 import { parseNumberInput, parseStateInput, stateToInput } from '../ui/formValues';
 import { DurationField } from './DurationField';
+import { DeviceActionTriggerEditor, ZoneTriggerEditor } from './advanced/AdvancedTriggerEditor';
 
 function withFor<T extends { for?: number }>(value: T, seconds: number | undefined): T {
   const next = { ...value };
@@ -93,5 +94,9 @@ export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (
           </div>
         </div>
       );
+    case 'zone':
+      return <ZoneTriggerEditor value={value} onChange={onChange} />;
+    case 'device_action':
+      return <DeviceActionTriggerEditor value={value} onChange={onChange} />;
   }
 }

@@ -4,6 +4,7 @@ import { useProjectStore } from '../store/projectStore';
 import { EntityPicker } from './EntityPicker';
 import { ACTION_LABELS, actionFactories } from '../ui/automationOptions';
 import { ListEditor } from './ListEditor';
+import { AdvancedActionEditor } from './advanced/AdvancedActionEditor';
 import { Field, SelectField, TextField, inputClass } from '../ui/Field';
 import { dataToInput, parseDataInput, parseNumberInput, servicesForEntity } from '../ui/formValues';
 
@@ -120,6 +121,8 @@ export function ActionEditor({ value, onChange }: { value: Action; onChange: (a:
           />
         </div>
       );
+    default:
+      return <AdvancedActionEditor value={value} onChange={onChange} />;
   }
 }
 

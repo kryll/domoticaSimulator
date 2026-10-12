@@ -2,8 +2,10 @@ import { create } from 'zustand';
 import type { Id } from '../types';
 
 /** select = edición; interact = uso (clic = acción principal). */
-export type CanvasMode = 'select' | 'room' | 'connect' | 'interact';
-export type BottomTab = 'validation' | 'automations' | 'scenes' | 'logbook';
+export type CanvasMode = 'select' | 'room' | 'connect' | 'interact' | 'wall';
+export type BottomTab = 'validation' | 'automations' | 'scenes' | 'logbook' | ExtraBottomTab;
+/** Pestañas de la Fase 3 (ver ui/extraTabs.ts). */
+export type ExtraBottomTab = 'home' | 'dashboard' | 'tests';
 
 export type Selection =
   | { kind: 'device'; id: Id }

@@ -62,7 +62,7 @@ export function useCanvasKeyboard(): void {
         if (ui.contextMenu) ui.openContextMenu(null);
         else if (ui.popoverDeviceId) ui.openPopover(null);
         else if (ui.connectFromId) ui.setConnectFrom(null);
-        else if (ui.canvasMode === 'room' || ui.canvasMode === 'connect') ui.setCanvasMode('select');
+        else if (ui.canvasMode === 'room' || ui.canvasMode === 'connect' || ui.canvasMode === 'wall') ui.setCanvasMode('select');
         return;
       }
       if (inMenuOrDialog(e.target)) return;

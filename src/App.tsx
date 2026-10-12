@@ -11,6 +11,7 @@ import { startAutosave, useProjectStore } from './store/projectStore';
 import { startInteractAutoplay, startSimulationSync, stopSimulationLoop } from './store/simulationStore';
 import { useUiStore } from './store/uiStore';
 import { loadInitialProject } from './store/bootstrap';
+import { ExtraDialogs } from './ui/ExtraDialogs';
 
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -102,6 +103,7 @@ export function App({ autoLoad = true }: AppProps) {
         </div>
         <Toast />
         <LazyDialogs />
+        <ExtraDialogs />
       </div>
     </ReactFlowProvider>
   );

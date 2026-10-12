@@ -1,12 +1,14 @@
 import { Button } from '../ui/Button';
 import { useUiStore, type CanvasMode } from '../store/uiStore';
 import { autoConnect } from './actions';
+import { CanvasLayerToggles } from './extras/CanvasLayerToggles';
 
 const MODES: Array<{ mode: CanvasMode; label: string; hint: string; key: string }> = [
   { mode: 'select', label: 'Edición', hint: 'Seleccionar y mover elementos (V). Alt+clic o ⏻ = acción principal', key: 'V' },
   { mode: 'interact', label: 'Uso', hint: 'Usar los dispositivos: clic = acción principal, rueda = ajustar (U)', key: 'U' },
   { mode: 'room', label: 'Dibujar sala', hint: 'Dibujar una sala rectangular (R)', key: 'R' },
   { mode: 'connect', label: 'Conectar', hint: 'Arrastra de un dispositivo a otro para conectarlos (C)', key: 'C' },
+  { mode: 'wall', label: 'Dibujar pared', hint: 'Dibujar paredes sobre el plano (atenúan la señal)', key: '' },
 ];
 
 export function CanvasToolbar() {
@@ -26,7 +28,7 @@ export function CanvasToolbar() {
               size="sm"
               variant={mode === m.mode ? 'primary' : 'ghost'}
               aria-pressed={mode === m.mode}
-              aria-keyshortcuts={m.key}
+              aria-keyshortcuts={m.key || undefined}
               title={m.hint}
               onClick={() => setMode(m.mode)}
             >
@@ -41,6 +43,7 @@ export function CanvasToolbar() {
         <Button size="sm" variant={showCoverage ? 'primary' : 'ghost'} aria-pressed={showCoverage} onClick={toggleCoverage}>
           Cobertura
         </Button>
+        <CanvasLayerToggles />
         <Button
           size="sm"
           variant="ghost"

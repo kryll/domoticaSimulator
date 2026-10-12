@@ -2,7 +2,7 @@
 import type { Device, DeviceDefinition, Id, Project } from '../types';
 import { isBleProxy, isInfra } from '../devices/roles';
 import { canConnect, isWiredLink } from './connections';
-import { isInRange } from './coverage';
+import { isInRangeWithWalls } from './walls';
 
 export interface MeshAnalysis {
   reachable: Set<Id>;
@@ -27,7 +27,8 @@ function linked(project: Project, defs: DeviceDefinition[], a: Device, b: Device
   const r = canConnect(a, b, defs);
   if (!r.ok) return false;
   if (isWiredLink(a, b, defs, r.protocol)) return connected(project, a.id, b.id);
-  return isInRange(a, b, defs, project.floors, r.protocol);
+  // Fase 3 (B21): con paredes en la planta se usa el modelo de atenuación.
+  return isInRangeWithWalls(a, b, defs, project, r.protocol);
 }
 
 /**

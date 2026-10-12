@@ -14,6 +14,19 @@ import type {
   Scene,
   Script,
   Trigger,
+  Person,
+  Zone,
+  EnvironmentSettings,
+  Timeline,
+  TimelineStep,
+  ProjectVariant,
+  EntityGroup,
+  ReliabilitySettings,
+  Wall,
+  ChooseOption,
+  RepeatAction,
+  TimelineEventStep,
+  TimelineAssertStep,
 } from '../types';
 import { INTEGRATIONS, PROTOCOLS } from '../devices/labels';
 
@@ -100,6 +113,7 @@ function floor(v: unknown, path: string): Floor {
   if (f.pixelsPerMeter <= 0) fail(`${path}.pixelsPerMeter`, 'debe ser mayor que 0');
   const bg = optStr(o, 'backgroundImage', path);
   if (bg !== undefined) f.backgroundImage = bg;
+  if (o.walls !== undefined) f.walls = arr(o.walls, `${path}.walls`).map((w, i) => wall(w, `${path}.walls[${i}]`));
   return f;
 }
 
@@ -126,6 +140,7 @@ function device(v: unknown, path: string): Device {
   };
   const roomId = optStr(o, 'roomId', path);
   if (roomId !== undefined) d.roomId = roomId;
+  if (o.showAs !== undefined) d.showAs = oneOf(o, 'showAs', ['light', 'switch'] as const, path);
   return d;
 }
 
@@ -136,8 +151,12 @@ function connection(v: unknown, path: string): Connection {
 
 function trigger(v: unknown, path: string): Trigger {
   const o = obj(v, path);
-  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun'] as const, path);
+  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'zone', 'device_action'] as const, path);
   if (type === 'time') return { type, at: str(o, 'at', path) };
+  if (type === 'zone') {
+    return { type, personId: str(o, 'personId', path), zoneId: str(o, 'zoneId', path), event: oneOf(o, 'event', ['enter', 'leave'] as const, path) };
+  }
+  if (type === 'device_action') return { type, entityId: str(o, 'entityId', path), action: str(o, 'action', path) };
   if (type === 'sun') {
     const t: Trigger = { type, event: oneOf(o, 'event', ['sunrise', 'sunset'] as const, path) };
     const off = optNum(o, 'offsetMinutes', path);
@@ -164,7 +183,7 @@ function trigger(v: unknown, path: string): Trigger {
 
 function condition(v: unknown, path: string): Condition {
   const o = obj(v, path);
-  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'and', 'or'] as const, path);
+  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'and', 'or', 'not', 'zone'] as const, path);
   switch (type) {
     case 'state': {
       const c: Condition = { type, entityId: str(o, 'entityId', path), state: stateValue(o.state, `${path}.state`) };
@@ -190,13 +209,25 @@ function condition(v: unknown, path: string): Condition {
     }
     case 'and':
     case 'or':
-      return { type, conditions: arr(o.conditions, `${path}.conditions`).map((c, i) => condition(c, `${path}.conditions[${i}]`)) };
+    case 'not':
+      return { type, conditions: conditions(o.conditions, `${path}.conditions`) };
+    case 'zone':
+      return { type, personId: str(o, 'personId', path), zoneId: str(o, 'zoneId', path) };
   }
+}
+
+function conditions(v: unknown, path: string): Condition[] {
+  return arr(v, path).map((c, i) => condition(c, `${path}[${i}]`));
 }
 
 function action(v: unknown, path: string): Action {
   const o = obj(v, path);
-  const type = oneOf(o, 'type', ['service', 'scene', 'script', 'delay'] as const, path);
+  const type = oneOf(
+    o,
+    'type',
+    ['service', 'scene', 'script', 'delay', 'choose', 'if', 'wait_for_trigger', 'repeat', 'notify', 'variables'] as const,
+    path,
+  );
   switch (type) {
     case 'service': {
       const a: Action = { type, service: str(o, 'service', path), entityId: str(o, 'entityId', path) };
@@ -209,6 +240,45 @@ function action(v: unknown, path: string): Action {
       return { type, scriptId: str(o, 'scriptId', path) };
     case 'delay':
       return { type, seconds: numAt(o, 'seconds', path) };
+    case 'choose': {
+      const choices: ChooseOption[] = arr(o.choices, `${path}.choices`).map((c, i) => {
+        const co = obj(c, `${path}.choices[${i}]`);
+        return { conditions: conditions(co.conditions, `${path}.choices[${i}].conditions`), sequence: actions(co.sequence, `${path}.choices[${i}].sequence`) };
+      });
+      const a: Action = { type, choices };
+      if (o.default !== undefined) a.default = actions(o.default, `${path}.default`);
+      return a;
+    }
+    case 'if': {
+      const a: Action = { type, conditions: conditions(o.conditions, `${path}.conditions`), then: actions(o.then, `${path}.then`) };
+      if (o.else !== undefined) a.else = actions(o.else, `${path}.else`);
+      return a;
+    }
+    case 'wait_for_trigger': {
+      const a: Action = { type, triggers: arr(o.triggers, `${path}.triggers`).map((t, i) => trigger(t, `${path}.triggers[${i}]`)) };
+      const timeout = optNum(o, 'timeoutSeconds', path);
+      if (timeout !== undefined) a.timeoutSeconds = timeout;
+      if (o.continueOnTimeout !== undefined) a.continueOnTimeout = bool(o, 'continueOnTimeout', path);
+      return a;
+    }
+    case 'repeat': {
+      const a: RepeatAction = { type, sequence: actions(o.sequence, `${path}.sequence`) };
+      const count = optNum(o, 'count', path);
+      if (count !== undefined) a.count = count;
+      if (o.while !== undefined) a.while = conditions(o.while, `${path}.while`);
+      if (o.until !== undefined) a.until = conditions(o.until, `${path}.until`);
+      return a;
+    }
+    case 'notify': {
+      const a: Action = { type, message: str(o, 'message', path) };
+      const title = optStr(o, 'title', path);
+      const service = optStr(o, 'service', path);
+      if (title !== undefined) a.title = title;
+      if (service !== undefined) a.service = service;
+      return a;
+    }
+    case 'variables':
+      return { type, variables: stateRecord(o.variables, `${path}.variables`) };
   }
 }
 
@@ -273,6 +343,128 @@ function checkReferences(p: Project): void {
   }
 }
 
+// ---------- Fase 3 ----------
+
+function bool(o: Obj, key: string, path: string): boolean {
+  const v = o[key];
+  if (typeof v !== 'boolean') fail(`${path}.${key}`, 'debe ser verdadero o falso');
+  return v;
+}
+
+function wall(v: unknown, path: string): Wall {
+  const o = obj(v, path);
+  return { a: point(o.a, `${path}.a`), b: point(o.b, `${path}.b`), material: oneOf(o, 'material', ['drywall', 'brick', 'concrete', 'glass'] as const, path) };
+}
+
+function person(v: unknown, path: string): Person {
+  const o = obj(v, path);
+  const p: Person = { id: str(o, 'id', path), name: str(o, 'name', path) };
+  const color = optStr(o, 'color', path);
+  if (color !== undefined) p.color = color;
+  return p;
+}
+
+function zone(v: unknown, path: string): Zone {
+  const o = obj(v, path);
+  return { id: str(o, 'id', path), name: str(o, 'name', path), kind: oneOf(o, 'kind', ['home', 'work', 'other'] as const, path) };
+}
+
+function environment(v: unknown, path: string): EnvironmentSettings {
+  const o = obj(v, path);
+  const e: EnvironmentSettings = { enabled: bool(o, 'enabled', path), outdoorMean: numAt(o, 'outdoorMean', path), outdoorAmplitude: numAt(o, 'outdoorAmplitude', path) };
+  const tau = optNum(o, 'tauHours', path);
+  const windowFactor = optNum(o, 'windowFactor', path);
+  const rate = optNum(o, 'hvacRatePerHour', path);
+  if (tau !== undefined) e.tauHours = tau;
+  if (windowFactor !== undefined) e.windowFactor = windowFactor;
+  if (rate !== undefined) e.hvacRatePerHour = rate;
+  return e;
+}
+
+const EVENT_KINDS = ['state', 'service', 'motion', 'button', 'door', 'person', 'scene', 'script'] as const;
+const ASSERT_OPS = ['eq', 'ne', 'gt', 'lt', 'gte', 'lte'] as const;
+
+function timelineStep(v: unknown, path: string): TimelineStep {
+  const o = obj(v, path);
+  const at = str(o, 'at', path);
+  if (!/^\d{1,2}:\d{2}(:\d{2})?$/.test(at)) fail(`${path}.at`, 'debe tener el formato HH:MM');
+  const kind = oneOf(o, 'kind', ['event', 'assert'] as const, path);
+  if (kind === 'assert') {
+    const step: TimelineAssertStep = { at, kind, entityId: str(o, 'entityId', path), expect: stateValue(o.expect, `${path}.expect`) };
+    if (o.op !== undefined) step.op = oneOf(o, 'op', ASSERT_OPS, path);
+    const attribute = optStr(o, 'attribute', path);
+    if (attribute !== undefined) step.attribute = attribute;
+    return step;
+  }
+  const step: TimelineEventStep = { at, kind, event: oneOf(o, 'event', EVENT_KINDS, path) };
+  for (const key of ['entityId', 'service', 'personId', 'zoneId', 'sceneId', 'scriptId'] as const) {
+    const value = optStr(o, key, path);
+    if (value !== undefined) step[key] = value;
+  }
+  const value = optStateValue(o, 'value', path);
+  if (value !== undefined) step.value = value;
+  if (o.data !== undefined) step.data = stateRecord(o.data, `${path}.data`);
+  return step;
+}
+
+function timeline(v: unknown, path: string): Timeline {
+  const o = obj(v, path);
+  return { id: str(o, 'id', path), name: str(o, 'name', path), steps: arr(o.steps, `${path}.steps`).map((s, i) => timelineStep(s, `${path}.steps[${i}]`)) };
+}
+
+function group(v: unknown, path: string): EntityGroup {
+  const o = obj(v, path);
+  const entityIds = arr(o.entityIds, `${path}.entityIds`).map((e, i) => {
+    if (typeof e !== 'string') fail(`${path}.entityIds[${i}]`, 'debe ser un texto');
+    return e;
+  });
+  return { id: str(o, 'id', path), name: str(o, 'name', path), domain: oneOf(o, 'domain', ['light', 'switch', 'cover'] as const, path), entityIds };
+}
+
+function reliability(v: unknown, path: string): ReliabilitySettings {
+  const o = obj(v, path);
+  const r: ReliabilitySettings = { latency: bool(o, 'latency', path) };
+  const rate = optNum(o, 'failureRate', path);
+  if (rate !== undefined) {
+    if (rate < 0 || rate > 1) fail(`${path}.failureRate`, 'debe estar entre 0 y 1');
+    r.failureRate = rate;
+  }
+  const seed = optNum(o, 'seed', path);
+  if (seed !== undefined) r.seed = seed;
+  return r;
+}
+
+function variant(v: unknown, path: string): ProjectVariant {
+  const o = obj(v, path);
+  const snap = obj(o.snapshot, `${path}.snapshot`);
+  // La instantánea se valida como un proyecto completo (sin sus propias variantes).
+  const snapshot: Omit<Project, 'variants'> = parseProject({ ...snap, variants: undefined });
+  return { id: str(o, 'id', path), name: str(o, 'name', path), snapshot };
+}
+
+function optList<T>(o: Obj, key: string, parse: (v: unknown, path: string) => T): T[] | undefined {
+  return o[key] === undefined ? undefined : list(o, key, parse);
+}
+
+/** Campos opcionales de la Fase 3 del proyecto. */
+function parseFase3(o: Obj, project: Project): void {
+  const people = optList(o, 'people', person);
+  const zones = optList(o, 'zones', zone);
+  const timelines = optList(o, 'timelines', timeline);
+  const variants = optList(o, 'variants', variant);
+  const groups = optList(o, 'groups', group);
+  if (people) project.people = people;
+  if (zones) project.zones = zones;
+  if (o.environment !== undefined) project.environment = environment(o.environment, 'environment');
+  if (timelines) project.timelines = timelines;
+  if (variants) project.variants = variants;
+  if (groups) project.groups = groups;
+  if (o.reliability !== undefined) project.reliability = reliability(o.reliability, 'reliability');
+  for (const [name, items] of [['people', people], ['zones', zones], ['timelines', timelines], ['variants', variants], ['groups', groups]] as const) {
+    if (items) checkUniqueIds(name, items);
+  }
+}
+
 /** Valida y normaliza un objeto desconocido como Project. Lanza Error en español. */
 export function parseProject(raw: unknown): Project {
   const o = obj(raw, 'el documento');
@@ -300,5 +492,6 @@ export function parseProject(raw: unknown): Project {
   checkUniqueIds('scenes', project.scenes);
   checkUniqueIds('scripts', project.scripts);
   checkReferences(project);
+  parseFase3(o, project);
   return project;
 }

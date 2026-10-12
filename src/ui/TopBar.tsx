@@ -8,6 +8,10 @@ import { SimulationControls } from '../simulation/SimulationControls';
 import { Button } from './Button';
 import { ProjectsDialog } from './ProjectsDialog';
 import { downloadText, readFileAsText, safeFilename } from './download';
+import { useExtrasStore } from '../store/extrasStore';
+import { TopBarExtras } from './TopBarExtras';
+// Estático: yaml.ts ya va en el bundle principal (lo usa el motor a través de yamlLogic.ts).
+import { automationsToYaml, scenesToYaml, scriptsToYaml } from '../export/yaml';
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -125,6 +129,7 @@ export function TopBar() {
           >
             Nuevo proyecto
           </MenuItem>
+          <MenuItem onClick={() => useExtrasStore.getState().openDialog('houseTemplates')}>Nuevo desde plantilla de casa…</MenuItem>
           <MenuItem onClick={() => setOpenDialog(true)}>Abrir…</MenuItem>
           <MenuItem onClick={() => safely(() => openAsNewProject(createDemoProject()).then(() => undefined))}>Cargar proyecto de demo</MenuItem>
           <MenuItem onClick={() => fileRef.current?.click()}>Importar JSON…</MenuItem>
@@ -133,13 +138,13 @@ export function TopBar() {
           <MenuItem onClick={() => safely(() => downloadText(exportProjectJson(project()), `${base()}.json`, 'application/json'))}>
             Proyecto (JSON)
           </MenuItem>
-          <MenuItem onClick={() => safely(async () => downloadText((await import('../export/yaml')).automationsToYaml(project()), 'automations.yaml', 'text/yaml'))}>
+          <MenuItem onClick={() => safely(() => downloadText(automationsToYaml(project()), 'automations.yaml', 'text/yaml'))}>
             automations.yaml
           </MenuItem>
-          <MenuItem onClick={() => safely(async () => downloadText((await import('../export/yaml')).scenesToYaml(project()), 'scenes.yaml', 'text/yaml'))}>
+          <MenuItem onClick={() => safely(() => downloadText(scenesToYaml(project()), 'scenes.yaml', 'text/yaml'))}>
             scenes.yaml
           </MenuItem>
-          <MenuItem onClick={() => safely(async () => downloadText((await import('../export/yaml')).scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
+          <MenuItem onClick={() => safely(() => downloadText(scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
             scripts.yaml
           </MenuItem>
           <MenuItem onClick={() => safely(async () => downloadText((await import('../export/csv')).devicesToCsv(project(), catalog), `${base()}-dispositivos.csv`, 'text/csv'))}>
@@ -148,6 +153,7 @@ export function TopBar() {
           <MenuItem onClick={() => safely(async () => (await import('../export/png')).exportCanvasPng(`${base()}-plano.png`), 'Imagen exportada')}>
             Imagen del plano (PNG)
           </MenuItem>
+          <MenuItem onClick={() => useExtrasStore.getState().openDialog('packages')}>Configuración HA (packages .zip)…</MenuItem>
         </Menu>
         <input
           ref={fileRef}
@@ -179,7 +185,8 @@ export function TopBar() {
         </Button>
       </div>
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1">
+        <TopBarExtras />
         <SimulationControls />
       </div>
       {openDialog && <ProjectsDialog onClose={() => setOpenDialog(false)} />}

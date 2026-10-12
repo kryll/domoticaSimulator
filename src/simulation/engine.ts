@@ -17,9 +17,33 @@ import type {
   SimTimer,
   SimulationState,
   Trigger,
+  RecordedEvent,
+  WaitForTriggerAction,
 } from '../types';
 import { entitiesForDevice, entityDomain, initialEntityStates, slugify } from '../devices/entities';
 import { entityCapabilities, findEntityOwner } from '../devices/capabilities';
+import { catalog } from '../devices/catalog';
+import { mapActionEntities, mapTriggerEntities } from '../automations/walk';
+import {
+  addNotification,
+  aggregateGroupState,
+  expandRepeat,
+  fase3TriggerMatches,
+  findGroupByEntity,
+  groupEntities,
+  groupEntityId,
+  groupsContaining,
+  MAX_ACTION_STEPS,
+  memberService,
+  peopleEntities,
+  renderData,
+  renderTemplate,
+  WAIT_FOREVER,
+  type Variables,
+} from './logic';
+import { recordSample, sampleValue } from './history';
+import { latencyFor, nextRandom } from './latency';
+import { applyEnvironment } from './thermal';
 import { DAY_MS, DEFAULT_SUN, isTimeBetween, MINUTE_MS, parseHHMM, SECOND_MS, startOfDay, sunTimes, type SunConfig } from './clock';
 import {
   applyService,
@@ -43,12 +67,18 @@ const MAX_TICK_DAYS = 400;
 interface RunCtx {
   automationId?: Id;
   scriptId?: Id;
+  /** Fase 3: variables de la ejecución (acción variables). */
+  variables?: Variables;
 }
 
 /** Contexto interno de ejecución: profundidad y cadena de automatizaciones/scripts activos. */
 interface Exec {
   depth: number;
   chain: readonly Id[];
+  /** Fase 3: no registra los cambios de estado (sensores del modelo térmico). */
+  quiet?: boolean;
+  /** Fase 3: la llamada ya pasó por la latencia simulada. */
+  immediate?: boolean;
 }
 
 const ROOT: Exec = { depth: 0, chain: [] };
@@ -71,15 +101,17 @@ export function appendLog(
   return addLog(sim, level, message, extra);
 }
 
-function addLog(
-  sim: SimulationState,
-  level: LogLevel,
-  message: string,
-  extra: { entityId?: string; automationId?: Id } = {},
-): SimulationState {
+interface LogExtra {
+  entityId?: string;
+  automationId?: Id;
+  change?: LogEntry['change'];
+}
+
+function addLog(sim: SimulationState, level: LogLevel, message: string, extra: LogExtra = {}): SimulationState {
   const entry: LogEntry = { id: `log-${nextSeq(sim.log)}`, timestamp: sim.now, level, message };
   if (extra.entityId !== undefined) entry.entityId = extra.entityId;
   if (extra.automationId !== undefined) entry.automationId = extra.automationId;
+  if (extra.change !== undefined) entry.change = extra.change;
   const log = [...sim.log, entry];
   return { ...sim, log: log.length > MAX_LOG_ENTRIES ? log.slice(log.length - MAX_LOG_ENTRIES) : log };
 }
@@ -190,16 +222,18 @@ function renameTimer(timer: SimTimer, mapping: Record<string, string>): SimTimer
       return { ...timer, setStates: renameKey(timer.setStates, mapping) };
     case 'cover_step':
     case 'state_for':
+    case 'service_call':
       return { ...timer, entityId: ren(timer.entityId) };
   }
 }
 
 function renameActions(actions: Action[], mapping: Record<string, string>): Action[] {
-  return actions.map((a) => (a.type === 'service' && mapping[a.entityId] ? { ...a, entityId: mapping[a.entityId] ?? a.entityId } : a));
+  return actions.map((a) => mapActionEntities(a, (id) => mapping[id] ?? id));
 }
 
 function renamePending(p: PendingAction, mapping: Record<string, string>): PendingAction {
   const next: PendingAction = { ...p, actions: renameActions(p.actions, mapping) };
+  if (p.wait) next.wait = { ...p.wait, triggers: p.wait.triggers.map((t) => mapTriggerEntities(t, (id) => mapping[id] ?? id)) };
   if (p.timer) {
     next.timer = renameTimer(p.timer, mapping);
     const entityId = p.key?.startsWith('entity:') ? p.key.slice(7) : undefined;
@@ -237,15 +271,20 @@ export function renameEntities(sim: SimulationState, mapping: Record<string, str
 // ---------- Creación ----------
 
 export function createSimulationState(project: Project, defs: DeviceDefinition[], now: number): SimulationState {
+  const devices = initialEntityStates(project, defs);
+  const entities = { ...devices, ...peopleEntities(project), ...groupEntities(project, devices) };
   const sim: SimulationState = {
     running: false,
     now,
     speed: 1,
-    entities: initialEntityStates(project, defs),
+    entities,
     pending: [],
     queue: [],
     log: [],
     startedAt: now,
+    notifications: [],
+    // B23: el historial empieza con el estado inicial de cada entidad.
+    history: Object.fromEntries(Object.entries(entities).map(([id, e]) => [id, [{ t: now, v: sampleValue(e.state) }]])),
   };
   return addLog(sim, 'info', `Simulación preparada con ${Object.keys(sim.entities).length} entidades`);
 }
@@ -273,6 +312,12 @@ export function evaluateCondition(c: Condition, sim: SimulationState): boolean {
       return c.conditions.every((x) => evaluateCondition(x, sim));
     case 'or':
       return c.conditions.some((x) => evaluateCondition(x, sim));
+    case 'not':
+      return !c.conditions.some((x) => evaluateCondition(x, sim));
+    case 'zone':
+      return Object.entries(sim.entities).some(
+        ([id, e]) => entityDomain(id) === 'person' && e.attributes?.person_id === c.personId && String(e.attributes.zone_id ?? '') === c.zoneId,
+      );
   }
 }
 
@@ -337,7 +382,7 @@ function runAutomationInternal(
   return drainQueue(next, project, a, exec);
 }
 
-function stateTriggerMatches(t: Trigger, entityId: string, prev: EntityStateValue, next: EntityStateValue): boolean {
+function stateTriggerMatches(t: Trigger, entityId: string, prev: EntityStateValue, next: EntityStateValue, project: Project): boolean {
   if (t.type === 'state') {
     if (t.entityId !== entityId || sameState(prev, next)) return false;
     return (t.from === undefined || sameState(prev, t.from)) && (t.to === undefined || sameState(next, t.to));
@@ -346,7 +391,7 @@ function stateTriggerMatches(t: Trigger, entityId: string, prev: EntityStateValu
     if (t.entityId !== entityId) return false;
     return inNumericRange(next, t.above, t.below) && !inNumericRange(prev, t.above, t.below);
   }
-  return false;
+  return fase3TriggerMatches(t, project, entityId, prev, next);
 }
 
 function fireStateTriggers(
@@ -361,7 +406,7 @@ function fireStateTriggers(
   for (const a of project.automations) {
     let immediate = false;
     for (const [i, t] of a.triggers.entries()) {
-      if (!stateTriggerMatches(t, entityId, prev, next)) continue;
+      if (!stateTriggerMatches(t, entityId, prev, next, project)) continue;
       if (t.type === 'state' && t.for !== undefined && t.for > 0) {
         const timer: SimTimer = { kind: 'state_for', entityId, automationId: a.id, triggerIndex: i };
         result = scheduleTimer(result, `for:${a.id}:${i}`, result.now + t.for * SECOND_MS, timer);
@@ -411,10 +456,54 @@ function applyChange(
   if (lastChanged !== undefined) merged.lastChanged = lastChanged;
   let result: SimulationState = { ...sim, entities: { ...sim.entities, [entityId]: merged } };
   if (!changed) return syncClimate(result, project, entityId, merged);
-  result = addLog(result, 'info', `${friendly(result, entityId)}: ${normalize(prev.state)} → ${normalize(merged.state)}`, { entityId });
+  result = recordSample(result, entityId, merged.state);
+  if (!exec.quiet) {
+    const change = { from: prev.state, to: merged.state };
+    result = addLog(result, 'info', `${friendly(result, entityId)}: ${normalize(prev.state)} → ${normalize(merged.state)}`, { entityId, change });
+  }
   result = cancelStateFor(result, entityId);
   result = syncClimate(result, project, entityId, merged);
+  result = syncGroups(result, project, entityId, exec);
+  result = resumeWaits(result, project, entityId, prev.state, merged.state, exec);
   return fireStateTriggers(result, project, entityId, prev.state, merged.state, exec);
+}
+
+/** Fase 3 (B19): recalcula el estado agregado de los grupos que contienen la entidad. */
+function syncGroups(sim: SimulationState, project: Project, entityId: string, exec: Exec): SimulationState {
+  let result = sim;
+  for (const g of groupsContaining(project, entityId)) {
+    const id = groupEntityId(g);
+    const current = result.entities[id];
+    const next = aggregateGroupState(g, result.entities);
+    if (current && sameState(current.state, next.state)) continue;
+    if (!current) {
+      result = { ...result, entities: { ...result.entities, [id]: { ...next, lastChanged: result.now } } };
+      continue;
+    }
+    result = applyChange(result, project, id, next, { ...exec, depth: exec.depth + 1 });
+  }
+  return result;
+}
+
+/** Fase 3 (B11): reanuda los wait_for_trigger cuyo disparador coincide con el cambio. */
+function resumeWaits(
+  sim: SimulationState,
+  project: Project,
+  entityId: string,
+  prev: EntityStateValue,
+  next: EntityStateValue,
+  exec: Exec,
+): SimulationState {
+  const matching = sim.pending.filter((p) => p.wait?.triggers.some((t) => stateTriggerMatches(t, entityId, prev, next, project)));
+  let result = sim;
+  for (const p of matching) {
+    if (!result.pending.some((x) => x.id === p.id)) continue;
+    result = { ...result, pending: result.pending.filter((x) => x.id !== p.id) };
+    const extra = p.automationId === undefined ? {} : { automationId: p.automationId };
+    result = addLog(result, 'info', `Espera completada: ${friendly(result, entityId)} → ${normalize(next)}`, extra);
+    result = continuePending(result, project, p, { depth: exec.depth + 1, chain: exec.chain });
+  }
+  return result;
 }
 
 /**
@@ -426,9 +515,46 @@ export function setEntityState(
   project: Project,
   entityId: string,
   next: EntityState | EntityStateValue,
-  opts: { replace?: boolean } = {},
+  opts: { replace?: boolean; quiet?: boolean } = {},
 ): SimulationState {
-  return applyChange(sim, project, entityId, next, ROOT, opts.replace ?? false);
+  const exec: Exec = opts.quiet ? { ...ROOT, quiet: true } : ROOT;
+  const result = applyChange(sim, project, entityId, next, exec, opts.replace ?? false);
+  if (opts.quiet) return result;
+  const value = isEntityState(next) ? next.state : next;
+  return annotateEvent(sim, result, { kind: 'state', entityId, value });
+}
+
+/** Fase 3 (B14): marca la primera entrada nueva del registro como evento de usuario. */
+function annotateEvent(before: SimulationState, after: SimulationState, event: RecordedEvent): SimulationState {
+  const id = `log-${nextSeq(before.log)}`;
+  const idx = after.log.findIndex((e) => e.id === id);
+  const entry = after.log[idx];
+  if (idx === -1 || !entry) return after;
+  const log = [...after.log];
+  log[idx] = { ...entry, event };
+  return { ...after, log };
+}
+
+/**
+ * Fase 3 (B14): sustituye los eventos anotados entre `before` y `after` por uno solo (en la
+ * primera entrada nueva). Lo usan los eventos físicos compuestos (movimiento, pulsación).
+ */
+export function markRecordedEvent(before: SimulationState, after: SimulationState, event: RecordedEvent): SimulationState {
+  const first = nextSeq(before.log);
+  let marked = false;
+  const log = after.log.map((e) => {
+    const n = Number(e.id.replace(/^log-/, ''));
+    if (!(n >= first)) return e;
+    if (!marked) {
+      marked = true;
+      return { ...e, event };
+    }
+    if (!e.event) return e;
+    const copy = { ...e };
+    delete copy.event;
+    return copy;
+  });
+  return marked ? { ...after, log } : after;
 }
 
 // ---------- Escenas y scripts ----------
@@ -501,7 +627,9 @@ function callServiceInternal(
     const ref = service === 'turn_on' ? entityId : name;
     return runScriptInternal(sim, project, ref, ctx, exec);
   }
-  const logExtra = { entityId, ...ctx };
+  const logExtra = { entityId, ...(ctx.automationId === undefined ? {} : { automationId: ctx.automationId }) };
+  const group = findGroupByEntity(project, entityId);
+  if (group) return callGroupService(sim, project, group, service, data, ctx, exec);
   const current = sim.entities[entityId];
   if (!current) return addLog(sim, 'warning', `Servicio ${name}: entidad desconocida ${entityId}`, logExtra);
   if (domain !== target && domain !== 'homeassistant') {
@@ -510,6 +638,7 @@ function callServiceInternal(
   if (current.state === 'unavailable') {
     return addLog(sim, 'warning', `Servicio ${name}: ${friendly(sim, entityId)} no está disponible`, logExtra);
   }
+  if (project.reliability?.latency && !exec.immediate) return delayServiceCall(sim, project, entityId, name, data, ctx);
   const caps = entityCapabilities(project, entityId);
   const res = applyService(target, service, current, data, { now: sim.now, capabilities: caps });
   if (!res) return addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra);
@@ -529,6 +658,56 @@ function callServiceInternal(
   return next;
 }
 
+/** Fase 3 (B19): servicio sobre un grupo → mismo servicio en cada miembro. */
+function callGroupService(
+  sim: SimulationState,
+  project: Project,
+  group: NonNullable<ReturnType<typeof findGroupByEntity>>,
+  service: string,
+  data: ServiceData | undefined,
+  ctx: RunCtx,
+  exec: Exec,
+): SimulationState {
+  const id = groupEntityId(group);
+  const groupState = sim.entities[id]?.state ?? 'off';
+  const extra = { entityId: id, ...(ctx.automationId === undefined ? {} : { automationId: ctx.automationId }) };
+  let result = addLog(sim, 'info', `Servicio ${group.domain}.${service} → grupo «${group.name}» (${group.entityIds.length} miembros)`, extra);
+  const inner: Exec = { ...exec, depth: exec.depth + 1 };
+  if (inner.depth > MAX_DEPTH) return addLog(result, 'error', `Grupo «${group.name}»: posible bucle infinito`, extra);
+  for (const member of group.entityIds) {
+    result = callServiceInternal(result, project, member, memberService(group, groupState, service, member), data, ctx, inner);
+  }
+  return result;
+}
+
+/** Fase 3 (B22): aplica la llamada tras la latencia simulada; en la nube puede fallar. */
+function delayServiceCall(
+  sim: SimulationState,
+  project: Project,
+  entityId: string,
+  service: string,
+  data: ServiceData | undefined,
+  ctx: RunCtx,
+): SimulationState {
+  const rel = project.reliability;
+  let state = sim.rngState ?? rel?.seed ?? 1;
+  const [r1, s1] = nextRandom(state);
+  const [r2, s2] = nextRandom(s1);
+  state = s2;
+  const info = latencyFor(project, catalog, entityId, r1);
+  const extra = { entityId, ...(ctx.automationId === undefined ? {} : { automationId: ctx.automationId }) };
+  const next: SimulationState = { ...sim, rngState: state };
+  if (info.cloud && (rel?.failureRate ?? 0) > 0 && r2 < (rel?.failureRate ?? 0)) {
+    return addLog(next, 'error', `Servicio ${service} → ${friendly(sim, entityId)}: falló la llamada a la nube (fallo simulado)`, extra);
+  }
+  const timer: SimTimer = { kind: 'service_call', entityId, service };
+  if (data !== undefined) timer.data = data;
+  if (ctx.automationId !== undefined) timer.automationId = ctx.automationId;
+  const key = `latency:${entityId}:${sim.now}:${state}`;
+  const logged = addLog(next, 'info', `Servicio ${service} → ${friendly(sim, entityId)}: en camino (${info.ms} ms${info.cloud ? ', nube' : ''})`, extra);
+  return scheduleTimer(logged, key, sim.now + info.ms, timer);
+}
+
 /**
  * Llama a un servicio de HA sobre una entidad: vía única para el usuario y las automatizaciones.
  * `service` puede ser "light.turn_on" o solo "turn_on" (se usa el dominio de la entidad).
@@ -542,7 +721,11 @@ export function callService(
   service: string,
   data?: ServiceData,
 ): SimulationState {
-  return callServiceInternal(sim, project, entityId, service, data, {}, ROOT);
+  const result = callServiceInternal(sim, project, entityId, service, data, {}, ROOT);
+  const event: RecordedEvent = { kind: 'service', entityId, service };
+  const plain = data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, Array.isArray(v) ? `[${v.join(', ')}]` : v])) : undefined;
+  if (plain && Object.keys(plain).length > 0) event.data = plain;
+  return annotateEvent(sim, result, event);
 }
 
 /**
@@ -567,7 +750,30 @@ function schedule(sim: SimulationState, rest: Action[], seconds: number, ctx: Ru
   const pending: PendingAction = { id: `pending-${last?.id ?? logged.pending.length}`, dueAt: sim.now + seconds * 1000, actions: rest };
   if (ctx.automationId !== undefined) pending.automationId = ctx.automationId;
   if (ctx.scriptId !== undefined) pending.scriptId = ctx.scriptId;
+  if (ctx.variables !== undefined && Object.keys(ctx.variables).length > 0) pending.variables = ctx.variables;
   return { ...logged, pending: [...logged.pending, pending] };
+}
+
+/** Fase 3 (B11): wait_for_trigger deja el resto de acciones esperando al disparador. */
+function scheduleWait(sim: SimulationState, rest: Action[], a: WaitForTriggerAction, ctx: RunCtx): SimulationState {
+  const extra = ctx.automationId === undefined ? {} : { automationId: ctx.automationId };
+  const timeout = a.timeoutSeconds !== undefined ? Math.max(0, a.timeoutSeconds) : undefined;
+  const logged = addLog(sim, 'info', timeout === undefined ? 'Esperando a un disparador' : `Esperando a un disparador (máximo ${formatDuration(timeout)})`, extra);
+  const last = logged.log[logged.log.length - 1];
+  const pending: PendingAction = {
+    id: `wait-${last?.id ?? logged.pending.length}`,
+    dueAt: timeout === undefined ? WAIT_FOREVER : sim.now + timeout * SECOND_MS,
+    actions: rest,
+    wait: { triggers: a.triggers, continueOnTimeout: a.continueOnTimeout ?? true, ...(timeout === undefined ? { forever: true } : {}) },
+  };
+  if (ctx.automationId !== undefined) pending.automationId = ctx.automationId;
+  if (ctx.scriptId !== undefined) pending.scriptId = ctx.scriptId;
+  if (ctx.variables !== undefined && Object.keys(ctx.variables).length > 0) pending.variables = ctx.variables;
+  return { ...logged, pending: [...logged.pending, pending] };
+}
+
+function allConditions(conds: Condition[], sim: SimulationState): boolean {
+  return conds.every((c) => evaluateCondition(c, sim));
 }
 
 function runActionsInternal(sim: SimulationState, project: Project, actions: Action[], ctx: RunCtx, exec: Exec): SimulationState {
@@ -575,19 +781,59 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
     return addLog(sim, 'error', `Acciones no ejecutadas: posible bucle infinito (límite de ${MAX_DEPTH} niveles)`);
   }
   let result = sim;
-  for (const [i, action] of actions.entries()) {
+  let queue: Action[] = actions;
+  let vars: Variables = ctx.variables ?? {};
+  const extra = ctx.automationId === undefined ? {} : { automationId: ctx.automationId };
+  for (let steps = 0; queue.length > 0; steps++) {
+    if (steps >= MAX_ACTION_STEPS) {
+      return addLog(result, 'error', `Acciones detenidas: más de ${MAX_ACTION_STEPS} pasos sin espera (¿repeat infinito?)`, extra);
+    }
+    const [action, ...rest] = queue;
+    queue = rest;
+    if (!action) continue;
+    const c: RunCtx = Object.keys(vars).length > 0 ? { ...ctx, variables: vars } : ctx;
     switch (action.type) {
       case 'delay':
-        return schedule(result, actions.slice(i + 1), Math.max(0, action.seconds), ctx);
+        return schedule(result, rest, Math.max(0, action.seconds), c);
       case 'service':
-        result = callServiceInternal(result, project, action.entityId, action.service, action.data, ctx, exec);
+        result = callServiceInternal(result, project, action.entityId, action.service, renderData(action.data, vars, result), c, exec);
         break;
       case 'scene':
         result = activateSceneInternal(result, project, action.sceneId, exec);
         break;
       case 'script':
-        result = runScriptInternal(result, project, action.scriptId, ctx, exec);
+        result = runScriptInternal(result, project, action.scriptId, c, exec);
         break;
+      case 'choose': {
+        const index = action.choices.findIndex((o) => allConditions(o.conditions, result));
+        const chosen = index === -1 ? action.default ?? [] : (action.choices[index]?.sequence ?? []);
+        result = addLog(result, 'info', index === -1 ? 'choose: ninguna opción se cumple; se usa la opción por defecto' : `choose: se cumple la opción ${index + 1}`, extra);
+        queue = [...chosen, ...rest];
+        break;
+      }
+      case 'if': {
+        const ok = allConditions(action.conditions, result);
+        result = addLog(result, 'info', ok ? 'if: condiciones cumplidas (then)' : 'if: condiciones no cumplidas (else)', extra);
+        queue = [...(ok ? action.then : action.else ?? []), ...rest];
+        break;
+      }
+      case 'repeat':
+        queue = [...expandRepeat(action, (conds) => allConditions(conds, result)), ...rest];
+        break;
+      case 'wait_for_trigger':
+        return scheduleWait(result, rest, action, c);
+      case 'notify': {
+        const title = renderTemplate(action.title ?? 'Home Assistant', vars, result);
+        const message = renderTemplate(action.message, vars, result);
+        result = addLog(addNotification(result, title, message), 'info', `Notificación: ${title} — ${message}`, extra);
+        break;
+      }
+      case 'variables': {
+        const rendered: Variables = {};
+        for (const [k, v] of Object.entries(action.variables)) rendered[k] = typeof v === 'string' ? renderTemplate(v, vars, result) : v;
+        vars = { ...vars, ...rendered };
+        break;
+      }
     }
   }
   return result;
@@ -676,22 +922,44 @@ function runTimer(sim: SimulationState, project: Project, timer: SimTimer): Simu
       const reason = `${timer.entityId} lleva ${formatDuration(t.for)} en ${normalize(current.state)}`;
       return runAutomationInternal(sim, project, a, ROOT, reason);
     }
+    case 'service_call': {
+      const ctx: RunCtx = timer.automationId === undefined ? {} : { automationId: timer.automationId };
+      return callServiceInternal(sim, project, timer.entityId, timer.service, timer.data, ctx, { ...ROOT, immediate: true });
+    }
   }
 }
 
 function runPending(sim: SimulationState, project: Project, p: PendingAction): SimulationState {
   const rest = { ...sim, now: Math.max(sim.now, p.dueAt), pending: sim.pending.filter((x) => x.id !== p.id) };
   if (p.timer) return runTimer(rest, project, p.timer);
+  if (p.wait) {
+    const extra = p.automationId === undefined ? {} : { automationId: p.automationId };
+    if (!p.wait.continueOnTimeout) {
+      const stopped = addLog(rest, 'warning', 'Tiempo de espera agotado: se detienen las acciones (continue_on_timeout: false)', extra);
+      const automation = project.automations.find((a) => a.id === p.automationId);
+      return automation ? drainQueue(stopped, project, automation, ROOT) : stopped;
+    }
+    return continuePending(addLog(rest, 'info', 'Tiempo de espera agotado: se continúa', extra), project, p, ROOT);
+  }
+  return continuePending(rest, project, p, ROOT);
+}
+
+/** Ejecuta las acciones restantes de una espera (delay o wait_for_trigger) ya retirada. */
+function continuePending(sim: SimulationState, project: Project, p: PendingAction, exec: Exec): SimulationState {
   const ctx: RunCtx = {};
   if (p.automationId !== undefined) ctx.automationId = p.automationId;
   if (p.scriptId !== undefined) ctx.scriptId = p.scriptId;
-  const ran = runActions(rest, project, p.actions, ctx);
+  if (p.variables !== undefined) ctx.variables = p.variables;
+  const chain = [...exec.chain, ...[p.automationId, p.scriptId].filter((x): x is Id => x !== undefined)];
+  const ran = runActionsInternal(sim, project, p.actions, ctx, { depth: exec.depth, chain });
   const automation = project.automations.find((a) => a.id === p.automationId);
   return automation ? drainQueue(ran, project, automation, ROOT) : ran;
 }
 
 export interface TickOptions {
   sun?: SunConfig;
+  /** Fase 3: catálogo para el modelo de entorno (por defecto el catálogo incluido). */
+  defs?: DeviceDefinition[];
 }
 
 /**
@@ -708,7 +976,8 @@ export function tick(sim: SimulationState, project: Project, deltaMs: number, op
   for (let guard = 0; guard < MAX_TICK_EVENTS; guard++) {
     const pending = earliestPending(result, to);
     const event = timed[idx];
-    if (!pending && !event) return { ...result, now: to };
+    // Fase 3 (B13): único punto de llamada del modelo de entorno.
+    if (!pending && !event) return applyEnvironment({ ...result, now: to }, project, opts.defs ?? catalog, advance);
     if (pending && (!event || pending.dueAt <= event.at)) {
       result = runPending(result, project, pending);
     } else if (event) {

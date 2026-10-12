@@ -153,6 +153,29 @@ const AUTOMATIONS: Automation[] = [
     conditions: [],
     actions: [{ type: 'service', service: 'switch.turn_on', entityId: 'switch.ventilador_dormitorio' }],
   },
+  {
+    id: 'demo-auto-salir',
+    name: 'Al salir Ana: apagar luces si no queda nadie',
+    enabled: true,
+    mode: 'single',
+    triggers: [{ type: 'zone', personId: 'demo-ana', zoneId: 'home', event: 'leave' }],
+    conditions: [],
+    actions: [
+      {
+        type: 'choose',
+        choices: [
+          {
+            conditions: [{ type: 'numeric_state', entityId: 'zone.home', below: 1 }],
+            sequence: [
+              { type: 'service', service: 'light.turn_off', entityId: 'light.grupo_planta_baja' },
+              { type: 'notify', title: 'Casa vacía', message: 'Se han apagado las luces de la planta baja' },
+            ],
+          },
+        ],
+        default: [{ type: 'notify', title: 'Ana ha salido', message: 'Todavía queda alguien en casa' }],
+      },
+    ],
+  },
 ];
 
 const SCENES: Scene[] = [
@@ -212,6 +235,12 @@ export function createDemoProject(): Project {
     automations: clone(AUTOMATIONS),
     scenes: clone(SCENES),
     scripts: clone(SCRIPTS),
+    people: [
+      { id: 'demo-ana', name: 'Ana', color: '#e11d48' },
+      { id: 'demo-luis', name: 'Luis', color: '#2563eb' },
+    ],
+    zones: [{ id: 'demo-trabajo', name: 'Trabajo', kind: 'work' }],
+    groups: [{ id: 'demo-grupo-pb', name: 'Planta baja', domain: 'light', entityIds: ['light.luz_salon', 'light.luz_pasillo'] }],
   };
   return { ...base, connections: suggestConnections(base, catalog) };
 }

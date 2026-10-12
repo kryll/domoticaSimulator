@@ -5,6 +5,7 @@ import { ListEditor } from './ListEditor';
 import { TextField } from '../ui/Field';
 import { parseNumberInput, parseStateInput, stateToInput } from '../ui/formValues';
 import { DurationField } from './DurationField';
+import { NotConditionEditor, ZoneConditionEditor } from './advanced/ConditionListEditor';
 
 export function ConditionEditor({ value, onChange }: { value: Condition; onChange: (c: Condition) => void }) {
   const header = <div className="mb-1 text-xs font-semibold text-slate-700">{CONDITION_LABELS[value.type]}</div>;
@@ -91,5 +92,9 @@ export function ConditionEditor({ value, onChange }: { value: Condition; onChang
           emptyText="Sin condiciones anidadas."
         />
       );
+    case 'not':
+      return <NotConditionEditor value={value} onChange={onChange} />;
+    case 'zone':
+      return <ZoneConditionEditor value={value} onChange={onChange} />;
   }
 }

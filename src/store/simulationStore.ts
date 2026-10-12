@@ -16,6 +16,7 @@ import {
   tick,
 } from '../simulation/engine';
 import { useProjectStore } from './projectStore';
+import { groupEntities, peopleEntities } from '../simulation/logic';
 
 export const SPEEDS = [1, 10, 60, 600] as const;
 export type Speed = (typeof SPEEDS)[number];
@@ -132,10 +133,21 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     let base = get().sim;
     if (renamed.size > 0) base = renameEntities(base, Object.fromEntries([...renamed].map(([next, old]) => [old, next])));
     const current = base.entities;
-    const initial = initialEntityStates(p, catalog);
+    // Además de los dispositivos: personas, zonas y grupos (Fase 3), que el motor crea al empezar.
+    const deviceStates = initialEntityStates(p, catalog);
+    const groups = groupEntities(p, { ...deviceStates, ...current });
+    const initial = { ...deviceStates, ...peopleEntities(p), ...groups };
     const entities: SimulationState['entities'] = {};
     let changed = base !== get().sim;
     for (const [id, init] of Object.entries(initial)) {
+      const group = groups[id];
+      if (group) {
+        // El estado de un grupo se deriva siempre de sus miembros actuales.
+        const before = current[id];
+        entities[id] = before && before.state === group.state && JSON.stringify(before.attributes) === JSON.stringify(group.attributes) ? before : group;
+        if (entities[id] !== before) changed = true;
+        continue;
+      }
       const oldId = renamed.get(id);
       const kept = current[id] ?? (oldId !== undefined ? current[oldId] : undefined);
       if (kept) {

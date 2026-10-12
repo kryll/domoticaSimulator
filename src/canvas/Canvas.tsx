@@ -41,6 +41,9 @@ import { Legend } from './Legend';
 import { CoverageLayer } from './CoverageLayer';
 import { RoomDrawOverlay } from './RoomDrawOverlay';
 import { PROTOCOL_COLORS } from './style';
+import { CanvasExtras } from './extras/CanvasExtras';
+import { FloorContextMenu } from './extras/FloorContextMenu';
+import { useExtrasStore } from '../store/extrasStore';
 
 const nodeTypes: NodeTypes = { device: DeviceNodeView, room: RoomNodeView, plan: PlanNodeView, roomLabel: RoomLabelNodeView };
 const edgeTypes: EdgeTypes = { protocol: ProtocolEdgeView };
@@ -379,6 +382,7 @@ export function Canvas() {
   }, [focusRequest, fitView]);
 
   const floorDevices = useMemo(() => project.devices.filter((d) => d.floorId === floorId), [project, floorId]);
+  const floorRooms = useMemo(() => project.rooms.filter((r) => r.floorId === floorId), [project.rooms, floorId]);
 
   return (
     <div id="ha-canvas" className="relative h-full w-full" onDragOver={onDragOver} onDrop={onDrop} aria-label="Lienzo del plano">
@@ -399,6 +403,7 @@ export function Canvas() {
         onPaneContextMenu={(e) => {
           e.preventDefault();
           useUiStore.getState().openContextMenu(null);
+          if (floorId) useExtrasStore.getState().openFloorMenu({ floorId, x: e.clientX, y: e.clientY });
         }}
         nodesDraggable={!interact}
         nodeDragThreshold={4}
@@ -409,7 +414,7 @@ export function Canvas() {
         connectionMode={ConnectionMode.Loose}
         connectionRadius={40}
         deleteKeyCode={interact ? null : ['Delete', 'Backspace']}
-        panOnDrag={mode !== 'room'}
+        panOnDrag={mode !== 'room' && mode !== 'wall'}
         selectionOnDrag={false}
         fitView
         minZoom={0.1}
@@ -426,6 +431,7 @@ export function Canvas() {
           <Legend protocols={usedProtocols.length > 0 ? usedProtocols : undefined} />
         </FlowPanel>
         {mode === 'room' && floorId && <RoomDrawOverlay floorId={floorId} />}
+        <CanvasExtras floor={floor} rooms={floorRooms} />
         {connectFromId && (
           <FlowPanel position="top-right">
             <p className="rounded-md bg-sky-700/95 px-2 py-1 text-xs font-medium text-white shadow" role="status">
@@ -435,6 +441,7 @@ export function Canvas() {
         )}
       </ReactFlow>
       <DeviceContextMenu />
+      <FloorContextMenu />
     </div>
   );
 }

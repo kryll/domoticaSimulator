@@ -47,7 +47,7 @@ describe('createDemoProject', () => {
     expect(demo.rooms.length).toBeGreaterThanOrEqual(6);
     expect(demo.devices.length).toBeGreaterThanOrEqual(15);
     expect(demo.connections.length).toBeGreaterThanOrEqual(demo.devices.length - 1);
-    expect(demo.automations).toHaveLength(8);
+    expect(demo.automations).toHaveLength(9);
     expect(demo.scenes).toHaveLength(2);
     expect(demo.scripts).toHaveLength(1);
   });
@@ -209,5 +209,23 @@ describe('IndexedDB', () => {
     await saveProject(p);
     await saveProject({ ...p, name: 'Dos' });
     expect((await listProjects()).map((x) => x.name)).toEqual(['Dos']);
+  });
+});
+
+describe('createDemoProject (Fase 3)', () => {
+  it('incluye personas, una zona, un grupo y una automatización de zona que funciona', async () => {
+    const { catalog } = await import('../devices/catalog');
+    const { createSimulationState } = await import('../simulation/engine');
+    const { movePerson } = await import('../simulation/people');
+    const demo = createDemoProject();
+    let sim = createSimulationState(demo, catalog, Date.UTC(2026, 9, 12, 12));
+    expect(sim.entities['light.grupo_planta_baja']?.state).toBe('off');
+    sim = movePerson(sim, demo, 'demo-ana', 'demo-trabajo');
+    expect(sim.notifications?.at(-1)?.title).toBe('Ana ha salido');
+    sim = movePerson(sim, demo, 'demo-luis', null);
+    sim = movePerson(sim, demo, 'demo-ana', 'home');
+    sim = movePerson(sim, demo, 'demo-ana', null);
+    expect(sim.entities['zone.home']?.state).toBe(0);
+    expect(sim.notifications?.at(-1)?.title).toBe('Casa vacía');
   });
 });

@@ -17,11 +17,28 @@ export interface DeviceEntity {
   friendlyName: string;
 }
 
+/**
+ * Fase 3 (B19): «Mostrar relé como luz». Con device.showAs, la entidad principal (la primera
+ * switch o light) cambia de dominio; como luz solo admite encendido/apagado.
+ */
+export function entityDefinitionsForDevice(device: Pick<Device, 'showAs'>, def: DeviceDefinition): EntityDefinition[] {
+  const target = device.showAs;
+  if (!target) return def.entities;
+  const index = def.entities.findIndex((e) => e.domain === 'switch' || e.domain === 'light');
+  const main = def.entities[index];
+  if (!main || main.domain === target) return def.entities;
+  const converted: EntityDefinition =
+    target === 'light'
+      ? { ...main, domain: 'light', capabilities: { ...main.capabilities, colorModes: ['onoff'] } }
+      : { ...main, domain: 'switch' };
+  return def.entities.map((e, i) => (i === index ? converted : e));
+}
+
 /** Entidades de un dispositivo con su entity_id y nombre amigable. */
 export function entitiesForDevice(device: Device, def: DeviceDefinition): DeviceEntity[] {
   const base = slugify(device.name);
   const single = def.entities.length === 1;
-  return def.entities.map((e) => ({
+  return entityDefinitionsForDevice(device, def).map((e) => ({
     entityId: single ? `${e.domain}.${base}` : `${e.domain}.${base}_${e.key}`,
     definition: e,
     friendlyName: single ? device.name : `${device.name} ${e.name}`,

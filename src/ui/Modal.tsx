@@ -7,9 +7,13 @@ export interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Ancho máximo del diálogo (por defecto «md»). */
+  size?: 'md' | 'lg' | 'xl';
 }
 
-export function Modal({ open, title, onClose, children, footer }: ModalProps) {
+const SIZES = { md: 'max-w-lg', lg: 'max-w-3xl', xl: 'max-w-5xl' } as const;
+
+export function Modal({ open, title, onClose, children, footer, size = 'md' }: ModalProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -41,7 +45,7 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg bg-white shadow-xl focus:outline-none"
+        className={`flex max-h-[85vh] w-full ${SIZES[size]} flex-col rounded-lg bg-white shadow-xl focus:outline-none`}
       >
         <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 id={titleId} className="text-base font-semibold text-slate-800">

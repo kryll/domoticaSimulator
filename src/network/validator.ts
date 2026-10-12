@@ -1,5 +1,5 @@
 // Validador del proyecto: reglas de red y de dominio con códigos estables y mensajes en español.
-import type { Brand, Device, Integration, DeviceDefinition, Id, IssueSeverity, Project, ValidationIssue } from '../types';
+import type { Brand, Condition, Device, Integration, DeviceDefinition, Id, IssueSeverity, Project, ValidationIssue } from '../types';
 import { INTEGRATION_LABELS } from '../devices/labels';
 import { isCloud } from '../devices/catalog';
 import {
@@ -16,6 +16,7 @@ import {
 import { entityIdsForDevice } from '../devices/entities';
 import { collectEntityRefs, type EntityReference } from '../devices/renaming';
 import { findScene, findScript } from '../simulation/engine';
+import { groupEntityId, peopleEntities, projectZones } from '../simulation/logic';
 import { canConnect } from './connections';
 import { isInRange } from './coverage';
 import { analyzeMesh } from './mesh';
@@ -203,7 +204,9 @@ const KIND_LABELS: Record<EntityReference['kind'], string> = {
 };
 
 function knownEntityIds(ctx: Ctx): Set<string> {
-  return new Set(ctx.placed.flatMap((p) => entityIdsForDevice(p.device, p.def)));
+  const ids = ctx.placed.flatMap((p) => entityIdsForDevice(p.device, p.def));
+  // Fase 3: personas, zonas y grupos también son entidades.
+  return new Set([...ids, ...Object.keys(peopleEntities(ctx.project)), ...(ctx.project.groups ?? []).map(groupEntityId)]);
 }
 
 function refExists(entityId: string, known: Set<string>, project: Project): boolean {
@@ -223,6 +226,34 @@ function unknownEntityRule(ctx: Ctx): ValidationIssue[] {
     seen.add(key);
     const shown = ref.entityId === '' ? '(vacía)' : ref.entityId;
     result.push(issue('error', 'entidad-desconocida', `${KIND_LABELS[ref.kind]} «${ref.ownerName}» usa la entidad ${shown}, que no existe`, [], key));
+  }
+  return result;
+}
+
+/** Fase 3: personas y zonas de los disparadores/condiciones de zona, y miembros de los grupos. */
+function fase3RefsRule(ctx: Ctx): ValidationIssue[] {
+  const result: ValidationIssue[] = [];
+  const people = new Set((ctx.project.people ?? []).map((p) => p.id));
+  const zones = new Set(projectZones(ctx.project).map((z) => z.id));
+  for (const a of ctx.project.automations) {
+    const refs = [...a.triggers, ...a.conditions.flatMap(function walk(c: Condition): Condition[] {
+      return c.type === 'and' || c.type === 'or' || c.type === 'not' ? c.conditions.flatMap(walk) : [c];
+    })];
+    for (const r of refs) {
+      if (r.type !== 'zone') continue;
+      if (!people.has(r.personId)) result.push(issue('error', 'persona-desconocida', `La automatización «${a.name}» usa una persona que no existe (${r.personId})`, [], `${a.id}:${r.personId}`));
+      if (!zones.has(r.zoneId)) result.push(issue('error', 'zona-desconocida', `La automatización «${a.name}» usa una zona que no existe (${r.zoneId})`, [], `${a.id}:${r.zoneId}`));
+    }
+  }
+  const known = knownEntityIds(ctx);
+  for (const g of ctx.project.groups ?? []) {
+    const missing = g.entityIds.filter((id) => !known.has(id));
+    if (missing.length > 0) result.push(issue('error', 'grupo-entidad-desconocida', `El grupo «${g.name}» incluye entidades que no existen: ${missing.join(', ')}`, [], g.id));
+    const wrong = g.entityIds.filter((id) => known.has(id) && g.domain !== 'cover' && !['light', 'switch'].includes(id.split('.')[0] ?? ''));
+    const wrongCover = g.entityIds.filter((id) => known.has(id) && g.domain === 'cover' && !id.startsWith('cover.'));
+    if (wrong.length + wrongCover.length > 0) {
+      result.push(issue('warning', 'grupo-dominio-mezclado', `El grupo «${g.name}» (${g.domain}) incluye entidades de otro tipo: ${[...wrong, ...wrongCover].join(', ')}`, [], `${g.id}:dominio`));
+    }
   }
   return result;
 }
@@ -276,6 +307,7 @@ export function validateProject(project: Project, defs: DeviceDefinition[]): Val
     ...connectionRules(ctx),
     ...duplicateEntityRule(ctx),
     ...unknownEntityRule(ctx),
+    ...fase3RefsRule(ctx),
     ...isolatedInfraRule(ctx),
     ...cloudRule(ctx),
     ...roomRule(ctx),

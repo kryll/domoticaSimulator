@@ -21,6 +21,7 @@ import { useDeviceOffline } from '../simulation/useDeviceOffline';
 import { effectiveIotClass } from '../devices/roles';
 import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
 import { PROTOCOL_COLORS, formatState } from './style';
+import { DeviceDisplayOptions, EntityHistory } from './extras/DevicePropertiesExtras';
 
 /** Input de texto que confirma el cambio al perder el foco o pulsar Intro. */
 function CommitTextField({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
@@ -94,6 +95,7 @@ function DeviceProperties({ device }: { device: Device }) {
           options={(def?.integrations ?? [device.integration]).map((i) => ({ value: i, label: INTEGRATION_LABELS[i] }))}
           onChange={(e) => updateDevice(device.id, { integration: e.target.value as Device['integration'] })}
         />
+        <DeviceDisplayOptions device={device} />
       </section>
 
       {def && iotClass && (
@@ -160,6 +162,7 @@ function DeviceProperties({ device }: { device: Device }) {
                 </div>
                 <div className="mb-1 text-[11px] text-slate-500">{r.definition.name}</div>
                 <EntityControls entityId={r.entityId} definition={r.definition} state={entities[r.entityId]} />
+                <EntityHistory entityId={r.entityId} definition={r.definition} />
               </li>
             ))}
           </ul>

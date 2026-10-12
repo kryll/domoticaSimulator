@@ -114,4 +114,26 @@ describe('simulationStore · renombrar', () => {
     expect(map.get('sensor.salon_temperature')).toBe('sensor.clima_temperature');
     expect([...map.values()].some((v) => v.startsWith('light.'))).toBe(false);
   });
+
+  it('al sincronizar conserva personas, zonas y grupos (Fase 3) y crea los nuevos', async () => {
+    const { movePerson } = await import('../simulation/people');
+    const project = makeProject({ devices: [makeDevice('hue-white-e27', 'd1', 100, 100, 'Luz salón')] });
+    useProjectStore.getState().loadProject(project);
+    sim().reset(project);
+    const stop = startSimulationSync();
+    try {
+      useProjectStore.getState().update((p) => ({ ...p, people: [{ id: 'ana', name: 'Ana' }] }));
+      expect(sim().sim.entities['person.ana']?.state).toBe('home');
+      useSimulationStore.setState((s) => ({ sim: movePerson(s.sim, useProjectStore.getState().project, 'ana', '') }));
+      useProjectStore.getState().update((p) => ({ ...p, groups: [{ id: 'g', name: 'Luces', domain: 'light', entityIds: ['light.luz_salon'] }] }));
+      expect(sim().sim.entities['person.ana']?.state).toBe('not_home');
+      expect(sim().sim.entities['zone.home']).toBeDefined();
+      expect(sim().sim.entities['light.grupo_luces']?.state).toBe('off');
+      sim().callService('light.luz_salon', 'light.turn_on');
+      useProjectStore.getState().renameProject('Otro nombre');
+      expect(sim().sim.entities['light.grupo_luces']?.state).toBe('on');
+    } finally {
+      stop();
+    }
+  });
 });
