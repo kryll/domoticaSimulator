@@ -4,12 +4,17 @@ import { INTEGRATION_LABELS, PROTOCOL_LABELS } from '../devices/labels';
 import { isCloud } from '../devices/catalog';
 import { effectiveIotClass } from '../devices/roles';
 
+/** Separador de campos: punto y coma, como espera Excel con configuración regional española. */
+export const CSV_SEPARATOR = ';';
+/** Marca de orden de bytes UTF-8 para que Excel detecte la codificación. */
+export const CSV_BOM = '\uFEFF';
+
 export const CSV_HEADERS = ['Nombre', 'Marca', 'Modelo', 'Planta', 'Sala', 'Protocolo', 'Integración', 'Conectividad'] as const;
 
-/** Escapa un campo CSV (RFC 4180) y neutraliza fórmulas de hoja de cálculo. */
+/** Escapa un campo CSV (RFC 4180 con separador «;») y neutraliza fórmulas de hoja de cálculo. */
 export function csvField(value: string): string {
   const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  return /[";\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 export function devicesToCsv(project: Project, defs: DeviceDefinition[]): string {
@@ -30,5 +35,5 @@ export function devicesToCsv(project: Project, defs: DeviceDefinition[]): string
       iot === undefined ? '' : isCloud(iot) ? 'Nube' : 'Local',
     ]);
   }
-  return `${rows.map((r) => r.map(csvField).join(',')).join('\r\n')}\r\n`;
+  return `${CSV_BOM}${rows.map((r) => r.map(csvField).join(CSV_SEPARATOR)).join('\r\n')}\r\n`;
 }

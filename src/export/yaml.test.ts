@@ -168,4 +168,17 @@ describe('exportación a Home Assistant', () => {
       "
     `);
   });
+
+  it('los booleanos de estado se escriben como "on"/"off"', () => {
+    const a: Automation = {
+      ...automation,
+      triggers: [{ type: 'state', entityId: 'light.x', from: false, to: true }],
+      conditions: [{ type: 'state', entityId: 'light.y', state: true }],
+      actions: [],
+    };
+    const yaml = automationToYaml(a);
+    expect(yaml).toContain('from: "off"\n    to: "on"');
+    expect(yaml).toContain('state: "on"');
+    expect(yaml).not.toMatch(/true|false/);
+  });
 });

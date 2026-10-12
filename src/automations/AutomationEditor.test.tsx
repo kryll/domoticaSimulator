@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { AutomationEditor } from './AutomationEditor';
 import { useProjectStore } from '../store/projectStore';
 import { makeDevice, makeProject } from '../test/fixtures';
-import type { Automation } from '../types';
+import type { Action, Automation } from '../types';
+import { ActionListEditor } from './ActionEditor';
 
 const base: Automation = {
   id: 'a1',
@@ -81,5 +82,37 @@ describe('AutomationEditor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Aplicar YAML' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Error en el YAML');
     expect(latest.name).toBe('Luz por movimiento');
+  });
+});
+
+describe('ActionListEditor', () => {
+  it('al reordenar, el campo Datos sigue a su acción', async () => {
+    let actions: Action[] = [
+      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness: 10 } },
+      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness: 200 } },
+    ];
+    function ListHarness() {
+      const [list, setList] = useState(actions);
+      return (
+        <ActionListEditor
+          actions={list}
+          onChange={(next) => {
+            actions = next;
+            setList(next);
+          }}
+        />
+      );
+    }
+    render(<ListHarness />);
+    const fields = () => screen.getAllByLabelText('Datos (clave=valor)').map((el) => (el as HTMLInputElement).value);
+    expect(fields()).toEqual(['brightness=10', 'brightness=200']);
+    await userEvent.click(screen.getByRole('button', { name: 'Bajar elemento 1 de Acciones' }));
+    expect(fields()).toEqual(['brightness=200', 'brightness=10']);
+    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness : null))).toEqual([200, 10]);
+    // editar el primero modifica solo esa acción
+    fireEvent.change(screen.getAllByLabelText('Datos (clave=valor)')[0] as HTMLElement, { target: { value: 'brightness=50' } });
+    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness : null))).toEqual([50, 10]);
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar elemento 1 de Acciones' }));
+    expect(fields()).toEqual(['brightness=10']);
   });
 });

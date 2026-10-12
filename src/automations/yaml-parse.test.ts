@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { automationsToYaml, automationToYaml } from '../export/yaml';
+import { sameState } from '../simulation/engine';
 import type { Automation, Scene, Script } from '../types';
 import { parseAutomationsYaml, parseAutomationYaml, parseScalar, parseYaml } from './yaml-parse';
 
@@ -142,5 +143,21 @@ describe('parseAutomationYaml', () => {
     const yaml = 'trigger:\n  - platform: time\n    at: "07:00"\naction:\n  - service: scene.turn_on\n    target:\n      entity_id: scene.no_existe\n';
     expect(() => parseAutomationYaml(yaml, { scenes, scripts })).toThrow(/Escena desconocida/);
     expect(() => parseAutomationYaml(yaml.replace(/scene/g, 'script'), { scenes, scripts })).toThrow(/Script desconocido/);
+  });
+
+  it('ida y vuelta de un trigger con to: true conserva la semántica', () => {
+    const a: Automation = {
+      ...full,
+      enabled: true,
+      triggers: [{ type: 'state', entityId: 'light.x', from: false, to: true }],
+      conditions: [{ type: 'state', entityId: 'light.x', state: true }],
+    };
+    const back = parseAutomationYaml(automationToYaml(a));
+    const t = back.triggers[0];
+    const c = back.conditions[0];
+    expect(t).toEqual({ type: 'state', entityId: 'light.x', from: 'off', to: 'on' });
+    expect(c).toEqual({ type: 'state', entityId: 'light.x', state: 'on' });
+    expect(t?.type === 'state' && sameState(t.to ?? '', true) && sameState(t.from ?? '', false)).toBe(true);
+    expect(c?.type === 'state' && sameState(c.state, true)).toBe(true);
   });
 });

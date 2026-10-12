@@ -1,9 +1,10 @@
-import type { Device, Id, Point } from '../types';
+import type { Device, Id, NetworkRole, Point } from '../types';
 import { catalog, getDefinition } from '../devices/catalog';
 import { createDevice, uniqueDeviceName } from '../devices/factory';
 import { canConnect, suggestConnections } from '../network/connections';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
+import { findFreeSpot } from './geometry';
 
 /** Planta activa (o la primera del proyecto). */
 export function activeFloorId(): Id | undefined {
@@ -33,6 +34,24 @@ export function addDeviceFromDefinition(definitionId: Id, position: Point): Devi
   return device;
 }
 
+/** Jerarquía de papeles de red: el de mayor rango hace de padre (destino) en una conexión. */
+const ROLE_RANK: Record<NetworkRole, number> = {
+  end_device: 0,
+  router: 1,
+  access_point: 2,
+  border_router: 3,
+  hub: 3,
+  coordinator: 3,
+  ha_server: 4,
+};
+
+/** Ordena el par para que sourceId sea el hijo y targetId el padre (infraestructura). */
+export function orientConnection(a: Device, b: Device): { sourceId: Id; targetId: Id } {
+  const ra = ROLE_RANK[getDefinition(a.definitionId, catalog)?.role ?? 'end_device'];
+  const rb = ROLE_RANK[getDefinition(b.definitionId, catalog)?.role ?? 'end_device'];
+  return ra > rb ? { sourceId: b.id, targetId: a.id } : { sourceId: a.id, targetId: b.id };
+}
+
 /** Intenta conectar dos dispositivos; avisa si no es posible. */
 export function connectDevices(sourceId: Id, targetId: Id): boolean {
   const ui = useUiStore.getState();
@@ -45,7 +64,7 @@ export function connectDevices(sourceId: Id, targetId: Id): boolean {
     ui.notify(`No se pueden conectar: ${result.reason}`, 'error');
     return false;
   }
-  const created = store.addConnection({ sourceId, targetId, protocol: result.protocol });
+  const created = store.addConnection({ ...orientConnection(a, b), protocol: result.protocol });
   if (!created) {
     ui.notify('Esos dispositivos ya están conectados', 'info');
     return false;
@@ -63,6 +82,16 @@ export function autoConnect(): number {
     .getState()
     .notify(added > 0 ? `Se han añadido ${added} conexiones` : 'No hay conexiones nuevas que sugerir', added > 0 ? 'success' : 'info');
   return added;
+}
+
+/** Hueco libre cerca de `point` en la planta activa (para no apilar nodos). */
+export function freeSpotNear(point: Point): Point {
+  const floorId = activeFloorId();
+  const occupied = useProjectStore
+    .getState()
+    .project.devices.filter((d) => d.floorId === floorId)
+    .map((d) => d.position);
+  return findFreeSpot(occupied, point);
 }
 
 /** Posición aproximada del centro visible del lienzo, en coordenadas de flujo. */

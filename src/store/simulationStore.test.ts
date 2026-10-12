@@ -1,5 +1,6 @@
 import { useProjectStore } from './projectStore';
-import { stopSimulationLoop, useSimulationStore } from './simulationStore';
+import { startSimulationSync, stopSimulationLoop, useSimulationStore } from './simulationStore';
+import { simNowFromLocalDate } from '../simulation/clock';
 import { makeDevice, makeProject } from '../test/fixtures';
 
 const sim = () => useSimulationStore.getState();
@@ -41,5 +42,40 @@ describe('simulationStore', () => {
     useProjectStore.getState().addDevice(makeDevice('sonoff-s26r2', 'd2', 0, 0, 'Enchufe'));
     sim().syncWithProject(useProjectStore.getState().project);
     expect(sim().sim.entities['switch.enchufe']).toBeDefined();
+  });
+});
+
+describe('simulationStore: reloj y renombrado', () => {
+  beforeEach(() => {
+    const project = makeProject({ devices: [makeDevice('hue-white-e27', 'd1', 100, 100, 'Luz salón')] });
+    useProjectStore.getState().loadProject(project);
+    useSimulationStore.getState().reset(project);
+  });
+
+  it('arranca con la hora local de pared (simNowFromLocalDate)', () => {
+    const expected = simNowFromLocalDate(new Date());
+    expect(Math.abs(useSimulationStore.getState().sim.now - expected)).toBeLessThan(5000);
+  });
+
+  it('traslada el estado al renombrar y quita entidades que ya no existen', () => {
+    useSimulationStore.getState().setEntity('light.luz_salon', { state: 'on' });
+    const stop = startSimulationSync();
+    useProjectStore.getState().updateDevice('d1', { name: 'Lámpara' });
+    let entities = useSimulationStore.getState().sim.entities;
+    expect(entities['light.luz_salon']).toBeUndefined();
+    expect(entities['light.lampara']?.state).toBe('on');
+    useProjectStore.getState().removeDevices(['d1']);
+    entities = useSimulationStore.getState().sim.entities;
+    expect(entities['light.lampara']).toBeUndefined();
+    stop();
+  });
+
+  it('pressButton registra la acción del mando', () => {
+    useProjectStore.getState().addDevice(makeDevice('aqara-wireless-mini-switch', 'm1', 0, 0, 'Mando'));
+    const p = useProjectStore.getState().project;
+    useSimulationStore.getState().reset(p);
+    useSimulationStore.getState().pressButton('sensor.mando_action', 'double');
+    const log = useSimulationStore.getState().sim.log.map((e) => e.message).join('\n');
+    expect(log).toContain('double');
   });
 });

@@ -23,10 +23,36 @@ export function parseNumberInput(text: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** "brightness=200, color=red" -> { brightness: 200, color: 'red' } */
+/** Separa por comas o saltos de línea que no estén dentro de [], {}, () ni comillas. */
+export function splitTopLevel(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let current = '';
+  for (const ch of text) {
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === '[' || ch === '{' || ch === '(') {
+      depth++;
+    } else if ((ch === ']' || ch === '}' || ch === ')') && depth > 0) {
+      depth--;
+    } else if ((ch === ',' || ch === '\n') && depth === 0) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+  return parts;
+}
+
+/** "brightness=200, rgb_color=[255,0,0]" -> { brightness: 200, rgb_color: '[255,0,0]' } */
 export function parseDataInput(text: string): Record<string, EntityStateValue> | undefined {
   const out: Record<string, EntityStateValue> = {};
-  for (const part of text.split(/[,\n]/)) {
+  for (const part of splitTopLevel(text)) {
     const [k, ...rest] = part.split('=');
     const key = k?.trim();
     if (!key) continue;

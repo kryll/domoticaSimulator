@@ -36,7 +36,9 @@ export type Integration =
   | 'sonos'
   | 'samsungtv'
   | 'webostv'
-  | 'tplink';
+  | 'tplink'
+  // Integración propia del servidor Home Assistant (no es un dispositivo de terceros).
+  | 'homeassistant';
 
 export type Brand =
   | 'IKEA'
@@ -257,6 +259,8 @@ export interface SimulationState {
   entities: Record<string, EntityState>;
   /** Acciones con delay pendientes de ejecutar. */
   pending: PendingAction[];
+  /** Ejecuciones encoladas de automatizaciones en modo 'queued' que esperan a que termine la anterior. */
+  queue?: PendingAction[];
   log: LogEntry[];
 }
 

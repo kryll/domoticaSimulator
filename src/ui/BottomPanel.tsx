@@ -1,17 +1,23 @@
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore, type BottomTab } from '../store/uiStore';
 import { analyzeProject } from '../canvas/analysis';
 import { ValidationPanel } from '../simulation/ValidationPanel';
 import { LogbookPanel } from '../simulation/LogbookPanel';
-import { AutomationsPanel } from '../automations/AutomationsPanel';
-import { ScenesPanel } from '../scenes/ScenesPanel';
 import { Tabs } from './Tabs';
 import { Button } from './Button';
 import { tabPanelId } from './ids';
 
 const PREFIX = 'bottom';
+
+// Paneles pesados cargados bajo demanda para aligerar el bundle inicial.
+const AutomationsPanel = lazy(() => import('../automations/AutomationsPanel').then((m) => ({ default: m.AutomationsPanel })));
+const ScenesPanel = lazy(() => import('../scenes/ScenesPanel').then((m) => ({ default: m.ScenesPanel })));
+
+function Loading() {
+  return <p className="px-3 py-6 text-center text-sm text-slate-500">Cargando…</p>;
+}
 
 function Count({ n, tone }: { n: number; tone: 'red' | 'slate' }) {
   if (n === 0) return null;
@@ -43,7 +49,7 @@ export function BottomPanel() {
     { key: 'validation', label: <>Validación<Count n={problems} tone="red" /></> },
     { key: 'automations', label: <>Automatizaciones<Count n={project.automations.length} tone="slate" /></> },
     { key: 'scenes', label: <>Escenas y scripts<Count n={project.scenes.length + project.scripts.length} tone="slate" /></> },
-    { key: 'logbook', label: <>Logbook<Count n={logCount} tone="slate" /></> },
+    { key: 'logbook', label: <>Registro<Count n={logCount} tone="slate" /></> },
   ];
 
   return (
@@ -71,8 +77,10 @@ export function BottomPanel() {
           className="min-h-0 flex-1 overflow-auto border-t border-slate-200"
         >
           {tab === 'validation' && <ValidationPanel issues={issues} />}
-          {tab === 'automations' && <AutomationsPanel />}
-          {tab === 'scenes' && <ScenesPanel />}
+          <Suspense fallback={<Loading />}>
+            {tab === 'automations' && <AutomationsPanel />}
+            {tab === 'scenes' && <ScenesPanel />}
+          </Suspense>
           {tab === 'logbook' && <LogbookPanel />}
         </div>
       )}

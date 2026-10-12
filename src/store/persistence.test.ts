@@ -51,6 +51,23 @@ describe('createDemoProject', () => {
     expect(demo.scripts).toHaveLength(1);
   });
 
+  it('los nodos (~180 × 70 px) no se solapan en ninguna planta y están dentro de su sala', () => {
+    const W = 180;
+    const H = 70;
+    for (const a of demo.devices) {
+      for (const b of demo.devices) {
+        if (a.id >= b.id || a.floorId !== b.floorId) continue;
+        const overlap = Math.abs(a.position.x - b.position.x) < W && Math.abs(a.position.y - b.position.y) < H;
+        expect(overlap, `${a.name} / ${b.name}`).toBe(false);
+      }
+      const room = demo.rooms.find((r) => r.id === a.roomId);
+      const xs = room?.polygon.map((p) => p.x) ?? [];
+      const ys = room?.polygon.map((p) => p.y) ?? [];
+      expect(a.position.x >= Math.min(...xs) && a.position.x + W <= Math.max(...xs), `${a.name} x`).toBe(true);
+      expect(a.position.y >= Math.min(...ys) && a.position.y + H <= Math.max(...ys), `${a.name} y`).toBe(true);
+    }
+  });
+
   it('usa definiciones reales del catálogo', () => {
     for (const d of demo.devices) expect(catalog.some((c) => c.id === d.definitionId), d.definitionId).toBe(true);
   });

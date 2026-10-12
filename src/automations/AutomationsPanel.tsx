@@ -43,7 +43,7 @@ export function AutomationsPanel() {
                 )}
               >
                 <span className="truncate">{a.name}</span>
-                {!a.enabled && <Badge>Off</Badge>}
+                {!a.enabled && <Badge>Apagada</Badge>}
               </button>
             </li>
           ))}

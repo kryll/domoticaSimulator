@@ -9,7 +9,7 @@
       "ethernet"
     ],
     "integrations": [
-      "matter"
+      "homeassistant"
     ],
     "iotClass": "local_push",
     "role": "ha_server",

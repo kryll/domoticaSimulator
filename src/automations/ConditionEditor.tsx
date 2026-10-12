@@ -31,7 +31,7 @@ export function ConditionEditor({ value, onChange }: { value: Condition; onChang
               label="Entidad"
               value={value.entityId}
               onChange={(entityId) => onChange({ ...value, entityId })}
-              domains={['sensor', 'climate']}
+              numericOnly
             />
             <TextField
               label="Por encima de"

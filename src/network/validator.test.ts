@@ -151,4 +151,58 @@ describe('validateProject', () => {
     expect(sev).toEqual([...sev].sort((a, b) => a - b));
     expect(new Set(issues.map((i) => i.id)).size).toBe(issues.length);
   });
+
+  it('thread-border-router-sin-credenciales con un Echo 4 y dispositivos Thread', () => {
+    const p = connected([dev('echo', 'amazon-echo-4', { x: 100, y: 100 }), dev('t', 'aqara-u200', { x: 150, y: 100 })]);
+    const i = find(validateProject(p, catalog), 'thread-border-router-sin-credenciales');
+    expect(i).toMatchObject({ severity: 'warning', deviceIds: ['echo'] });
+    expect(i?.message).toMatch(/Amazon no comparte las credenciales Thread/);
+    const noThread = connected([dev('echo', 'amazon-echo-4', { x: 100, y: 100 })]);
+    expect(codes(validateProject(noThread, catalog))).not.toContain('thread-border-router-sin-credenciales');
+    const google = connected([dev('nh', 'google-nest-hub-2', { x: 100, y: 100 }), dev('t', 'aqara-u200', { x: 150, y: 100 })]);
+    expect(codes(validateProject(google, catalog))).not.toContain('thread-border-router-sin-credenciales');
+  });
+
+  it('entidad-desconocida en automatizaciones, escenas y scripts', () => {
+    const p = connected([dev('l', 'tapo-p110', { x: 100, y: 0 }, { name: 'Lampara' })], {
+      automations: [
+        {
+          id: 'a1',
+          name: 'Auto',
+          enabled: true,
+          mode: 'single',
+          triggers: [{ type: 'state', entityId: 'binary_sensor.fantasma', to: 'on' }],
+          conditions: [{ type: 'or', conditions: [{ type: 'state', entityId: 'switch.lampara_switch', state: 'on' }] }],
+          actions: [
+            { type: 'service', service: 'switch.turn_on', entityId: 'switch.lampara_switch' },
+            { type: 'service', service: 'scene.turn_on', entityId: 'scene.noche' },
+            { type: 'service', service: 'script.turn_on', entityId: 'script.no_existe' },
+          ],
+        },
+      ],
+      scenes: [{ id: 's1', name: 'Noche', entities: { 'light.vieja': { state: 'off' } } }],
+      scripts: [{ id: 'sc', name: 'Guion', sequence: [{ type: 'service', service: 'switch.turn_off', entityId: 'switch.lampara' }] }],
+    });
+    const issues = validateProject(p, catalog).filter((i) => i.code === 'entidad-desconocida');
+    expect(issues.map((i) => i.message)).toEqual([
+      'La automatización «Auto» usa la entidad binary_sensor.fantasma, que no existe',
+      'La automatización «Auto» usa la entidad script.no_existe, que no existe',
+      'La escena «Noche» usa la entidad light.vieja, que no existe',
+      'El script «Guion» usa la entidad switch.lampara, que no existe',
+    ]);
+    expect(issues.every((i) => i.severity === 'error')).toBe(true);
+    expect(new Set(issues.map((i) => i.id)).size).toBe(issues.length);
+  });
+
+  it('entity-id-duplicado si dos dispositivos generan los mismos entity_id', () => {
+    const p = connected([
+      dev('a', 'tapo-p110', { x: 100, y: 0 }, { name: 'Enchufe' }),
+      dev('b', 'tuya-wifi-plug', { x: 120, y: 0 }, { name: 'enchufe' }),
+      dev('c', 'hue-white-e27', { x: 140, y: 0 }, { name: 'Enchufe' }),
+    ]);
+    const dup = validateProject(p, catalog).filter((i) => i.code === 'entity-id-duplicado');
+    expect(dup).toHaveLength(1);
+    expect(dup[0]).toMatchObject({ severity: 'error', deviceIds: ['a', 'b'] });
+    expect(dup[0]?.message).toContain('switch.enchufe_switch');
+  });
 });

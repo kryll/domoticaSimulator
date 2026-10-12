@@ -8,7 +8,13 @@ import { readFileAsDataUrl } from '../ui/download';
 import { cx } from '../ui/cx';
 import type { Floor } from '../types';
 
-function FloorDialog({ floor, onClose }: { floor: Floor; onClose: () => void }) {
+function FloorDialog({ floorId, onClose }: { floorId: string; onClose: () => void }) {
+  const floor = useProjectStore((s) => s.project.floors.find((f) => f.id === floorId));
+  if (!floor) return null;
+  return <FloorDialogBody floor={floor} onClose={onClose} />;
+}
+
+function FloorDialogBody({ floor, onClose }: { floor: Floor; onClose: () => void }) {
   const updateFloor = useProjectStore((s) => s.updateFloor);
   const removeFloor = useProjectStore((s) => s.removeFloor);
   const floorCount = useProjectStore((s) => s.project.floors.length);
@@ -102,7 +108,7 @@ export function FloorBar() {
   const addFloor = useProjectStore((s) => s.addFloor);
   const activeFloorId = useUiStore((s) => s.activeFloorId);
   const setActiveFloor = useUiStore((s) => s.setActiveFloor);
-  const [editing, setEditing] = useState<Floor | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const sorted = [...floors].sort((a, b) => a.level - b.level);
   const current = floors.find((f) => f.id === activeFloorId) ?? floors[0];
 
@@ -115,7 +121,7 @@ export function FloorBar() {
           type="button"
           aria-pressed={current?.id === f.id}
           onClick={() => setActiveFloor(f.id)}
-          onDoubleClick={() => setEditing(f)}
+          onDoubleClick={() => setEditing(f.id)}
           className={cx(
             'rounded-md px-2 py-0.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500',
             current?.id === f.id ? 'bg-white font-semibold text-sky-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:bg-white',
@@ -137,11 +143,11 @@ export function FloorBar() {
         + Planta
       </Button>
       {current && (
-        <Button size="sm" variant="ghost" onClick={() => setEditing(current)} title="Renombrar, escala y plano de fondo">
+        <Button size="sm" variant="ghost" onClick={() => setEditing(current.id)} title="Renombrar, escala y plano de fondo">
           Editar planta
         </Button>
       )}
-      {editing && <FloorDialog floor={editing} onClose={() => setEditing(null)} />}
+      {editing && <FloorDialog floorId={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }

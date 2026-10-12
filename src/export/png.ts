@@ -1,4 +1,3 @@
-import { toPng } from 'html-to-image';
 import { downloadDataUrl } from '../ui/download';
 
 const IGNORED_CLASSES = ['react-flow__controls', 'react-flow__minimap'];
@@ -12,6 +11,8 @@ export function includeInExport(node: Node): boolean {
 
 /** Renderiza un elemento del DOM (el lienzo) a PNG y lo descarga. */
 export async function exportElementToPng(element: HTMLElement, filename: string): Promise<void> {
+  // Carga perezosa: html-to-image solo se descarga al exportar.
+  const { toPng } = await import('html-to-image');
   const dataUrl = await toPng(element, {
     backgroundColor: '#f8fafc',
     pixelRatio: 2,

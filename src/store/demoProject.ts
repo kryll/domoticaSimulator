@@ -16,14 +16,14 @@ const FLOORS: Floor[] = [
 ];
 
 const ROOMS: Room[] = [
-  rect('demo-salon', PB, 'Salón', 0, 0, 500, 350),
-  rect('demo-cocina', PB, 'Cocina', 500, 0, 800, 350),
-  rect('demo-entrada', PB, 'Entrada', 0, 350, 300, 500),
-  rect('demo-pasillo', PB, 'Pasillo', 300, 350, 800, 500),
-  rect('demo-dormitorio', P1, 'Dormitorio', 0, 0, 450, 350),
-  rect('demo-distribuidor', P1, 'Distribuidor', 0, 350, 450, 500),
-  rect('demo-bano', P1, 'Baño', 450, 0, 800, 250),
-  rect('demo-despacho', P1, 'Despacho', 450, 250, 800, 500),
+  rect('demo-salon', PB, 'Salón', 0, 0, 620, 400),
+  rect('demo-cocina', PB, 'Cocina', 620, 0, 1040, 400),
+  rect('demo-entrada', PB, 'Entrada', 0, 400, 420, 620),
+  rect('demo-pasillo', PB, 'Pasillo', 420, 400, 1040, 620),
+  rect('demo-dormitorio', P1, 'Dormitorio', 0, 0, 620, 400),
+  rect('demo-distribuidor', P1, 'Distribuidor', 0, 400, 620, 620),
+  rect('demo-bano', P1, 'Baño', 620, 0, 1040, 300),
+  rect('demo-despacho', P1, 'Despacho', 620, 300, 1040, 620),
 ];
 
 interface Spec {
@@ -36,29 +36,30 @@ interface Spec {
   integration?: Integration;
 }
 
+// Rejilla de 200 × 100 px: los nodos (~180 × 70 px) no se solapan dentro de cada planta.
 const SPECS: Spec[] = [
-  { id: 'demo-servidor', def: 'ha-green', name: 'Home Assistant', floor: PB, room: 'demo-salon', at: { x: 420, y: 300 } },
-  { id: 'demo-router', def: 'tplink-deco-x50', name: 'Router Wi-Fi', floor: PB, room: 'demo-salon', at: { x: 470, y: 300 } },
-  { id: 'demo-coordinador', def: 'sonoff-zbdongle-p', name: 'Coordinador Zigbee', floor: PB, room: 'demo-salon', at: { x: 400, y: 320 } },
-  { id: 'demo-puente-hue', def: 'hue-bridge-v2', name: 'Puente Hue', floor: PB, room: 'demo-salon', at: { x: 450, y: 250 } },
-  { id: 'demo-luz-salon', def: 'hue-white-color-e27', name: 'Luz salón', floor: PB, room: 'demo-salon', at: { x: 250, y: 175 } },
-  { id: 'demo-tv', def: 'samsung-qled-q80', name: 'Televisor', floor: PB, room: 'demo-salon', at: { x: 50, y: 175 } },
-  { id: 'demo-altavoz', def: 'sonos-era-100', name: 'Altavoz salón', floor: PB, room: 'demo-salon', at: { x: 100, y: 50 } },
-  { id: 'demo-termostato', def: 'netatmo-thermostat', name: 'Termostato', floor: PB, room: 'demo-salon', at: { x: 480, y: 150 } },
-  { id: 'demo-nest-hub', def: 'google-nest-hub-2', name: 'Nest Hub cocina', floor: PB, room: 'demo-cocina', at: { x: 650, y: 175 } },
-  { id: 'demo-luz-cocina', def: 'shelly-1pm-gen3', name: 'Luz cocina', floor: PB, room: 'demo-cocina', at: { x: 700, y: 50 } },
-  { id: 'demo-cafetera', def: 'sonoff-s26r2', name: 'Cafetera', floor: PB, room: 'demo-cocina', at: { x: 750, y: 300 } },
-  { id: 'demo-puerta', def: 'aqara-door-window', name: 'Puerta entrada', floor: PB, room: 'demo-entrada', at: { x: 20, y: 425 }, integration: 'zha' },
-  { id: 'demo-cerradura', def: 'aqara-u200', name: 'Cerradura entrada', floor: PB, room: 'demo-entrada', at: { x: 40, y: 380 } },
-  { id: 'demo-camara', def: 'reolink-rlc-810a', name: 'Cámara entrada', floor: PB, room: 'demo-entrada', at: { x: 150, y: 480 } },
-  { id: 'demo-movimiento', def: 'aqara-motion-p1', name: 'Movimiento pasillo', floor: PB, room: 'demo-pasillo', at: { x: 550, y: 425 }, integration: 'zha' },
-  { id: 'demo-luz-dormitorio', def: 'hue-white-e27', name: 'Luz dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 225, y: 175 } },
-  { id: 'demo-enchufe-dormitorio', def: 'sonoff-s26r2zb', name: 'Ventilador dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 400, y: 300 } },
-  { id: 'demo-clima-dormitorio', def: 'aqara-temp-hum', name: 'Clima dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 100, y: 100 }, integration: 'zha' },
-  { id: 'demo-persiana', def: 'shelly-2pm-gen3-cover', name: 'Persiana dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 20, y: 175 } },
-  { id: 'demo-enchufe-bano', def: 'shelly-plug-s-gen3', name: 'Enchufe baño', floor: P1, room: 'demo-bano', at: { x: 750, y: 200 } },
-  { id: 'demo-sensor-bano', def: 'xiaomi-lywsd03mmc', name: 'Sensor baño', floor: P1, room: 'demo-bano', at: { x: 700, y: 100 } },
-  { id: 'demo-aspiradora', def: 'xiaomi-robot-vacuum-s10', name: 'Aspiradora', floor: P1, room: 'demo-despacho', at: { x: 600, y: 450 } },
+  { id: 'demo-servidor', def: 'ha-green', name: 'Home Assistant', floor: PB, room: 'demo-salon', at: { x: 20, y: 20 } },
+  { id: 'demo-router', def: 'tplink-deco-x50', name: 'Router Wi-Fi', floor: PB, room: 'demo-salon', at: { x: 220, y: 20 } },
+  { id: 'demo-coordinador', def: 'sonoff-zbdongle-p', name: 'Coordinador Zigbee', floor: PB, room: 'demo-salon', at: { x: 420, y: 20 } },
+  { id: 'demo-puente-hue', def: 'hue-bridge-v2', name: 'Puente Hue', floor: PB, room: 'demo-salon', at: { x: 20, y: 120 } },
+  { id: 'demo-luz-salon', def: 'hue-white-color-e27', name: 'Luz salón', floor: PB, room: 'demo-salon', at: { x: 220, y: 120 } },
+  { id: 'demo-termostato', def: 'netatmo-thermostat', name: 'Termostato', floor: PB, room: 'demo-salon', at: { x: 420, y: 120 } },
+  { id: 'demo-tv', def: 'samsung-qled-q80', name: 'Televisor', floor: PB, room: 'demo-salon', at: { x: 20, y: 220 } },
+  { id: 'demo-altavoz', def: 'sonos-era-100', name: 'Altavoz salón', floor: PB, room: 'demo-salon', at: { x: 220, y: 220 } },
+  { id: 'demo-nest-hub', def: 'google-nest-hub-2', name: 'Nest Hub cocina', floor: PB, room: 'demo-cocina', at: { x: 640, y: 20 } },
+  { id: 'demo-luz-cocina', def: 'shelly-1pm-gen3', name: 'Luz cocina', floor: PB, room: 'demo-cocina', at: { x: 840, y: 20 } },
+  { id: 'demo-cafetera', def: 'sonoff-s26r2', name: 'Cafetera', floor: PB, room: 'demo-cocina', at: { x: 640, y: 120 } },
+  { id: 'demo-puerta', def: 'aqara-door-window', name: 'Puerta entrada', floor: PB, room: 'demo-entrada', at: { x: 20, y: 420 }, integration: 'zha' },
+  { id: 'demo-cerradura', def: 'aqara-u200', name: 'Cerradura entrada', floor: PB, room: 'demo-entrada', at: { x: 220, y: 420 } },
+  { id: 'demo-camara', def: 'reolink-rlc-810a', name: 'Cámara entrada', floor: PB, room: 'demo-entrada', at: { x: 20, y: 520 } },
+  { id: 'demo-movimiento', def: 'aqara-motion-p1', name: 'Movimiento pasillo', floor: PB, room: 'demo-pasillo', at: { x: 440, y: 420 }, integration: 'zha' },
+  { id: 'demo-clima-dormitorio', def: 'aqara-temp-hum', name: 'Clima dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 20, y: 20 }, integration: 'zha' },
+  { id: 'demo-luz-dormitorio', def: 'hue-white-e27', name: 'Luz dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 220, y: 120 } },
+  { id: 'demo-enchufe-dormitorio', def: 'sonoff-s26r2zb', name: 'Ventilador dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 420, y: 120 } },
+  { id: 'demo-persiana', def: 'shelly-2pm-gen3-cover', name: 'Persiana dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 20, y: 220 } },
+  { id: 'demo-enchufe-bano', def: 'shelly-plug-s-gen3', name: 'Enchufe baño', floor: P1, room: 'demo-bano', at: { x: 640, y: 20 } },
+  { id: 'demo-sensor-bano', def: 'xiaomi-lywsd03mmc', name: 'Sensor baño', floor: P1, room: 'demo-bano', at: { x: 840, y: 20 } },
+  { id: 'demo-aspiradora', def: 'xiaomi-robot-vacuum-s10', name: 'Aspiradora', floor: P1, room: 'demo-despacho', at: { x: 640, y: 320 } },
 ];
 
 function buildDevice(spec: Spec): Device {

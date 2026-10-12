@@ -88,6 +88,13 @@ function quickActions(def: EntityDefinition): QuickAction[] {
   }
 }
 
+/** Pulsaciones de mandos inalámbricos (Aqara, IKEA...). */
+const PRESS_ACTIONS: Array<{ label: string; action: string }> = [
+  { label: 'Pulsación', action: 'single' },
+  { label: 'Doble', action: 'double' },
+  { label: 'Mantener', action: 'hold' },
+];
+
 function NumberSetter({
   label,
   initial,
@@ -99,7 +106,13 @@ function NumberSetter({
   unit?: string;
   onApply: (value: number) => void;
 }) {
+  // Controlado: si el estado cambia desde fuera (escenas, scripts, automatizaciones) se refleja.
   const [value, setValue] = useState(String(initial));
+  const [seen, setSeen] = useState(initial);
+  if (seen !== initial) {
+    setSeen(initial);
+    setValue(String(initial));
+  }
   return (
     <form
       className="flex items-center gap-1"
@@ -134,6 +147,8 @@ export interface EntityControlsProps {
 /** Botones para simular eventos sobre una entidad. */
 export function EntityControls({ entityId, definition, state }: EntityControlsProps) {
   const setEntity = useSimulationStore((s) => s.setEntity);
+  const press = useSimulationStore((s) => s.pressButton);
+  const simNow = useSimulationStore((s) => s.sim.now);
   const apply = (next: EntityStateValue, attributes?: EntityState['attributes']) =>
     setEntity(entityId, { state: next, attributes: { ...state?.attributes, ...attributes } });
 
@@ -142,9 +157,21 @@ export function EntityControls({ entityId, definition, state }: EntityControlsPr
 
   if (definition.domain === 'button') {
     return (
-      <Button size="sm" onClick={() => apply(new Date().toISOString())}>
+      <Button size="sm" onClick={() => apply(new Date(simNow).toISOString())}>
         Pulsar
       </Button>
+    );
+  }
+
+  if (definition.key === 'action') {
+    return (
+      <div className="flex flex-wrap gap-1" role="group" aria-label={`Acciones de ${definition.name}`}>
+        {PRESS_ACTIONS.map((a) => (
+          <Button key={a.action} size="sm" onClick={() => press(entityId, a.action)}>
+            {a.label}
+          </Button>
+        ))}
+      </div>
     );
   }
 

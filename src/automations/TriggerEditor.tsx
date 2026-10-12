@@ -38,7 +38,7 @@ export function TriggerEditor({ value, onChange }: { value: Trigger; onChange: (
               label="Entidad"
               value={value.entityId}
               onChange={(entityId) => onChange({ ...value, entityId })}
-              domains={['sensor', 'climate']}
+              numericOnly
             />
             <TextField
               label="Por encima de"

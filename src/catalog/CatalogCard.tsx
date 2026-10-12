@@ -40,7 +40,7 @@ function CatalogCardImpl({ definition, onAdd }: CatalogCardProps) {
             </Badge>
           ))}
           <Badge tone={cloud ? 'violet' : 'green'} title={cloud ? 'Depende de la nube' : 'Control local'}>
-            {cloud ? 'Cloud' : 'Local'}
+            {cloud ? 'Nube' : 'Local'}
           </Badge>
         </div>
       </div>

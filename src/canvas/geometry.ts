@@ -102,3 +102,34 @@ export function reassignRooms(project: Project, floorId: Id): Project {
   });
   return changed ? { ...project, devices } : project;
 }
+
+/** Tamaño aproximado de un nodo de dispositivo en el lienzo (px). */
+export const NODE_FOOTPRINT = { width: 176, height: 64 };
+
+/**
+ * Hueco libre más cercano a `center` donde un nodo de tamaño `size` no se solape con los
+ * nodos centrados en `occupied`. Busca en anillos de una rejilla alrededor del centro.
+ */
+export function findFreeSpot(
+  occupied: Point[],
+  center: Point,
+  size: { width: number; height: number } = NODE_FOOTPRINT,
+  maxRings = 30,
+): Point {
+  const free = (p: Point) =>
+    occupied.every((o) => Math.abs(o.x - p.x) >= size.width || Math.abs(o.y - p.y) >= size.height);
+  if (free(center)) return center;
+  for (let ring = 1; ring <= maxRings; ring++) {
+    const candidates: Point[] = [];
+    for (let i = -ring; i <= ring; i++) {
+      for (let j = -ring; j <= ring; j++) {
+        if (Math.max(Math.abs(i), Math.abs(j)) !== ring) continue;
+        candidates.push({ x: center.x + i * size.width, y: center.y + j * size.height });
+      }
+    }
+    candidates.sort((a, b) => Math.hypot(a.x - center.x, a.y - center.y) - Math.hypot(b.x - center.x, b.y - center.y));
+    const hit = candidates.find(free);
+    if (hit) return hit;
+  }
+  return center;
+}

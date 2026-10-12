@@ -84,3 +84,45 @@ describe('projectStore', () => {
     expect(store().project.floors.map((f) => f.id)).toEqual(['f1']);
   });
 });
+
+describe('projectStore: renombrar y borrar', () => {
+  beforeEach(() => {
+    store().loadProject(makeProject());
+  });
+
+  it('al renombrar usa un nombre único y actualiza las referencias de entity_id en un solo paso', () => {
+    store().addDevice(makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz salón'));
+    store().addDevice(makeDevice('hue-white-e27', 'd2', 300, 0, 'Lámpara'));
+    store().addAutomation({
+      triggers: [{ type: 'state', entityId: 'light.luz_salon', to: 'on' }],
+      actions: [{ type: 'service', service: 'light.turn_off', entityId: 'light.luz_salon' }],
+    });
+    const past = store().past.length;
+    store().updateDevice('d1', { name: 'Lámpara' });
+    const p = store().project;
+    const renamed = p.devices.find((d) => d.id === 'd1');
+    expect(renamed?.name).not.toBe('Lámpara');
+    expect(renamed?.name).toMatch(/^Lámpara/);
+    const auto = p.automations[0];
+    const trigger = auto?.triggers[0];
+    expect(trigger?.type === 'state' && trigger.entityId).not.toBe('light.luz_salon');
+    expect(JSON.stringify(auto)).not.toContain('light.luz_salon');
+    expect(store().past.length).toBe(past + 1);
+    store().undo();
+    expect(JSON.stringify(store().project.automations[0])).toContain('light.luz_salon');
+  });
+
+  it('removeElements borra todo en un único paso de deshacer', () => {
+    store().addDevice(makeDevice('sonoff-zbdongle-p', 'c1'));
+    store().addDevice(makeDevice('hue-white-e27', 'd1', 300, 0));
+    store().addConnection({ sourceId: 'd1', targetId: 'c1', protocol: 'zigbee' });
+    const room = store().addRoom({ floorId: 'f1', name: 'Sala', polygon: [] });
+    const before = store().project;
+    store().removeElements({ deviceIds: ['d1'], roomIds: [room.id] });
+    expect(store().project.devices).toHaveLength(1);
+    expect(store().project.rooms).toHaveLength(0);
+    expect(store().project.connections).toHaveLength(0);
+    store().undo();
+    expect(store().project).toBe(before);
+  });
+});

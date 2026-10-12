@@ -109,6 +109,7 @@ export function createSimulationState(project: Project, defs: DeviceDefinition[]
     speed: 1,
     entities: initialEntityStates(project, defs),
     pending: [],
+    queue: [],
     log: [],
   };
   return addLog(sim, 'info', `Simulación preparada con ${Object.keys(sim.entities).length} entidades`);
@@ -143,6 +144,28 @@ function isRunning(sim: SimulationState, automationId: Id): boolean {
   return sim.pending.some((p) => p.automationId === automationId);
 }
 
+function enqueue(sim: SimulationState, a: Automation): SimulationState {
+  const logged = addLog(sim, 'info', `Automatización «${a.name}» en cola (modo queued): se ejecutará al terminar la anterior`, { automationId: a.id });
+  const last = logged.log[logged.log.length - 1];
+  const item: PendingAction = { id: `queue-${last?.id ?? 0}`, dueAt: sim.now, automationId: a.id, actions: a.actions };
+  return { ...logged, queue: [...(logged.queue ?? []), item] };
+}
+
+/** Si la automatización ya no está ocupada, lanza su siguiente ejecución en cola. */
+function drainQueue(sim: SimulationState, project: Project, a: Automation, exec: Exec): SimulationState {
+  if (exec.chain.includes(a.id) || isRunning(sim, a.id)) return sim;
+  const item = sim.queue?.find((q) => q.automationId === a.id);
+  if (!item) return sim;
+  const rest: SimulationState = { ...sim, queue: (sim.queue ?? []).filter((q) => q.id !== item.id) };
+  if (exec.depth > MAX_DEPTH) {
+    return addLog(rest, 'error', `Cola de «${a.name}» descartada: posible bucle infinito`, { automationId: a.id });
+  }
+  const started = addLog(rest, 'info', `Automatización «${a.name}»: ejecutando disparo en cola`, { automationId: a.id });
+  const inner: Exec = { depth: exec.depth + 1, chain: exec.chain };
+  const ran = runActionsInternal(started, project, item.actions, { automationId: a.id }, { depth: inner.depth, chain: [...exec.chain, a.id] });
+  return drainQueue(ran, project, a, inner);
+}
+
 function runAutomation(sim: SimulationState, project: Project, a: Automation, exec: Exec, reason: string): SimulationState {
   if (!a.enabled) return sim;
   const extra = { automationId: a.id };
@@ -156,10 +179,12 @@ function runAutomation(sim: SimulationState, project: Project, a: Automation, ex
   if (!a.conditions.every((c) => evaluateCondition(c, sim))) {
     return addLog(sim, 'info', `Automatización «${a.name}»: condiciones no cumplidas`, extra);
   }
+  if (busy && a.mode === 'queued') return enqueue(sim, a);
   let next = sim;
   if (a.mode === 'restart') next = { ...next, pending: next.pending.filter((p) => p.automationId !== a.id) };
   next = addLog(next, 'info', `Automatización «${a.name}» disparada (${reason})`, extra);
-  return runActionsInternal(next, project, a.actions, { automationId: a.id }, { depth: exec.depth + 1, chain: [...exec.chain, a.id] });
+  next = runActionsInternal(next, project, a.actions, { automationId: a.id }, { depth: exec.depth + 1, chain: [...exec.chain, a.id] });
+  return drainQueue(next, project, a, exec);
 }
 
 function stateTriggerMatches(t: Trigger, entityId: string, prev: EntityStateValue, next: EntityStateValue): boolean {
@@ -380,7 +405,9 @@ function runPending(sim: SimulationState, project: Project, p: PendingAction): S
   const ctx: RunCtx = {};
   if (p.automationId !== undefined) ctx.automationId = p.automationId;
   if (p.scriptId !== undefined) ctx.scriptId = p.scriptId;
-  return runActions(rest, project, p.actions, ctx);
+  const ran = runActions(rest, project, p.actions, ctx);
+  const automation = project.automations.find((a) => a.id === p.automationId);
+  return automation ? drainQueue(ran, project, automation, ROOT) : ran;
 }
 
 export interface TickOptions {

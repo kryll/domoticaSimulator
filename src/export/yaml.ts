@@ -1,5 +1,5 @@
 // Serializador YAML propio (sin dependencias) y exportación al formato de Home Assistant.
-import type { Action, Automation, Condition, Project, Scene, Script, Trigger } from '../types';
+import type { Action, Automation, Condition, EntityStateValue, Project, Scene, Script, Trigger } from '../types';
 import { slugify } from '../devices/entities';
 
 export type YamlScalar = string | number | boolean | null;
@@ -108,6 +108,12 @@ function scriptEntity(id: string, ctx: YamlContext): string {
   return `script.${script ? slugify(script.name) : id}`;
 }
 
+/** Estado de HA como texto: los booleanos se escriben 'on'/'off'. */
+export function stateToYaml(v: EntityStateValue): string {
+  if (typeof v === 'boolean') return v ? 'on' : 'off';
+  return String(v);
+}
+
 function formatOffset(minutes: number): string {
   const sign = minutes < 0 ? '-' : '+';
   const abs = Math.abs(Math.round(minutes));
@@ -118,8 +124,8 @@ export function triggerToYaml(t: Trigger): YamlMap {
   switch (t.type) {
     case 'state': {
       const m: YamlMap = { platform: 'state', entity_id: t.entityId };
-      if (t.from !== undefined) m.from = String(t.from);
-      if (t.to !== undefined) m.to = String(t.to);
+      if (t.from !== undefined) m.from = stateToYaml(t.from);
+      if (t.to !== undefined) m.to = stateToYaml(t.to);
       return m;
     }
     case 'numeric_state': {
@@ -141,7 +147,7 @@ export function triggerToYaml(t: Trigger): YamlMap {
 export function conditionToYaml(c: Condition): YamlMap {
   switch (c.type) {
     case 'state':
-      return { condition: 'state', entity_id: c.entityId, state: String(c.state) };
+      return { condition: 'state', entity_id: c.entityId, state: stateToYaml(c.state) };
     case 'numeric_state': {
       const m: YamlMap = { condition: 'numeric_state', entity_id: c.entityId };
       if (c.above !== undefined) m.above = c.above;
@@ -201,7 +207,7 @@ export function scenesToYaml(project: Project): string {
     project.scenes.map((s) => {
       const entities: YamlMap = {};
       for (const [entityId, st] of Object.entries(s.entities)) {
-        entities[entityId] = { state: typeof st.state === 'boolean' ? (st.state ? 'on' : 'off') : st.state, ...st.attributes };
+        entities[entityId] = { state: typeof st.state === 'boolean' ? stateToYaml(st.state) : st.state, ...st.attributes };
       }
       return { id: s.id, name: s.name, entities };
     }),

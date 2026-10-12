@@ -383,6 +383,56 @@ describe('tick', () => {
   });
 });
 
+describe('modo queued', () => {
+  const actions: Action[] = [
+    { type: 'service', service: 'switch.toggle', entityId: PLUG },
+    { type: 'delay', seconds: 60 },
+    { type: 'service', service: 'light.toggle', entityId: LIGHT },
+  ];
+  const p = home({ automations: [auto('q', { mode: 'queued', triggers: [{ type: 'state', entityId: MOTION, to: 'on' }], actions })] });
+  const runs = (sim: SimulationState) => sim.log.filter((l) => /disparada|disparo en cola/.test(l.message)).length;
+
+  it('dos disparos seguidos: el segundo espera a que termine el primero', () => {
+    let sim = triggerMotion(start(p), p, MOTION);
+    sim = triggerMotion(triggerMotion(sim, p, MOTION, false), p, MOTION);
+    expect(sim.queue).toHaveLength(1);
+    expect(sim.queue?.[0]).toMatchObject({ automationId: 'q', dueAt: at(12) });
+    expect(sim.log.at(-1)?.message).toMatch(/en cola/);
+    expect(state(sim, PLUG)).toBe('on'); // solo ha corrido la primera ejecución
+    expect(runs(sim)).toBe(1);
+
+    sim = tick(sim, p, 60_000); // termina la primera y arranca la encolada
+    expect(state(sim, LIGHT)).toBe('on');
+    expect(state(sim, PLUG)).toBe('off');
+    expect(sim.queue).toEqual([]);
+    expect(sim.pending).toHaveLength(1);
+    expect(runs(sim)).toBe(2);
+
+    sim = tick(sim, p, 60_000);
+    expect(state(sim, LIGHT)).toBe('off');
+    expect(sim.pending).toEqual([]);
+    expect(sim.log.some((l) => l.level !== 'info')).toBe(false);
+  });
+
+  it('sin delay se encadenan en el mismo instante', () => {
+    const quick = home({
+      automations: [auto('q', { mode: 'queued', triggers: [{ type: 'state', entityId: LIGHT }], actions: [{ type: 'service', service: 'switch.toggle', entityId: PLUG }] })],
+    });
+    let sim = setEntityState(start(quick), quick, LIGHT, 'on');
+    sim = setEntityState(sim, quick, LIGHT, 'off');
+    expect(state(sim, PLUG)).toBe('off');
+    expect(sim.queue).toEqual([]);
+  });
+
+  it('una automatización queued que se redispara a sí misma acaba por el límite de bucles', () => {
+    const loop = home({
+      automations: [auto('q', { mode: 'queued', triggers: [{ type: 'state', entityId: LIGHT }], actions: [{ type: 'service', service: 'light.toggle', entityId: LIGHT }] })],
+    });
+    const sim = setEntityState(start(loop), loop, LIGHT, 'on');
+    expect(sim.log.some((l) => l.level === 'error')).toBe(true);
+  });
+});
+
 describe('events', () => {
   it('pressButton deja la acción y vuelve a "none" disparando automatizaciones', () => {
     const p = home({

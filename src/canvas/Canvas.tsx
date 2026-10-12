@@ -93,6 +93,24 @@ function buildNodes(
     nodes.push(node);
   }
 
+  const devicesById = new Map(project.devices.map((d) => [d.id, d]));
+  const floorNames = new Map(project.floors.map((f) => [f.id, f.name]));
+  const crossLinks = new Map<string, Array<{ deviceName: string; floorName: string }>>();
+  for (const c of project.connections) {
+    const a = devicesById.get(c.sourceId);
+    const b = devicesById.get(c.targetId);
+    if (!a || !b || a.floorId === b.floorId) continue;
+    for (const [here, there] of [
+      [a, b],
+      [b, a],
+    ] as const) {
+      if (here.floorId !== floorId) continue;
+      const list = crossLinks.get(here.id) ?? [];
+      list.push({ deviceName: there.name, floorName: floorNames.get(there.floorId) ?? '?' });
+      crossLinks.set(here.id, list);
+    }
+  }
+
   for (const device of project.devices) {
     if (device.floorId !== floorId) continue;
     const refs = entitiesOfDevice(device);
@@ -118,6 +136,7 @@ function buildNodes(
         unreachable: analysis.unreachable.has(device.id),
         highlighted: highlightSet.has(device.id),
         connectMode,
+        crossFloorLinks: crossLinks.get(device.id) ?? [],
       },
       selected: isSelected(selection, 'device', device.id),
       draggable: !connectMode,
@@ -224,12 +243,11 @@ export function Canvas() {
 
   const onDelete: OnDelete<AppNode, ProtocolEdge> = useCallback(
     ({ nodes: deletedNodes, edges: deletedEdges }) => {
-      const store = useProjectStore.getState();
-      const deviceIds = deletedNodes.filter((n) => n.type === 'device').map((n) => n.id);
-      const roomIds = deletedNodes.filter((n) => n.type === 'room').map((n) => n.id);
-      store.removeConnections(deletedEdges.map((e) => e.id));
-      store.removeDevices(deviceIds);
-      for (const id of roomIds) store.removeRoom(id);
+      useProjectStore.getState().removeElements({
+        deviceIds: deletedNodes.filter((n) => n.type === 'device').map((n) => n.id),
+        roomIds: deletedNodes.filter((n) => n.type === 'room').map((n) => n.id),
+        connectionIds: deletedEdges.map((e) => e.id),
+      });
       select(null);
     },
     [select],

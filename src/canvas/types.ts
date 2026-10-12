@@ -12,6 +12,8 @@ export type DeviceNodeData = {
   unreachable: boolean;
   highlighted: boolean;
   connectMode: boolean;
+  /** Conexiones con dispositivos de otras plantas. */
+  crossFloorLinks: Array<{ deviceName: string; floorName: string }>;
 };
 
 export type RoomNodeData = {

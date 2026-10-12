@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import type { Brand, DeviceCategory, DeviceDefinition, Protocol } from '../types';
 import { CATEGORY_LABELS, PROTOCOL_LABELS, catalog, filterCatalog, type CatalogFilter } from '../devices/catalog';
-import { addDeviceFromDefinition, canvasCenter } from '../canvas/actions';
+import { addDeviceFromDefinition, canvasCenter, freeSpotNear } from '../canvas/actions';
 import { Panel, EmptyState } from '../ui/Panel';
 import { SelectField, TextField } from '../ui/Field';
 import { Button } from '../ui/Button';
@@ -46,7 +46,7 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
   const handleAdd = useCallback(
     (def: DeviceDefinition) => {
       if (onAdd) onAdd(def);
-      else addDeviceFromDefinition(def.id, canvasCenter(screenToFlowPosition));
+      else addDeviceFromDefinition(def.id, freeSpotNear(canvasCenter(screenToFlowPosition)));
     },
     [onAdd, screenToFlowPosition],
   );
@@ -90,9 +90,9 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
             value={connectivity}
             onChange={(e) => setConnectivity(e.target.value as Connectivity)}
             options={[
-              { value: 'all', label: 'Local y cloud' },
+              { value: 'all', label: 'Local y nube' },
               { value: 'local', label: 'Solo local' },
-              { value: 'cloud', label: 'Solo cloud' },
+              { value: 'cloud', label: 'Solo nube' },
             ]}
           />
         </div>

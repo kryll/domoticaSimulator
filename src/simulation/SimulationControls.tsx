@@ -27,7 +27,7 @@ export function SimulationControls() {
         size="sm"
         variant="ghost"
         onClick={() => {
-          if (window.confirm('¿Reiniciar la simulación? Se perderán los estados y el logbook.')) reset();
+          if (window.confirm('¿Reiniciar la simulación? Se perderán los estados y el registro.')) reset();
         }}
         aria-label="Reiniciar simulación"
         title="Reiniciar"

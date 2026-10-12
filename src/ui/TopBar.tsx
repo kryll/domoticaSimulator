@@ -2,24 +2,17 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { createDemoProject, createEmptyProject, exportProjectJson, importProjectJson } from '../store/persistence';
-import { automationsToYaml, scenesToYaml, scriptsToYaml } from '../export/yaml';
-import { devicesToCsv } from '../export/csv';
-import { exportCanvasPng } from '../export/png';
+import { openAsNewProject, openProject } from '../store/bootstrap';
 import { catalog } from '../devices/catalog';
 import { SimulationControls } from '../simulation/SimulationControls';
 import { Button } from './Button';
 import { ProjectsDialog } from './ProjectsDialog';
 import { downloadText, readFileAsText, safeFilename } from './download';
-import type { Project } from '../types';
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function openProject(project: Project) {
-  useProjectStore.getState().loadProject(project);
-  useUiStore.getState().reset();
-}
 
 function ProjectName() {
   const name = useProjectStore((s) => s.project.name);
@@ -133,26 +126,26 @@ export function TopBar() {
             Nuevo proyecto
           </MenuItem>
           <MenuItem onClick={() => setOpenDialog(true)}>Abrir…</MenuItem>
-          <MenuItem onClick={() => openProject(createDemoProject())}>Cargar proyecto de demo</MenuItem>
+          <MenuItem onClick={() => safely(() => openAsNewProject(createDemoProject()).then(() => undefined))}>Cargar proyecto de demo</MenuItem>
           <MenuItem onClick={() => fileRef.current?.click()}>Importar JSON…</MenuItem>
         </Menu>
         <Menu label="Exportar">
           <MenuItem onClick={() => safely(() => downloadText(exportProjectJson(project()), `${base()}.json`, 'application/json'))}>
             Proyecto (JSON)
           </MenuItem>
-          <MenuItem onClick={() => safely(() => downloadText(automationsToYaml(project()), 'automations.yaml', 'text/yaml'))}>
+          <MenuItem onClick={() => safely(async () => downloadText((await import('../export/yaml')).automationsToYaml(project()), 'automations.yaml', 'text/yaml'))}>
             automations.yaml
           </MenuItem>
-          <MenuItem onClick={() => safely(() => downloadText(scenesToYaml(project()), 'scenes.yaml', 'text/yaml'))}>
+          <MenuItem onClick={() => safely(async () => downloadText((await import('../export/yaml')).scenesToYaml(project()), 'scenes.yaml', 'text/yaml'))}>
             scenes.yaml
           </MenuItem>
-          <MenuItem onClick={() => safely(() => downloadText(scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
+          <MenuItem onClick={() => safely(async () => downloadText((await import('../export/yaml')).scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
             scripts.yaml
           </MenuItem>
-          <MenuItem onClick={() => safely(() => downloadText(devicesToCsv(project(), catalog), `${base()}-dispositivos.csv`, 'text/csv'))}>
+          <MenuItem onClick={() => safely(async () => downloadText((await import('../export/csv')).devicesToCsv(project(), catalog), `${base()}-dispositivos.csv`, 'text/csv'))}>
             Inventario (CSV)
           </MenuItem>
-          <MenuItem onClick={() => safely(() => exportCanvasPng(`${base()}-plano.png`), 'Imagen exportada')}>
+          <MenuItem onClick={() => safely(async () => (await import('../export/png')).exportCanvasPng(`${base()}-plano.png`), 'Imagen exportada')}>
             Imagen del plano (PNG)
           </MenuItem>
         </Menu>
@@ -168,8 +161,7 @@ export function TopBar() {
             e.target.value = '';
             if (!file) return;
             try {
-              const imported = importProjectJson(await readFileAsText(file));
-              openProject(imported);
+              const imported = await openAsNewProject(importProjectJson(await readFileAsText(file)));
               notify(`Proyecto «${imported.name}» importado`, 'success');
             } catch (err) {
               notify(`No se pudo importar: ${errorText(err)}`, 'error');

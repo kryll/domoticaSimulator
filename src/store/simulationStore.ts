@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type { EntityState, EntityStateValue, Id, Project, SimulationState } from '../types';
-import { catalog } from '../devices/catalog';
-import { initialEntityStates } from '../devices/entities';
+import { entitiesForDevice, initialEntityStates } from '../devices/entities';
+import { catalog, getDefinition } from '../devices/catalog';
+import { simNowFromLocalDate } from '../simulation/clock';
+import { pressButton } from '../simulation/events';
 import { activateScene, createSimulationState, runScript, setEntityState, tick } from '../simulation/engine';
 import { useProjectStore } from './projectStore';
 
@@ -25,10 +27,15 @@ export interface SimulationStoreState {
   advance: (realMs: number) => void;
   /** Cambia manualmente el estado de una entidad (evento simulado). */
   setEntity: (entityId: string, next: EntityState | EntityStateValue) => void;
+  /** Pulsación de un mando (sensor de acción): single, double, hold... */
+  pressButton: (entityId: string, action: string) => void;
   activateScene: (sceneId: Id) => void;
   runScript: (scriptId: Id) => void;
-  /** Añade las entidades nuevas del proyecto que aún no estén en la simulación. */
-  syncWithProject: (project: Project) => void;
+  /**
+   * Ajusta las entidades de la simulación al proyecto: añade las nuevas, quita las que ya no
+   * existen y traslada el estado de las renombradas (comparando con `prev`).
+   */
+  syncWithProject: (project: Project, prev?: Project) => void;
 }
 
 let loop: ReturnType<typeof setInterval> | undefined;
@@ -44,13 +51,13 @@ function project(): Project {
 }
 
 export const useSimulationStore = create<SimulationStoreState>()((set, get) => ({
-  sim: createSimulationState(project(), catalog, Date.now()),
+  sim: createSimulationState(project(), catalog, simNowFromLocalDate(new Date())),
   running: false,
   speed: 1,
 
   reset: (p) => {
     stopLoop();
-    const sim = createSimulationState(p ?? project(), catalog, Date.now());
+    const sim = createSimulationState(p ?? project(), catalog, simNowFromLocalDate(new Date()));
     set({ sim: { ...sim, speed: get().speed, running: false }, running: false });
   },
   start: () => {
@@ -75,21 +82,50 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     set((s) => ({ sim: tick(s.sim, project(), realMs) }));
   },
   setEntity: (entityId, next) => set((s) => ({ sim: setEntityState(s.sim, project(), entityId, next) })),
+  pressButton: (entityId, action) => set((s) => ({ sim: pressButton(s.sim, project(), entityId, action) })),
   activateScene: (sceneId) => set((s) => ({ sim: activateScene(s.sim, project(), sceneId) })),
   runScript: (scriptId) => set((s) => ({ sim: runScript(s.sim, project(), scriptId) })),
-  syncWithProject: (p) => {
-    const initial = initialEntityStates(p, catalog);
+  syncWithProject: (p, prev) => {
     const current = get().sim.entities;
-    const missing = Object.keys(initial).filter((id) => !(id in current));
-    if (missing.length === 0) return;
-    const entities = { ...current };
-    for (const id of missing) {
-      const state = initial[id];
-      if (state) entities[id] = state;
+    const renamed = prev ? renamedEntityIds(prev, p) : new Map<string, string>();
+    const initial = initialEntityStates(p, catalog);
+    const entities: SimulationState['entities'] = {};
+    let changed = false;
+    for (const [id, init] of Object.entries(initial)) {
+      const oldId = renamed.get(id);
+      const kept = current[id] ?? (oldId !== undefined ? current[oldId] : undefined);
+      if (kept) {
+        // conserva el estado pero actualiza atributos derivados del nombre (friendly_name)
+        entities[id] = { ...kept, attributes: { ...kept.attributes, friendly_name: init.attributes?.friendly_name ?? id } };
+        if (!current[id] || kept.attributes?.friendly_name !== init.attributes?.friendly_name) changed = true;
+      } else {
+        entities[id] = init;
+        changed = true;
+      }
     }
+    if (Object.keys(current).some((id) => !(id in entities))) changed = true;
+    if (!changed) return;
     set((s) => ({ sim: { ...s.sim, entities } }));
   },
 }));
+
+/** entity_id nuevo -> entity_id anterior de los dispositivos cuyo nombre ha cambiado. */
+export function renamedEntityIds(prev: Project, next: Project): Map<string, string> {
+  const map = new Map<string, string>();
+  const before = new Map(prev.devices.map((d) => [d.id, d]));
+  for (const device of next.devices) {
+    const old = before.get(device.id);
+    if (!old || old.name === device.name || old.definitionId !== device.definitionId) continue;
+    const def = getDefinition(device.definitionId, catalog);
+    if (!def) continue;
+    const oldIds = entitiesForDevice(old, def);
+    entitiesForDevice(device, def).forEach((e, i) => {
+      const o = oldIds[i];
+      if (o && o.entityId !== e.entityId) map.set(e.entityId, o.entityId);
+    });
+  }
+  return map;
+}
 
 /** Mantiene la simulación al día con los dispositivos del proyecto. */
 export function startSimulationSync(): () => void {
@@ -99,7 +135,7 @@ export function startSimulationSync(): () => void {
       useSimulationStore.getState().reset(state.project);
       return;
     }
-    useSimulationStore.getState().syncWithProject(state.project);
+    useSimulationStore.getState().syncWithProject(state.project, prev.project);
   });
 }
 

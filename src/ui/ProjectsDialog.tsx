@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { deleteProject, listProjects, loadProject } from '../store/persistence';
 import { useProjectStore } from '../store/projectStore';
+import { openProject } from '../store/bootstrap';
 import { useUiStore } from '../store/uiStore';
 import { Button } from './Button';
 import { Modal } from './Modal';
@@ -26,8 +27,7 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }) {
       useUiStore.getState().notify('No se pudo abrir el proyecto', 'error');
       return;
     }
-    useProjectStore.getState().loadProject(project);
-    useUiStore.getState().reset();
+    openProject(project);
     onClose();
   };
 

@@ -14,6 +14,9 @@ import type {
 import { createEmptyProject, saveProject } from './persistence';
 import { reassignRooms, resolveRoomId, translatePolygon } from '../canvas/geometry';
 import { newId } from '../ui/ids';
+import { catalog, getDefinition } from '../devices/catalog';
+import { uniqueDeviceName } from '../devices/factory';
+import { entityIdMappingForRename, renameEntityRefs } from '../devices/renaming';
 
 /** Número máximo de pasos de deshacer. */
 export const HISTORY_LIMIT = 100;
@@ -53,6 +56,9 @@ export interface ProjectState {
   updateDevice: (id: Id, patch: Patch<Device>) => void;
   moveDevice: (id: Id, position: Point) => void;
   removeDevices: (ids: Id[]) => void;
+
+  /** Borra dispositivos, salas y conexiones en un único paso de deshacer. */
+  removeElements: (ids: { deviceIds?: Id[]; roomIds?: Id[]; connectionIds?: Id[] }) => void;
 
   addConnection: (connection: Omit<Connection, 'id'>) => Connection | null;
   addConnections: (connections: Connection[]) => number;
@@ -184,7 +190,21 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
         return { ...p, devices: [...p.devices, { ...device, roomId }] };
       }),
     updateDevice: (id, patch) =>
-      commit((p) => ({ ...p, devices: p.devices.map((d) => (d.id === id ? { ...d, ...patch } : d)) })),
+      commit((p) => {
+        const current = p.devices.find((d) => d.id === id);
+        if (!current) return p;
+        let next: Device = { ...current, ...patch };
+        let mapping: Record<string, string> = {};
+        if (patch.name !== undefined && patch.name !== current.name) {
+          // Nombre único (sin contar el propio dispositivo) y referencias de entity_id actualizadas.
+          const others = p.devices.filter((d) => d.id !== id).map((d) => d.name);
+          next = { ...next, name: uniqueDeviceName(patch.name.trim() || current.name, others) };
+          const def = getDefinition(current.definitionId, catalog);
+          if (def) mapping = entityIdMappingForRename(current, def, next.name);
+        }
+        const updated = { ...p, devices: p.devices.map((d) => (d.id === id ? next : d)) };
+        return Object.keys(mapping).length > 0 ? renameEntityRefs(updated, mapping) : updated;
+      }),
     moveDevice: (id, position) =>
       commit((p) => {
         const current = p.devices.find((d) => d.id === id);
@@ -204,6 +224,23 @@ export const useProjectStore = create<ProjectState>()((set, get) => {
         };
       }),
 
+    removeElements: ({ deviceIds = [], roomIds = [], connectionIds = [] }) =>
+      commit((p) => {
+        if (deviceIds.length + roomIds.length + connectionIds.length === 0) return p;
+        const devices = new Set(deviceIds);
+        const rooms = new Set(roomIds);
+        const conns = new Set(connectionIds);
+        return {
+          ...p,
+          rooms: p.rooms.filter((r) => !rooms.has(r.id)),
+          devices: p.devices
+            .filter((d) => !devices.has(d.id))
+            .map((d) => (d.roomId && rooms.has(d.roomId) ? { ...d, roomId: undefined } : d)),
+          connections: p.connections.filter(
+            (c) => !conns.has(c.id) && !devices.has(c.sourceId) && !devices.has(c.targetId),
+          ),
+        };
+      }),
     addConnection: (connection) => {
       const { project } = get();
       if (connection.sourceId === connection.targetId) return null;

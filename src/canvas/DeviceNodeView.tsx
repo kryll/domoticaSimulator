@@ -3,6 +3,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { DeviceNode } from './types';
 import { CATEGORY_ICONS, PROTOCOL_COLORS } from './style';
 import { PROTOCOL_LABELS, isCloud } from '../devices/catalog';
+import { effectiveIotClass } from '../devices/roles';
 import { cx } from '../ui/cx';
 
 const severityRing = {
@@ -12,10 +13,11 @@ const severityRing = {
 } as const;
 
 function DeviceNodeViewImpl({ data, selected }: NodeProps<DeviceNode>) {
-  const { device, definition, active, stateLabel, issueSeverity, issueMessages, unreachable, highlighted, connectMode } = data;
+  const { device, definition, active, stateLabel, issueSeverity, issueMessages, unreachable, highlighted, connectMode, crossFloorLinks } = data;
+  const linkFloors = [...new Set(crossFloorLinks.map((l) => l.floorName))];
   const color = PROTOCOL_COLORS[device.protocol];
   const icon = definition ? CATEGORY_ICONS[definition.category] : '❔';
-  const cloud = definition ? isCloud(definition.iotClass) : false;
+  const cloud = definition ? isCloud(effectiveIotClass(device, definition)) : false;
 
   return (
     <div
@@ -65,6 +67,14 @@ function DeviceNodeViewImpl({ data, selected }: NodeProps<DeviceNode>) {
           aria-label={unreachable ? 'Inalcanzable' : 'Tiene incidencias'}
         >
           !
+        </span>
+      )}
+      {linkFloors.length > 0 && (
+        <span
+          className="absolute -bottom-2.5 left-2 rounded-full border border-indigo-200 bg-indigo-50 px-1.5 text-[9px] font-semibold text-indigo-700"
+          title={crossFloorLinks.map((l) => `${l.deviceName} (${l.floorName})`).join('\n')}
+        >
+          ↕ enlace a {linkFloors.join(', ')}
         </span>
       )}
       <Handle

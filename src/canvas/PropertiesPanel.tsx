@@ -8,6 +8,7 @@ import {
   INTEGRATION_LABELS,
   POWER_LABELS,
   PROTOCOL_LABELS,
+  IOT_CLASS_LABELS,
   isCloud,
 } from '../devices/catalog';
 import { Panel, EmptyState } from '../ui/Panel';
@@ -15,6 +16,7 @@ import { SelectField, TextField } from '../ui/Field';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { EntityControls } from '../simulation/EntityControls';
+import { effectiveIotClass } from '../devices/roles';
 import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
 import { PROTOCOL_COLORS, formatState } from './style';
 
@@ -61,6 +63,7 @@ function DeviceProperties({ device }: { device: Device }) {
   const entities = useSimulationStore((s) => s.sim.entities);
   const select = useUiStore((s) => s.select);
   const def = definitionOf(device);
+  const iotClass = def ? effectiveIotClass(device, def) : undefined;
   const refs = entitiesOfDevice(device);
   const issues = analyzeProject(project).issuesByDevice.get(device.id) ?? [];
   const rooms = project.rooms.filter((r) => r.floorId === device.floorId);
@@ -90,7 +93,7 @@ function DeviceProperties({ device }: { device: Device }) {
         />
       </section>
 
-      {def && (
+      {def && iotClass && (
         <section aria-label="Ficha del dispositivo">
           <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Ficha</h3>
           <Dl
@@ -100,8 +103,8 @@ function DeviceProperties({ device }: { device: Device }) {
               ['Categoría', CATEGORY_LABELS[def.category]],
               [
                 'Conectividad',
-                <Badge key="c" tone={isCloud(def.iotClass) ? 'violet' : 'green'}>
-                  {isCloud(def.iotClass) ? 'Cloud' : 'Local'} · {def.iotClass}
+                <Badge key="c" tone={isCloud(iotClass) ? 'violet' : 'green'}>
+                  {isCloud(iotClass) ? 'Nube' : 'Local'} · {IOT_CLASS_LABELS[iotClass]}
                 </Badge>,
               ],
               ['Alimentación', POWER_LABELS[def.power]],

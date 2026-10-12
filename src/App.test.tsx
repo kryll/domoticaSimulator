@@ -24,7 +24,7 @@ describe('App', () => {
     expect(screen.getByRole('tab', { name: /Validación/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Automatizaciones/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Escenas y scripts/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Logbook/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Registro/ })).toBeInTheDocument();
   });
 
   it('añade un dispositivo desde el catálogo y muestra sus propiedades', async () => {

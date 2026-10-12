@@ -13,6 +13,9 @@ import {
   requiredHubBrand,
   zigbeeNetworkOf,
 } from '../devices/roles';
+import { entityIdsForDevice } from '../devices/entities';
+import { collectEntityRefs, type EntityReference } from '../devices/renaming';
+import { findScene, findScript } from '../simulation/engine';
 import { canConnect } from './connections';
 import { isInRange } from './coverage';
 import { analyzeMesh } from './mesh';
@@ -116,6 +119,18 @@ function simpleInfraRules(ctx: Ctx): ValidationIssue[] {
   ];
 }
 
+/** Marcas cuyos border routers no comparten las credenciales Thread con Home Assistant. */
+const CLOSED_THREAD_BRANDS: readonly Brand[] = ['Amazon'];
+
+function threadCredentialsRule(ctx: Ctx): ValidationIssue[] {
+  if (!endpoints(ctx).some((p) => p.device.protocol === 'thread')) return [];
+  return ctx.placed
+    .filter((p) => isThreadBorderRouter(p.def) && CLOSED_THREAD_BRANDS.includes(p.def.brand))
+    .map((p) =>
+      issue('warning', 'thread-border-router-sin-credenciales', `«${p.device.name}» es border router Thread, pero ${p.def.brand} no comparte las credenciales Thread con Home Assistant: los dispositivos Thread no podrán usar su red desde HA (añade un border router de Google, Aqara, IKEA o uno propio de HA)`, [p.device.id]),
+    );
+}
+
 function bleWithoutProxy(ctx: Ctx): Placed[] {
   const proxies = ctx.placed.filter((p) => isBleProxy(p.def));
   return endpoints(ctx).filter(
@@ -181,6 +196,56 @@ function isolatedInfraRule(ctx: Ctx): ValidationIssue[] {
     .map((p) => issue('warning', 'infraestructura-sin-conexion', `«${p.device.name}» no está conectado a la red de casa ni al servidor`, [p.device.id]));
 }
 
+const KIND_LABELS: Record<EntityReference['kind'], string> = {
+  automation: 'La automatización',
+  scene: 'La escena',
+  script: 'El script',
+};
+
+function knownEntityIds(ctx: Ctx): Set<string> {
+  return new Set(ctx.placed.flatMap((p) => entityIdsForDevice(p.device, p.def)));
+}
+
+function refExists(entityId: string, known: Set<string>, project: Project): boolean {
+  if (known.has(entityId)) return true;
+  if (entityId.startsWith('scene.')) return findScene(project, entityId) !== undefined;
+  if (entityId.startsWith('script.')) return findScript(project, entityId) !== undefined;
+  return false;
+}
+
+function unknownEntityRule(ctx: Ctx): ValidationIssue[] {
+  const known = knownEntityIds(ctx);
+  const seen = new Set<string>();
+  const result: ValidationIssue[] = [];
+  for (const ref of collectEntityRefs(ctx.project)) {
+    const key = `${ref.kind}:${ref.ownerId}:${ref.entityId}`;
+    if (seen.has(key) || refExists(ref.entityId, known, ctx.project)) continue;
+    seen.add(key);
+    const shown = ref.entityId === '' ? '(vacía)' : ref.entityId;
+    result.push(issue('error', 'entidad-desconocida', `${KIND_LABELS[ref.kind]} «${ref.ownerName}» usa la entidad ${shown}, que no existe`, [], key));
+  }
+  return result;
+}
+
+function duplicateEntityRule(ctx: Ctx): ValidationIssue[] {
+  const owners = new Map<string, Id[]>();
+  for (const p of ctx.placed) {
+    for (const id of new Set(entityIdsForDevice(p.device, p.def))) owners.set(id, [...(owners.get(id) ?? []), p.device.id]);
+  }
+  const groups = new Map<string, { deviceIds: Id[]; entityIds: string[] }>();
+  for (const [entityId, deviceIds] of owners) {
+    if (deviceIds.length < 2) continue;
+    const key = deviceIds.join(',');
+    const group = groups.get(key) ?? { deviceIds, entityIds: [] };
+    group.entityIds.push(entityId);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((g) => {
+    const devices = g.deviceIds.map((id) => `«${ctx.project.devices.find((d) => d.id === id)?.name ?? id}»`).join(', ');
+    return issue('error', 'entity-id-duplicado', `${devices} generan los mismos entity_id (${g.entityIds.join(', ')}); cambia el nombre de alguno`, g.deviceIds);
+  });
+}
+
 function roomRule(ctx: Ctx): ValidationIssue[] {
   return ctx.project.devices
     .filter((d) => !d.roomId || !ctx.project.rooms.some((r) => r.id === d.roomId))
@@ -204,8 +269,16 @@ export function validateProject(project: Project, defs: DeviceDefinition[]): Val
     ...hubRules(ctx),
     ...simpleInfraRules(ctx),
     ...bleRule(ctx),
+    ...threadCredentialsRule(ctx),
   ];
   issues.push(...coverageRule(ctx, issues));
-  issues.push(...connectionRules(ctx), ...isolatedInfraRule(ctx), ...cloudRule(ctx), ...roomRule(ctx));
+  issues.push(
+    ...connectionRules(ctx),
+    ...duplicateEntityRule(ctx),
+    ...unknownEntityRule(ctx),
+    ...isolatedInfraRule(ctx),
+    ...cloudRule(ctx),
+    ...roomRule(ctx),
+  );
   return issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }

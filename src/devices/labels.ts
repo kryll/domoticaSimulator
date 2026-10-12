@@ -42,6 +42,7 @@ export const INTEGRATION_LABELS: Record<Integration, string> = {
   samsungtv: 'Samsung Smart TV',
   webostv: 'LG webOS TV',
   tplink: 'TP-Link Smart Home',
+  homeassistant: 'Home Assistant',
 };
 
 export const CATEGORY_LABELS: Record<DeviceCategory, string> = {
@@ -153,4 +154,5 @@ export const INTEGRATION_IOT_CLASS: Record<Integration, IotClass> = {
   samsungtv: 'local_push',
   webostv: 'local_push',
   tplink: 'local_polling',
+  homeassistant: 'local_push',
 };

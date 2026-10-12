@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Action } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { EntityPicker } from './EntityPicker';
@@ -5,6 +6,34 @@ import { ACTION_LABELS, actionFactories } from '../ui/automationOptions';
 import { ListEditor } from './ListEditor';
 import { Field, SelectField, TextField, inputClass } from '../ui/Field';
 import { dataToInput, parseDataInput, parseNumberInput, servicesForEntity } from '../ui/formValues';
+
+type ActionData = Extract<Action, { type: 'service' }>['data'];
+
+function sameData(a: ActionData, b: ActionData): boolean {
+  return JSON.stringify(a ?? {}) === JSON.stringify(b ?? {});
+}
+
+/** Campo «Datos» controlado: borrador local que se resincroniza si value cambia desde fuera. */
+function DataField({ value, onChange }: { value: ActionData; onChange: (data: ActionData) => void }) {
+  const [draft, setDraft] = useState(() => dataToInput(value));
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    if (!sameData(parseDataInput(draft), value)) setDraft(dataToInput(value));
+  }
+  return (
+    <TextField
+      label="Datos (clave=valor)"
+      placeholder="brightness=200"
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const parsed = parseDataInput(e.target.value);
+        if (!sameData(parsed, value)) onChange(parsed);
+      }}
+    />
+  );
+}
 
 export function ActionEditor({ value, onChange }: { value: Action; onChange: (a: Action) => void }) {
   const scenes = useProjectStore((s) => s.project.scenes);
@@ -47,12 +76,7 @@ export function ActionEditor({ value, onChange }: { value: Action; onChange: (a:
                 </>
               )}
             </Field>
-            <TextField
-              label="Datos (clave=valor)"
-              placeholder="brightness=200"
-              defaultValue={dataToInput(value.data)}
-              onBlur={(e) => onChange({ ...value, data: parseDataInput(e.target.value) })}
-            />
+            <DataField value={value.data} onChange={(data) => onChange({ ...value, data })} />
           </div>
         </div>
       );

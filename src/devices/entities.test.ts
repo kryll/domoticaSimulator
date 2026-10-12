@@ -91,4 +91,14 @@ describe('factory', () => {
     expect(uniqueDeviceName('Luz', [{ name: 'Luz' }, { name: 'Luz 2' }])).toBe('Luz 3');
     expect(uniqueDeviceName('Salón', ['Salon'])).toBe('Salón 2');
   });
+
+  it('uniqueDeviceName: casos límite', () => {
+    expect(uniqueDeviceName('Luz', ['Luz 2'])).toBe('Luz');
+    expect(uniqueDeviceName('Luz', ['Luz', 'Luz 3'])).toBe('Luz 2');
+    expect(uniqueDeviceName('LUZ salón', ['luz_salon', 'Luz Salón 2'])).toBe('LUZ salón 3');
+    const many = ['Sensor', ...Array.from({ length: 20 }, (_, i) => `Sensor ${i + 2}`)];
+    expect(uniqueDeviceName('Sensor', many)).toBe('Sensor 22');
+    expect(uniqueDeviceName('!!!', ['Dispositivo'])).toBe('!!! 2');
+    expect(uniqueDeviceName('Enchufe', [dev('a', 'tapo-p110', undefined, { name: 'Enchufe' })])).toBe('Enchufe 2');
+  });
 });

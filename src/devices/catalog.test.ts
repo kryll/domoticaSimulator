@@ -66,6 +66,11 @@ describe('catálogo', () => {
     for (const d of catalog.filter((x) => !infra.includes(x.role))) expect(d.entities.length, d.id).toBeGreaterThan(0);
   });
 
+  it('el servidor HA usa la integración propia de Home Assistant', () => {
+    expect(def('ha-green').integrations).toEqual(['homeassistant']);
+    expect(INTEGRATION_LABELS.homeassistant).toBe('Home Assistant');
+  });
+
   it('getDefinition busca por id', () => {
     expect(getDefinition('shelly-1pm-gen3')?.brand).toBe('Shelly');
     expect(getDefinition('no-existe')).toBeUndefined();
