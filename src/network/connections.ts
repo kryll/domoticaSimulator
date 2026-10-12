@@ -46,7 +46,7 @@ function connectEndpoints(a: Node, b: Node): ConnectResult {
 }
 
 function connectInfraPair(a: Node, b: Node): ConnectResult {
-  const server = a.def.role === 'ha_server' ? b : b.def.role === 'ha_server' ? a : undefined;
+  const server = a.def.role === 'ha_server' ? a : b.def.role === 'ha_server' ? b : undefined;
   const other = server === a ? b : a;
   if (server && other.def.role === 'coordinator') {
     const radio = other.def.protocols[0];

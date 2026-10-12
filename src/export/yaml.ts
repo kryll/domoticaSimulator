@@ -14,6 +14,13 @@ const RESERVED = /^(true|false|yes|no|on|off|y|n|null|~)$/i;
 const NUMBER_LIKE = /^[-+]?(\.?\d|\.inf|\.nan)/i;
 const SPECIAL_START = /^[-?:,[\]{}#&*!|>'"%@`]/;
 
+function hasControlChars(s: string): boolean {
+  return [...s].some((ch) => {
+    const code = ch.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
+}
+
 function needsQuotes(s: string): boolean {
   return (
     s === '' ||
@@ -22,7 +29,7 @@ function needsQuotes(s: string): boolean {
     NUMBER_LIKE.test(s) ||
     SPECIAL_START.test(s) ||
     /[:#]/.test(s) ||
-    /[\u0000-\u001f\u007f]/.test(s)
+    hasControlChars(s)
   );
 }
 
