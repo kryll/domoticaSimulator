@@ -336,6 +336,32 @@ export interface ProjectSettings {
   prices?: Record<Id, number>;
   /** Factor de aceleración de la descarga de las baterías (1 = realista). */
   batteryAcceleration?: number;
+  /** Tanda 2: datos del presupuesto y de la propuesta para el cliente. */
+  quote?: QuoteSettings;
+}
+
+/** Tanda 2: ajustes del presupuesto por partidas (todas opcionales; ver src/report/quote.ts). */
+export interface QuoteSettings {
+  clientName?: string;
+  clientAddress?: string;
+  installerName?: string;
+  /** Horas de mano de obra adicionales (se suman a las estimadas). 0-1000. */
+  laborHours?: number;
+  /** Precio de la hora de mano de obra en €/h (por defecto 45). 0-1000. */
+  laborRateEurH?: number;
+  /** Minutos de instalación por dispositivo; si se indica, sustituye a la estimación por tipo. 0-600. */
+  perDeviceInstallMinutes?: number;
+  /** Margen sobre materiales y mano de obra en % (por defecto 0). 0-100. */
+  marginPct?: number;
+  /** Descuento en % (por defecto 0). 0-100. */
+  discountPct?: number;
+  /** IVA en % (por defecto 21). 0-100. */
+  vatPct?: number;
+  /** Días de validez de la oferta (por defecto 30). 1-365. */
+  validityDays?: number;
+  notes?: string;
+  /** Modo presentación: oculta los precios. */
+  hidePrices?: boolean;
 }
 
 /** Ajustes por defecto: Madrid, 0,15 €/kWh. */
@@ -514,10 +540,27 @@ export type IssueSeverity = 'error' | 'warning' | 'info';
 export interface ValidationIssue {
   id: string;
   severity: IssueSeverity;
-  /** Código estable, p. ej. "zigbee-sin-coordinador". */
+  /** Código estable, p. ej. "zigbee-sin-coordinador". Es un dato: no se muestra al usuario. */
   code: string;
+  /**
+   * Tanda 2: título corto y legible («Falta el coordinador Zigbee»). El validador lo rellena
+   * siempre; es opcional para no romper incidencias creadas a mano (usa issueTitle()).
+   */
+  title?: string;
   message: string;
   deviceIds: Id[];
+  /** Tanda 2: elemento al que se refiere la incidencia (para los arreglos rápidos). */
+  ref?: IssueRef;
+}
+
+/** Tanda 2: referencia estructurada de una incidencia (automatización, escena, script, conexión...). */
+export interface IssueRef {
+  kind: 'automation' | 'scene' | 'script' | 'connection' | 'group';
+  id: Id;
+  entityId?: string;
+  service?: string;
+  /** Nombre del script o slug compartido (nombre-script-duplicado). */
+  slug?: string;
 }
 
 // ---- Fase 3 ----

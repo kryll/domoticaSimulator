@@ -45,6 +45,9 @@ import { PROTOCOL_COLORS } from './style';
 import { CanvasExtras } from './extras/CanvasExtras';
 import { FloorContextMenu } from './extras/FloorContextMenu';
 import { useExtrasStore } from '../store/extrasStore';
+import { useViewStore } from '../store/viewStore';
+import { MinimapToggle, ZoomLevelClass, selectedConnectionScope } from './readability';
+import { EmptyCanvasGuide } from '../onboarding/EmptyCanvasGuide';
 
 /** Encuadre: deja libre arriba la altura de la barra del lienzo para que no tape nodos. */
 const FIT_VIEW_OPTIONS = { padding: { top: `${CANVAS_TOOLBAR_PX + 16}px`, x: '6%', bottom: '8%' } } as const;
@@ -94,12 +97,14 @@ interface BuildOptions {
   highlighted: string[];
   mode: CanvasMode;
   popoverDeviceId: string | null;
+  /** Modo presentación: nada se arrastra ni se edita. */
+  readOnly?: boolean;
 }
 
 function buildNodes(project: Project, floorId: string, sim: SimulationState, opts: BuildOptions): AppNode[] {
   const { selection, highlighted, mode, popoverDeviceId } = opts;
   const connectMode = mode === 'connect';
-  const roomsDraggable = mode === 'select';
+  const roomsDraggable = mode === 'select' && !opts.readOnly;
   const floor = project.floors.find((f) => f.id === floorId);
   const analysis = analyzeProject(project);
   const highlightSet = new Set(highlighted);
@@ -146,8 +151,10 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
       width: b.width,
       height: b.height,
       data: { room, deviceCount },
+      ariaLabel: `Sala ${room.name}`,
       selected: isSelected(selection, 'room', room.id),
       draggable: roomsDraggable,
+      selectable: !opts.readOnly,
       connectable: false,
       zIndex: -1,
     };
@@ -215,7 +222,7 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
       },
       selected: isSelected(selection, 'device', device.id),
       ariaLabel: `${device.name}: ${view?.unavailable ? 'no disponible' : [view?.summary, view?.secondary].filter(Boolean).join(', ')}`,
-      draggable: mode === 'select' || mode === 'room',
+      draggable: !opts.readOnly && (mode === 'select' || mode === 'room'),
       zIndex: popoverDeviceId === device.id ? 5 : 1,
     };
     nodes.push(node);
@@ -254,6 +261,9 @@ export function Canvas() {
   );
   const popoverDeviceId = useUiStore((s) => s.popoverDeviceId);
   const connectFromId = useUiStore((s) => s.connectFromId);
+  const readOnly = useViewStore((s) => s.presentation);
+  const connectionsLayer = useViewStore((s) => s.connectionsLayer);
+  const showMinimap = useViewStore((s) => s.showMinimap);
   const { screenToFlowPosition, fitView } = useReactFlow();
   useCanvasKeyboard();
 
@@ -262,8 +272,9 @@ export function Canvas() {
   const interact = mode === 'interact';
 
   const derived = useMemo(
-    () => buildNodes(project, floorId, { ...useSimulationStore.getState().sim, ...simParts }, { selection, highlighted, mode, popoverDeviceId }),
-    [project, floorId, simParts, selection, highlighted, mode, popoverDeviceId],
+    () =>
+      buildNodes(project, floorId, { ...useSimulationStore.getState().sim, ...simParts }, { selection, highlighted, mode, popoverDeviceId, readOnly }),
+    [project, floorId, simParts, selection, highlighted, mode, popoverDeviceId, readOnly],
   );
   const [nodes, setNodes] = useState<AppNode[]>(derived);
   useEffect(() => setNodes((prev) => mergeNodes(prev, derived)), [derived]);
@@ -273,9 +284,12 @@ export function Canvas() {
   const boxSelecting = useRef(false);
 
   const edges = useMemo<ProtocolEdge[]>(() => {
+    if (connectionsLayer === 'none') return [];
     const onFloor = new Set(project.devices.filter((d) => d.floorId === floorId).map((d) => d.id));
+    const focus = connectionsLayer === 'selected' ? selectedConnectionScope(selection) : null;
     return project.connections
       .filter((c) => onFloor.has(c.sourceId) && onFloor.has(c.targetId))
+      .filter((c) => !focus || focus.has(c.sourceId) || focus.has(c.targetId) || focus.has(c.id))
       .map((c) => ({
         id: c.id,
         source: c.sourceId,
@@ -284,7 +298,7 @@ export function Canvas() {
         data: { protocol: c.protocol },
         selected: isSelected(selection, 'connection', c.id),
       }));
-  }, [project, floorId, selection]);
+  }, [project, floorId, selection, connectionsLayer]);
 
   const usedProtocols = useMemo(() => {
     const set = new Set(project.connections.map((c) => c.protocol));
@@ -446,7 +460,15 @@ export function Canvas() {
   const floorRooms = useMemo(() => project.rooms.filter((r) => r.floorId === floorId), [project.rooms, floorId]);
 
   return (
-    <div id="ha-canvas" className="relative h-full w-full" onDragOver={onDragOver} onDrop={onDrop} aria-label="Lienzo del plano">
+    <div
+      id="ha-canvas"
+      className="relative h-full w-full focus:outline-none"
+      onDragOver={readOnly ? undefined : onDragOver}
+      onDrop={readOnly ? undefined : onDrop}
+      role="region"
+      aria-label="Lienzo del plano"
+      tabIndex={-1}
+    >
       <ReactFlow<AppNode, ProtocolEdge>
         nodes={nodes}
         edges={edges}
@@ -456,28 +478,31 @@ export function Canvas() {
         onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
-        onNodeContextMenu={onNodeContextMenu}
+        onNodeContextMenu={readOnly ? undefined : onNodeContextMenu}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         onPaneContextMenu={(e) => {
           e.preventDefault();
+          if (readOnly) return;
           useUiStore.getState().openContextMenu(null);
           if (floorId) useExtrasStore.getState().openFloorMenu({ floorId, x: e.clientX, y: e.clientY });
         }}
-        nodesDraggable={!interact}
+        nodesDraggable={!interact && !readOnly}
+        nodesConnectable={!readOnly}
+        edgesFocusable={!readOnly}
         nodeDragThreshold={4}
         zoomOnDoubleClick={false}
         onNodeDragStop={onNodeDragStop}
         onSelectionDragStop={onSelectionDragStop}
-        onConnect={onConnect}
+        onConnect={readOnly ? undefined : onConnect}
         connectionMode={ConnectionMode.Loose}
         connectionRadius={40}
         deleteKeyCode={null}
         panOnDrag={mode !== 'room' && mode !== 'wall'}
         selectionOnDrag={false}
-        selectionKeyCode={interact ? null : 'Shift'}
+        selectionKeyCode={interact || readOnly ? null : 'Shift'}
         multiSelectionKeyCode={null}
         onSelectionStart={onSelectionStart}
         onSelectionEnd={onSelectionEnd}
@@ -490,15 +515,20 @@ export function Canvas() {
         <NightMode containerId="ha-canvas" />
         {showCoverage && floor && <CoverageLayer devices={floorDevices} floor={floor} />}
         <Controls showInteractive={false} fitViewOptions={FIT_VIEW_OPTIONS} />
-        <MiniMap pannable zoomable className="!hidden md:!block" />
-        <FlowPanel position="top-left">
-          <CanvasToolbar />
-        </FlowPanel>
+        {showMinimap && <MiniMap pannable zoomable className="!hidden md:!block" ariaLabel="Minimapa del plano" />}
+        <MinimapToggle />
+        <ZoomLevelClass containerId="ha-canvas" />
+        {!readOnly && (
+          <FlowPanel position="top-left">
+            <CanvasToolbar />
+          </FlowPanel>
+        )}
         <FlowPanel position="bottom-center">
           <Legend protocols={usedProtocols.length > 0 ? usedProtocols : undefined} />
         </FlowPanel>
-        {mode === 'room' && floorId && <RoomDrawOverlay floorId={floorId} />}
+        {!readOnly && mode === 'room' && floorId && <RoomDrawOverlay floorId={floorId} />}
         <CanvasExtras floor={floor} rooms={floorRooms} />
+        {!readOnly && <EmptyCanvasGuide />}
         {connectFromId && (
           <FlowPanel position="top-right">
             <p className="rounded-md bg-sky-700/95 px-2 py-1 text-xs font-medium text-white shadow" role="status">
