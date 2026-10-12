@@ -446,7 +446,9 @@ export type SimTimer =
   /** Disparador de estado con `for:` pendiente de confirmar. */
   | { kind: 'state_for'; entityId: string; automationId: Id; triggerIndex: number }
   // Fase 3 (B22): llamada a servicio retrasada por la latencia simulada.
-  | ServiceCallTimer;
+  | ServiceCallTimer
+  // Fase 3 (B11): `for:` de un disparador de estado dentro de wait_for_trigger.
+  | WaitForTimer;
 
 export interface PendingAction {
   id: Id;
@@ -509,6 +511,11 @@ export interface Zone {
   id: Id;
   name: string;
   kind: ZoneKind;
+  /** Centro de la zona (grados). La zona home toma por defecto los de Project.settings. */
+  latitude?: number;
+  longitude?: number;
+  /** Radio en metros (10 a 50 000; por defecto 100 en la zona home). */
+  radius?: number;
 }
 
 export interface ZoneTrigger {
@@ -607,6 +614,27 @@ export interface WaitState {
   continueOnTimeout: boolean;
   /** true si no hay tiempo límite (dueAt queda en WAIT_FOREVER). */
   forever?: boolean;
+  /** Próxima hora (ms) a la que se cumple un disparador de hora o de sol de la espera. */
+  timedAt?: number;
+  /** Fin del tiempo límite (ms), si lo hay. */
+  timeoutAt?: number;
+}
+
+/** Contexto de cada acción pendiente: variables visibles, bloque al que pertenece y vuelta de repeat. */
+export interface PendingStep {
+  scope?: Record<string, EntityStateValue>;
+  block?: number;
+  /** Vuelta siguiente de un repeat (la acción es la continuación del repeat). */
+  repeatIndex?: number;
+}
+
+/** Disparador de estado con `for:` dentro de un wait_for_trigger, pendiente de confirmar. */
+export interface WaitForTimer {
+  kind: 'wait_for';
+  entityId: string;
+  /** Id de la PendingAction de la espera. */
+  waitId: Id;
+  triggerIndex: number;
 }
 
 // B13: entorno (modelo térmico e iluminancia)
@@ -797,6 +825,8 @@ export interface PendingAction {
    * su padre, que es traceOffset - 1).
    */
   traceIndexes?: number[];
+  /** Variables, bloque y vuelta de repeat de cada acción de `actions` (ámbito de variables). */
+  steps?: PendingStep[];
 }
 
 export interface LogEntry {

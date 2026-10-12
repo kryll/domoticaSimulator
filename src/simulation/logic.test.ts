@@ -9,7 +9,6 @@ import {
   aggregateGroupState,
   clearNotifications,
   dismissNotification,
-  expandRepeat,
   groupEntityId,
   markAllNotificationsRead,
   markNotificationRead,
@@ -259,9 +258,6 @@ describe('B11 condiciones y acciones', () => {
     expect(renderTemplate("{{ state_attr('light.luz', 'friendly_name') }}", {}, sim)).toBe('Luz');
   });
 
-  it('expandRepeat sin modo no hace nada', () => {
-    expect(expandRepeat({ type: 'repeat', sequence: [{ type: 'delay', seconds: 1 }] }, () => true)).toEqual([]);
-  });
 
   it('renameEntities renombra dentro de acciones anidadas y esperas', () => {
     const p = home();

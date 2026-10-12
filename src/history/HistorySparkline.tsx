@@ -1,7 +1,8 @@
 import { useId, useMemo, useState } from 'react';
 import type { HistorySample } from '../types';
 import { useSimulationStore } from '../store/simulationStore';
-import { historySeries } from '../simulation/history';
+import { attributeKey, historyAttributes, historySeries } from '../simulation/history';
+import { attributeMeta, displaySamples } from './attributeLabels';
 import { formatSimTime } from '../simulation/clock';
 import { activeSegments, gapSegments, isNumericWithGaps, numericPath } from './sparkline';
 
@@ -18,25 +19,50 @@ function fmt(n: number): string {
   return n.toLocaleString('es-ES', { maximumFractionDigits: 1 });
 }
 
+/** Serie elegida: el estado de la entidad o uno de sus atributos. */
+const STATE = '__estado__';
+
+export type StateMode = 'binary' | 'numeric' | 'none';
+
 /**
- * Minigráfica del historial de una entidad numérica (línea escalonada) o binaria (franjas).
+ * Minigráfica del historial de una entidad: su estado (línea escalonada si es numérico, franjas si
+ * es binario) o uno de sus atributos con historial (brillo, posición, temperatura actual...).
  * Se actualiza como mucho una vez por minuto simulado.
  */
-export function HistorySparkline({ entityId, unit, binary }: { entityId: string; unit?: string; binary?: boolean }) {
+export function HistorySparkline({ entityId, unit: stateUnit, stateMode = 'numeric', binary }: { entityId: string; unit?: string; stateMode?: StateMode; binary?: boolean }) {
+  const mode: StateMode = binary ? 'binary' : stateMode;
   const [win, setWin] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
   const gapId = `gap-${useId().replace(/:/g, '')}`;
-  const samples = useSimulationStore((s) => s.sim.history?.[entityId] ?? EMPTY);
+  const selectId = useId();
+  // Atributos con historial (como texto para no volver a pintar si no cambia la lista).
+  const attrsKey = useSimulationStore((s) => historyAttributes(s.sim, entityId).join('|'));
+  const attributes = useMemo(() => (attrsKey === '' ? [] : attrsKey.split('|')), [attrsKey]);
+  const options = [...(mode === 'none' ? [] : [STATE]), ...attributes];
+  const series_ = picked !== null && options.includes(picked) ? picked : (options[0] ?? STATE);
+  const attribute = series_ === STATE ? undefined : series_;
+  const meta = attribute === undefined ? { label: 'Estado', unit: stateUnit } : attributeMeta(attribute);
+  const unit = meta.unit;
+  const historyKey = attribute === undefined ? entityId : attributeKey(entityId, attribute);
+  const samples = useSimulationStore((s) => s.sim.history?.[historyKey] ?? EMPTY);
   const minute = useSimulationStore((s) => Math.floor(s.sim.now / 60_000));
   const span = WINDOWS[win]?.ms ?? 3_600_000;
   const to = (minute + 1) * 60_000;
   const from = to - span;
-  // `samples` en las dependencias: se recalcula solo cuando cambia el historial de la entidad.
+  // `samples` en las dependencias: se recalcula solo cuando cambia esa serie.
   const series = useMemo(
-    () => (samples.length === 0 ? EMPTY : historySeries(useSimulationStore.getState().sim, entityId, from, to)),
-    [samples, entityId, from, to],
+    () =>
+      samples.length === 0
+        ? EMPTY
+        : displaySamples(
+            historySeries(useSimulationStore.getState().sim, entityId, from, to, attribute),
+            attribute === undefined ? { label: 'Estado' } : attributeMeta(attribute),
+          ),
+    [samples, entityId, from, to, attribute],
   );
-  if (samples.length === 0) return null;
-  const numeric = !binary && isNumericWithGaps(series);
+  if (samples.length === 0 && attributes.length === 0) return null;
+  const binary_ = attribute === undefined ? mode === 'binary' : meta.activeValues !== undefined;
+  const numeric = !binary_ && isNumericWithGaps(series);
   const gaps = gapSegments(series, from, to, W);
   const path = numeric ? numericPath(series, from, to, { width: W, height: H, pad: 3 }) : null;
   const segs = numeric ? [] : activeSegments(series, from, to, W);
@@ -47,9 +73,35 @@ export function HistorySparkline({ entityId, unit, binary }: { entityId: string;
   const fullLabel = gaps.length > 0 ? `${label}, ${gaps.length} ${gaps.length === 1 ? 'tramo' : 'tramos'} sin datos` : label;
 
   return (
-    <figure className="mt-1" aria-label={`Historial de ${entityId}`}>
+    <figure className="mt-1" aria-label={`Historial de ${entityId}${attribute !== undefined ? ` (${meta.label})` : ''}`}>
       <div className="mb-0.5 flex items-center justify-between">
-        <figcaption className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Historial</figcaption>
+        <figcaption className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+          {options.length > 1 ? (
+            <>
+              <label htmlFor={selectId} className="sr-only">
+                Serie del historial
+              </label>
+              <select
+                id={selectId}
+                value={series_}
+                onChange={(e) => setPicked(e.target.value)}
+                className="rounded border border-slate-200 bg-white px-1 py-0 text-[10px] font-medium normal-case text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+              >
+                {options.map((o) => {
+                  const m = o === STATE ? { label: 'Estado', unit: stateUnit } : attributeMeta(o);
+                  return (
+                    <option key={o} value={o}>
+                      {m.label}
+                      {m.unit ? ` (${m.unit})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </>
+          ) : (
+            <>Historial{attribute !== undefined ? ` · ${meta.label}` : ''}</>
+          )}
+        </figcaption>
         <div className="flex gap-0.5" role="group" aria-label="Ventana del historial">
           {WINDOWS.map((w, i) => (
             <button

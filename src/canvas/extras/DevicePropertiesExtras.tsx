@@ -22,10 +22,12 @@ export function DeviceDisplayOptions({ device }: { device: Device }) {
   );
 }
 
-/** Minigráfica de historial para entidades numéricas o binarias (B23). */
+/** Minigráfica de historial (B23): estado numérico o binario y atributos con historial. */
 export function EntityHistory({ entityId, definition }: { entityId: string; definition: EntityDefinition }) {
-  const binary = definition.domain === 'binary_sensor' || definition.domain === 'switch' || definition.domain === 'light';
+  const binary = ['binary_sensor', 'switch', 'light', 'fan', 'lock'].includes(definition.domain);
   const numeric = definition.domain === 'sensor' && (definition.unit !== undefined || typeof definition.initialState === 'number');
-  if (!binary && !numeric) return null;
-  return <HistorySparkline entityId={entityId} unit={definition.unit} binary={binary} />;
+  // Persianas, termostatos y reproductores: su estado es texto; se dibujan sus atributos.
+  const attrsOnly = ['cover', 'climate', 'media_player'].includes(definition.domain);
+  if (!binary && !numeric && !attrsOnly) return null;
+  return <HistorySparkline entityId={entityId} unit={definition.unit} stateMode={binary ? 'binary' : numeric ? 'numeric' : 'none'} />;
 }

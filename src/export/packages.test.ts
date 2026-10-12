@@ -124,8 +124,9 @@ describe('guía y paquete general (revisión)', () => {
   it('personas comentadas, zonas pasivas y sección en la guía', () => {
     expect(general).toMatch(/^# Personas: créalas en Ajustes → Personas/m);
     expect(general).toContain('person.ana');
-    expect(general).toContain('passive: true');
-    expect(general).toContain('TODO');
+    // La demo da coordenadas a Trabajo: zona activa, sin passive ni TODO.
+    expect(general).toContain('name: Trabajo');
+    expect(general).not.toContain('passive: true');
     expect(guide).toContain('## 6. Personas y zonas');
     const root = parseYaml(general);
     expect(isYamlMap(root) && root.person === undefined).toBe(true);

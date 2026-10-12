@@ -22,6 +22,7 @@ import type {
   Trigger,
   RecordedEvent,
   WaitForTriggerAction,
+  PendingStep,
 } from '../types';
 import { catalog } from '../devices/catalog';
 import { entitiesForDevice, entityDomain, initialEntityStates, slugify } from '../devices/entities';
@@ -29,7 +30,6 @@ import { entityCapabilities, findEntityOwner } from '../devices/capabilities';
 import { mapActionEntities, mapTriggerEntities } from '../automations/walk';
 import {
   aggregateGroupState,
-  expandRepeat,
   fase3TriggerMatches,
   findGroupByEntity,
   groupEntities,
@@ -43,7 +43,7 @@ import {
   WAIT_FOREVER,
   type Variables,
 } from './logic';
-import { recordSample, sampleValue } from './history';
+import { ATTRIBUTE_SEPARATOR, recordAttributeSamples, recordSample, sampleValue } from './history';
 import { latencyFor, nextRandom } from './latency';
 import { applyEnvironment } from './thermal';
 import {
@@ -98,8 +98,10 @@ const MAX_TICK_DAYS = 400;
 interface RunCtx {
   automationId?: Id;
   scriptId?: Id;
-  /** Fase 3: variables de la ejecución (acción variables). */
+  /** Fase 3: variables de la ejecución (acción variables y trigger.*). */
   variables?: Variables;
+  /** Fase 3: contexto (ámbito, bloque, vuelta de repeat) de cada acción al reanudar una espera. */
+  steps?: PendingStep[];
   /**
    * Traza que se va rellenando (pasos de primer nivel de una automatización). `offset`: paso de
    * la primera acción; `indexes`: paso de cada acción si no son consecutivas (al reanudar una
@@ -219,7 +221,7 @@ export function findTimer(sim: SimulationState, key: string): PendingAction | un
 }
 
 function cancelStateFor(sim: SimulationState, entityId: string): SimulationState {
-  const keep = sim.pending.filter((p) => !(p.timer?.kind === 'state_for' && p.timer.entityId === entityId));
+  const keep = sim.pending.filter((p) => !((p.timer?.kind === 'state_for' || p.timer?.kind === 'wait_for') && p.timer.entityId === entityId));
   return keep.length === sim.pending.length ? sim : { ...sim, pending: keep };
 }
 
@@ -239,6 +241,7 @@ function renameTimer(timer: SimTimer, mapping: Record<string, string>): SimTimer
     case 'cover_step':
     case 'state_for':
     case 'service_call':
+    case 'wait_for':
       return { ...timer, entityId: ren(timer.entityId) };
   }
 }
@@ -276,6 +279,16 @@ export function renameEntities(sim: SimulationState, mapping: Record<string, str
     pending: sim.pending.map((p) => renamePending(p, map)),
   };
   if (sim.queue) next.queue = sim.queue.map((p) => renamePending(p, map));
+  if (sim.history) {
+    // Series de estado y de atributos («entity#atributo») con el entity_id nuevo.
+    const history: NonNullable<SimulationState['history']> = {};
+    for (const [key, samples] of Object.entries(sim.history)) {
+      const cut = key.indexOf(ATTRIBUTE_SEPARATOR);
+      const id = cut === -1 ? key : key.slice(0, cut);
+      history[(map[id] ?? id) + (cut === -1 ? '' : key.slice(cut))] = samples;
+    }
+    next.history = history;
+  }
   if (sim.offline) {
     const offline: Record<Id, Record<string, EntityState>> = {};
     for (const [deviceId, states] of Object.entries(sim.offline)) offline[deviceId] = renameKey(states, map);
@@ -302,7 +315,9 @@ export function createSimulationState(project: Project, defs: DeviceDefinition[]
     // B23: el historial empieza con el estado inicial de cada entidad.
     history: Object.fromEntries(Object.entries(entities).map(([id, e]) => [id, [{ t: now, v: sampleValue(e.state) }]])),
   };
-  return addLog(sim, 'info', `Simulación preparada con ${Object.keys(sim.entities).length} entidades`);
+  let withAttrs = sim;
+  for (const [id, e] of Object.entries(entities)) withAttrs = recordAttributeSamples(withAttrs, id, e);
+  return addLog(withAttrs, 'info', `Simulación preparada con ${Object.keys(sim.entities).length} entidades`);
 }
 
 // ---------- Condiciones ----------
@@ -345,10 +360,11 @@ function withTrace(ctx: RunCtx, trace: RunCtx['trace']): RunCtx {
   return trace ? { ...ctx, trace } : ctx;
 }
 
-function enqueue(sim: SimulationState, a: Automation, trace: AutomationTrace): SimulationState {
+function enqueue(sim: SimulationState, a: Automation, trace: AutomationTrace, variables?: Variables): SimulationState {
   const logged = addLog(addTrace(sim, trace), 'info', `Automatización «${a.name}» en cola (modo queued): se ejecutará al terminar la anterior`, { automationId: a.id });
   const last = logged.log[logged.log.length - 1];
   const item: PendingAction = { id: `queue-${last?.id ?? 0}`, dueAt: sim.now, automationId: a.id, actions: a.actions, traceId: trace.id, traceOffset: 0 };
+  if (variables && Object.keys(variables).length > 0) item.variables = variables;
   return { ...logged, queue: [...(logged.queue ?? []), item] };
 }
 
@@ -366,7 +382,7 @@ function drainQueue(sim: SimulationState, project: Project, a: Automation, exec:
   const trace = item.traceId === undefined ? undefined : { id: item.traceId, offset: 0 };
   if (trace) started = updateTrace(started, trace.id, (t) => ({ ...t, result: 'ran' }));
   const inner: Exec = { depth: exec.depth + 1, chain: exec.chain };
-  const ctx = withTrace({ automationId: a.id }, trace);
+  const ctx = withTrace(item.variables ? { automationId: a.id, variables: item.variables } : { automationId: a.id }, trace);
   const ran = runActionsInternal(started, project, item.actions, ctx, { depth: inner.depth, chain: [...exec.chain, a.id] });
   return drainQueue(ran, project, a, inner);
 }
@@ -374,6 +390,8 @@ function drainQueue(sim: SimulationState, project: Project, a: Automation, exec:
 interface RunOpts {
   skipConditions?: boolean;
   manual?: boolean;
+  /** Variables trigger.* del disparo. */
+  variables?: Variables;
 }
 
 /** Quita las esperas de una automatización (modo restart) y marca sus pasos como no ejecutados. */
@@ -408,9 +426,8 @@ export function cancelAllRuns(sim: SimulationState, detail = HA_RESTART_CANCEL_D
   const before = userWaits(sim).length + (sim.queue?.length ?? 0);
   const cancelled = cancelWhere(sim, () => true, detail);
   // Los disparadores con `for:` pendientes también se pierden al reiniciar.
-  const result = cancelled.pending.some((p) => p.timer?.kind === 'state_for')
-    ? { ...cancelled, pending: cancelled.pending.filter((p) => p.timer?.kind !== 'state_for') }
-    : cancelled;
+  const dropTimer = (p: PendingAction): boolean => p.timer?.kind === 'state_for' || p.timer?.kind === 'wait_for';
+  const result = cancelled.pending.some(dropTimer) ? { ...cancelled, pending: cancelled.pending.filter((p) => !dropTimer(p)) } : cancelled;
   return before === 0 ? result : addLog(result, 'warning', `${before} espera${before === 1 ? '' : 's'} de automatizaciones o scripts cancelada${before === 1 ? '' : 's'}: Home Assistant se reinició`);
 }
 
@@ -454,12 +471,13 @@ function runAutomationInternal(
     const logged = addLog(sim, 'info', `Automatización «${a.name}»: condiciones no cumplidas`, extra);
     return addTrace(logged, traced('conditions_failed', conditions));
   }
-  if (busy && a.mode === 'queued') return enqueue(sim, a, traced('queued', conditions));
+  if (busy && a.mode === 'queued') return enqueue(sim, a, traced('queued', conditions), opts.variables);
   const trace = traced('ran', conditions);
   let next = addTrace(sim, trace);
   if (a.mode === 'restart') next = cancelRuns(next, a.id);
   next = addLog(next, 'info', `Automatización «${a.name}» disparada (${reason})`, extra);
-  const ctx = withTrace({ automationId: a.id }, traceCtx(trace));
+  const base: RunCtx = opts.variables ? { automationId: a.id, variables: opts.variables } : { automationId: a.id };
+  const ctx = withTrace(base, traceCtx(trace));
   next = runActionsInternal(next, project, a.actions, ctx, { depth: exec.depth + 1, chain: [...exec.chain, a.id] });
   return drainQueue(next, project, a, exec);
 }
@@ -501,10 +519,19 @@ function fireStateTriggers(
       const trigger: TraceTrigger = { index: immediate, description: describeTrigger(t, result) };
       // Personas y zonas por su nombre («cambio de Ana»), no por su entity_id ni su id.
       const who = entityDomain(entityId) === 'person' || entityDomain(entityId) === 'zone' ? friendly(result, entityId) : entityId;
-      result = runAutomationInternal(result, project, a, exec, `cambio de ${who}`, trigger);
+      const variables = triggerVariables(t, entityId, prev, next);
+      result = runAutomationInternal(result, project, a, exec, `cambio de ${who}`, trigger, { variables });
     }
   }
   return result;
+}
+
+/** Variables trigger.* de un disparo por cambio de estado (para las plantillas {{ }}). */
+function triggerVariables(t: Trigger, entityId: string, prev: EntityStateValue | undefined, next: EntityStateValue | undefined): Variables {
+  const vars: Variables = { 'trigger.platform': t.type === 'device_action' ? 'device' : t.type, 'trigger.entity_id': entityId };
+  if (prev !== undefined) vars['trigger.from_state.state'] = normalize(prev);
+  if (next !== undefined) vars['trigger.to_state.state'] = normalize(next);
+  return vars;
 }
 
 /** Si cambia un sensor de temperatura, actualiza current_temperature del climate de su dispositivo. */
@@ -518,7 +545,7 @@ function syncClimate(sim: SimulationState, project: Project, entityId: string, s
     const climate = result.entities[e.entityId];
     if (e.definition.domain !== 'climate' || !climate || climate.state === 'unavailable') continue;
     const updated = updateClimateCurrentTemperature(climate, celsius);
-    result = { ...result, entities: { ...result.entities, [e.entityId]: updated } };
+    result = recordAttributeSamples({ ...result, entities: { ...result.entities, [e.entityId]: updated } }, e.entityId, updated);
     const before = climate.attributes?.hvac_action;
     const after = updated.attributes?.hvac_action;
     if (before !== after && after !== undefined) {
@@ -557,7 +584,7 @@ function applyChange(
   const changed = !sameState(prev.state, merged.state);
   const lastChanged = changed ? sim.now : prev.lastChanged;
   if (lastChanged !== undefined) merged.lastChanged = lastChanged;
-  let result: SimulationState = { ...sim, entities: { ...sim.entities, [entityId]: merged } };
+  let result: SimulationState = recordAttributeSamples({ ...sim, entities: { ...sim.entities, [entityId]: merged } }, entityId, merged);
   if (!changed) return syncPower(syncClimate(result, project, entityId, merged), project, entityId, exec);
   result = recordSample(result, entityId, merged.state);
   if (!exec.quiet) {
@@ -601,13 +628,46 @@ function resumeWaits(
   const matching = sim.pending.filter((p) => p.wait?.triggers.some((t) => stateTriggerMatches(t, entityId, prev, next, project)));
   let result = sim;
   for (const p of matching) {
-    if (!result.pending.some((x) => x.id === p.id)) continue;
-    result = { ...result, pending: result.pending.filter((x) => x.id !== p.id) };
-    const extra = p.automationId === undefined ? {} : { automationId: p.automationId };
-    result = addLog(result, 'info', `Espera completada: ${friendly(result, entityId)} → ${normalize(next)}`, extra);
-    result = continuePending(result, project, p, { depth: exec.depth + 1, chain: exec.chain });
+    if (!result.pending.some((x) => x.id === p.id) || !p.wait) continue;
+    const hits = p.wait.triggers.map((t, i) => ({ t, i })).filter(({ t }) => stateTriggerMatches(t, entityId, prev, next, project));
+    const now = hits.find(({ t }) => !(t.type === 'state' && t.for !== undefined && t.for > 0));
+    if (now) {
+      const vars = triggerVariables(now.t, entityId, prev, next);
+      result = completeWait(result, project, p, `${friendly(result, entityId)} → ${normalize(next)}`, { depth: exec.depth + 1, chain: exec.chain }, vars);
+      continue;
+    }
+    // Disparadores con `for:`: se confirma cuando la entidad lleve ese tiempo en el estado.
+    for (const { t, i } of hits) {
+      if (t.type !== 'state' || !t.for) continue;
+      const timer: SimTimer = { kind: 'wait_for', entityId, waitId: p.id, triggerIndex: i };
+      result = scheduleTimer(result, `waitfor:${p.id}:${i}`, result.now + t.for * SECOND_MS, timer);
+    }
   }
   return result;
+}
+
+/** Termina una espera wait_for_trigger porque se cumplió un disparador y sigue con sus acciones. */
+function completeWait(sim: SimulationState, project: Project, p: PendingAction, what: string, exec: Exec, vars: Variables = {}): SimulationState {
+  const extra = p.automationId === undefined ? {} : { automationId: p.automationId };
+  let result: SimulationState = {
+    ...sim,
+    pending: sim.pending.filter((x) => x.id !== p.id && !(x.timer?.kind === 'wait_for' && x.timer.waitId === p.id)),
+  };
+  result = addLog(result, 'info', `Espera completada: ${what}`, extra);
+  // Como en HA, las variables wait.trigger.* quedan visibles para el resto de acciones.
+  const waitVars: Variables = {};
+  for (const [k, v] of Object.entries(vars)) waitVars[`wait.${k}`] = v;
+  const withVars: PendingAction = Object.keys(waitVars).length === 0 ? p : addScopeToPending(p, waitVars);
+  return continuePending(result, project, withVars, exec);
+}
+
+/** Añade variables al ámbito de todas las acciones restantes de una espera. */
+function addScopeToPending(p: PendingAction, vars: Variables): PendingAction {
+  const steps = p.actions.map((_, i) => {
+    const s = p.steps?.[i] ?? {};
+    return { ...s, scope: { ...(s.scope ?? p.variables ?? {}), ...vars } };
+  });
+  return { ...p, steps };
 }
 
 /**
@@ -926,34 +986,68 @@ export function testTrigger(sim: SimulationState, project: Project, automationId
   return runAutomationInternal(sim, project, a, ROOT, `prueba del disparador: ${description}`, { index: triggerIndex, description }, { manual: true });
 }
 
-function schedule(sim: SimulationState, rest: Action[], seconds: number, ctx: RunCtx): SimulationState {
+function schedule(sim: SimulationState, rest: Step[], seconds: number, ctx: RunCtx): SimulationState {
   const logged = addLog(sim, 'info', `Esperando ${seconds} s`, ctx.automationId === undefined ? {} : { automationId: ctx.automationId });
   const last = logged.log[logged.log.length - 1];
-  const pending: PendingAction = { id: `pending-${last?.id ?? logged.pending.length}`, dueAt: sim.now + seconds * 1000, actions: rest };
+  const pending: PendingAction = { id: `pending-${last?.id ?? logged.pending.length}`, dueAt: sim.now + seconds * 1000, actions: rest.map((s) => s.action) };
   if (ctx.automationId !== undefined) pending.automationId = ctx.automationId;
   if (ctx.scriptId !== undefined) pending.scriptId = ctx.scriptId;
-  if (ctx.variables !== undefined && Object.keys(ctx.variables).length > 0) pending.variables = ctx.variables;
+  setPendingSteps(pending, rest);
   setPendingTrace(pending, ctx);
   return { ...logged, pending: [...logged.pending, pending] };
 }
 
+/**
+ * Próxima vez (ms, estrictamente después de `after`) en que se cumple alguno de los disparadores
+ * de hora o de sol (con su desplazamiento). undefined si no hay ninguno.
+ */
+export function nextTimedOccurrence(triggers: Trigger[], after: number, sun: SunSource): number | undefined {
+  let best: number | undefined;
+  for (const t of triggers) {
+    if (t.type !== 'time' && t.type !== 'sun') continue;
+    for (let day = startOfDay(after) - DAY_MS; day <= startOfDay(after) + 2 * DAY_MS; day += DAY_MS) {
+      const occ = triggerOffsetsMs(t, day, sun);
+      if (occ && occ.at > after && (best === undefined || occ.at < best)) best = occ.at;
+    }
+  }
+  return best;
+}
+
 /** Fase 3 (B11): wait_for_trigger deja el resto de acciones esperando al disparador. */
-function scheduleWait(sim: SimulationState, rest: Action[], a: WaitForTriggerAction, ctx: RunCtx): SimulationState {
+function scheduleWait(sim: SimulationState, project: Project, rest: Step[], a: WaitForTriggerAction, ctx: RunCtx): SimulationState {
   const extra = ctx.automationId === undefined ? {} : { automationId: ctx.automationId };
   const timeout = a.timeoutSeconds !== undefined ? Math.max(0, a.timeoutSeconds) : undefined;
-  const logged = addLog(sim, 'info', timeout === undefined ? 'Esperando a un disparador' : `Esperando a un disparador (máximo ${formatDuration(timeout)})`, extra);
+  const timeoutAt = timeout === undefined ? undefined : sim.now + timeout * SECOND_MS;
+  const timedAt = nextTimedOccurrence(a.triggers, sim.now, sunSourceOf(project));
+  const until = timedAt === undefined ? '' : `; disparador de hora o sol a las ${formatSimTime(timedAt)}`;
+  const logged = addLog(sim, 'info', `${timeout === undefined ? 'Esperando a un disparador' : `Esperando a un disparador (máximo ${formatDuration(timeout)})`}${until}`, extra);
   const last = logged.log[logged.log.length - 1];
+  const wait: PendingAction['wait'] = { triggers: a.triggers, continueOnTimeout: a.continueOnTimeout ?? true };
+  if (timeout === undefined) wait.forever = true;
+  if (timeoutAt !== undefined) wait.timeoutAt = timeoutAt;
+  if (timedAt !== undefined) wait.timedAt = timedAt;
   const pending: PendingAction = {
     id: `wait-${last?.id ?? logged.pending.length}`,
-    dueAt: timeout === undefined ? WAIT_FOREVER : sim.now + timeout * SECOND_MS,
-    actions: rest,
-    wait: { triggers: a.triggers, continueOnTimeout: a.continueOnTimeout ?? true, ...(timeout === undefined ? { forever: true } : {}) },
+    dueAt: Math.min(timeoutAt ?? WAIT_FOREVER, timedAt ?? WAIT_FOREVER),
+    actions: rest.map((s) => s.action),
+    wait,
   };
   if (ctx.automationId !== undefined) pending.automationId = ctx.automationId;
   if (ctx.scriptId !== undefined) pending.scriptId = ctx.scriptId;
-  if (ctx.variables !== undefined && Object.keys(ctx.variables).length > 0) pending.variables = ctx.variables;
+  setPendingSteps(pending, rest);
   setPendingTrace(pending, ctx);
   return { ...logged, pending: [...logged.pending, pending] };
+}
+
+/** Guarda el ámbito, el bloque y la vuelta de repeat de cada acción restante. */
+function setPendingSteps(pending: PendingAction, rest: Step[]): void {
+  const steps: PendingStep[] = rest.map((s) => {
+    const ps: PendingStep = { block: s.block };
+    if (Object.keys(s.scope).length > 0) ps.scope = s.scope;
+    if (s.repeatIndex !== undefined) ps.repeatIndex = s.repeatIndex;
+    return ps;
+  });
+  if (steps.some((s) => s.scope !== undefined || s.block !== 0 || s.repeatIndex !== undefined)) pending.steps = steps;
 }
 
 function allConditions(conds: Condition[], sim: SimulationState, project: Project): boolean {
@@ -966,6 +1060,12 @@ interface Step {
   trace?: number;
   /** Es hija (rama de choose/if, cuerpo de repeat) del paso `trace`. */
   nested?: boolean;
+  /** Variables visibles (ámbito). */
+  scope: Variables;
+  /** Bloque (secuencia) al que pertenece: 0 es el nivel superior. */
+  block: number;
+  /** Continuación de un repeat: número de la siguiente vuelta. */
+  repeatIndex?: number;
 }
 
 /** Guarda en la espera la traza y el paso de cada acción restante. */
@@ -982,12 +1082,20 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
     return addLog(sim, 'error', `Acciones no ejecutadas: posible bucle infinito (límite de ${MAX_DEPTH} niveles)`);
   }
   let result = sim;
+  const baseScope: Variables = ctx.variables ?? {};
   let queue: Step[] = actions.map((action, i) => {
-    if (!ctx.trace) return { action };
+    const meta = ctx.steps?.[i];
+    const step: Step = { action, scope: meta?.scope ?? baseScope, block: meta?.block ?? 0 };
+    if (meta?.repeatIndex !== undefined) step.repeatIndex = meta.repeatIndex;
+    if (!ctx.trace) return step;
     const trace = ctx.trace.indexes?.[i] ?? ctx.trace.offset + i;
-    return { action, trace, nested: trace === ctx.trace.nestedIndex };
+    return { ...step, trace, nested: trace === ctx.trace.nestedIndex || meta?.repeatIndex !== undefined };
   });
-  let vars: Variables = ctx.variables ?? {};
+  let nextBlock = Math.max(0, ...queue.map((q) => q.block)) + 1;
+  const plainCtx: RunCtx = { ...ctx };
+  delete plainCtx.trace;
+  delete plainCtx.steps;
+  delete plainCtx.variables;
   const extra = ctx.automationId === undefined ? {} : { automationId: ctx.automationId };
   const traceId = ctx.trace?.id;
   /** Marca el paso de la traza: los de primer nivel siempre; los anidados solo si fallan. */
@@ -998,9 +1106,14 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
     const patch = r.detail === undefined ? { status, at: r.sim.now } : { status, at: r.sim.now, detail: r.detail };
     return setTraceAction(r.sim, traceId, step.trace, patch);
   };
-  /** Las acciones hijas (ramas de choose/if, cuerpo de repeat) heredan el paso de su padre. */
-  const children = (xs: Action[], parent: Step): Step[] =>
-    xs.map((action) => (parent.trace === undefined ? { action } : { action, trace: parent.trace, nested: true }));
+  /**
+   * Las acciones hijas (ramas de choose/if, cuerpo de repeat) forman un bloque nuevo: heredan el
+   * paso de su padre y su ámbito, y sus variables no salen del bloque (como en HA).
+   */
+  const children = (xs: Action[], parent: Step, scope: Variables = parent.scope): Step[] => {
+    const block = nextBlock++;
+    return xs.map((action) => (parent.trace === undefined ? { action, scope, block } : { action, trace: parent.trace, nested: true, scope, block }));
+  };
   /** Contexto de la espera: el resto de pasos y el paso que queda «esperando». */
   const waitCtx = (c: RunCtx, step: Step, rest: Step[]): RunCtx => {
     if (traceId === undefined || step.trace === undefined) return withoutTrace(c);
@@ -1018,10 +1131,11 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
       return traceStep(outcome(addLog(result, 'error', `Acciones detenidas: ${detail}`, extra), false, detail), { ...step, nested: false });
     }
     const action = step.action;
-    const c: RunCtx = Object.keys(vars).length > 0 ? { ...withoutTrace(ctx), variables: vars } : withoutTrace(ctx);
+    const vars = step.scope;
+    const c: RunCtx = Object.keys(vars).length > 0 ? { ...plainCtx, variables: vars } : plainCtx;
     switch (action.type) {
       case 'delay':
-        return schedule(markWaiting(result, step), rest.map((s) => s.action), Math.max(0, action.seconds), waitCtx(c, step, rest));
+        return schedule(markWaiting(result, step), rest, Math.max(0, action.seconds), waitCtx(c, step, rest));
       case 'service':
         result = traceStep(callServiceCore(result, project, action.entityId, action.service, renderData(action.data, vars, result), c, exec), step);
         break;
@@ -1047,13 +1161,23 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
         break;
       }
       case 'repeat': {
-        const next = expandRepeat(action, (conds) => allConditions(conds, result, project));
-        if (!step.nested) result = traceStep(outcome(result, true, next.length === 0 ? 'ninguna vuelta' : undefined), step);
-        queue = [...children(next, step), ...rest];
+        const index = step.repeatIndex ?? 1;
+        const count = action.count === undefined ? undefined : Math.floor(action.count);
+        let run: boolean;
+        if (count !== undefined) run = index <= count;
+        else if (action.while !== undefined) run = allConditions(action.while, result, project);
+        else if (action.until !== undefined) run = index === 1 || !allConditions(action.until, result, project);
+        else run = false;
+        if (index === 1 && !step.nested) result = traceStep(outcome(result, true, run ? undefined : 'ninguna vuelta'), step);
+        if (!run) break;
+        const repeatVars: Variables = { 'repeat.index': index, 'repeat.first': index === 1 };
+        if (count !== undefined) repeatVars['repeat.last'] = index === count;
+        const again: Step = step.trace === undefined ? { ...step, repeatIndex: index + 1 } : { ...step, nested: true, repeatIndex: index + 1 };
+        queue = [...children(action.sequence, step, { ...step.scope, ...repeatVars }), again, ...rest];
         break;
       }
       case 'wait_for_trigger':
-        return scheduleWait(markWaiting(result, step), rest.map((s) => s.action), action, waitCtx(c, step, rest));
+        return scheduleWait(markWaiting(result, step), project, rest, action, waitCtx(c, step, rest));
       case 'notify': {
         const content: NotificationContent = {
           title: renderTemplate(action.title ?? DEFAULT_NOTIFICATION_TITLE, vars, result),
@@ -1065,7 +1189,8 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
       case 'variables': {
         const rendered: Variables = {};
         for (const [k, v] of Object.entries(action.variables)) rendered[k] = typeof v === 'string' ? renderTemplate(v, vars, result) : v;
-        vars = { ...vars, ...rendered };
+        // Visibles para el resto del mismo bloque (y lo que cuelga de él), no fuera.
+        queue = queue.map((q) => (q.block === step.block ? { ...q, scope: { ...q.scope, ...rendered } } : q));
         result = traceStep(outcome(result, true), step);
         break;
       }
@@ -1164,11 +1289,22 @@ function runTimer(sim: SimulationState, project: Project, timer: SimTimer): Simu
       if (t.to !== undefined && !sameState(current.state, t.to)) return sim;
       if (current.lastChanged !== undefined && sim.now - current.lastChanged < t.for * SECOND_MS) return sim;
       const reason = `${timer.entityId} lleva ${formatDuration(t.for)} en ${normalize(current.state)}`;
-      return runAutomationInternal(sim, project, a, ROOT, reason, { index: timer.triggerIndex, description: describeTrigger(t, sim) });
+      const variables = triggerVariables(t, timer.entityId, undefined, current.state);
+      return runAutomationInternal(sim, project, a, ROOT, reason, { index: timer.triggerIndex, description: describeTrigger(t, sim) }, { variables });
     }
     case 'service_call': {
       const ctx: RunCtx = timer.automationId === undefined ? {} : { automationId: timer.automationId };
       return callServiceCore(sim, project, timer.entityId, timer.service, timer.data, ctx, { ...ROOT, immediate: true }).sim;
+    }
+    case 'wait_for': {
+      const p = sim.pending.find((x) => x.id === timer.waitId);
+      const t = p?.wait?.triggers[timer.triggerIndex];
+      const current = sim.entities[timer.entityId];
+      if (!p || !current || t?.type !== 'state' || t.entityId !== timer.entityId || !t.for) return sim;
+      if (t.to !== undefined && !sameState(current.state, t.to)) return sim;
+      if (current.lastChanged !== undefined && sim.now - current.lastChanged < t.for * SECOND_MS) return sim;
+      const vars = triggerVariables(t, timer.entityId, undefined, current.state);
+      return completeWait(sim, project, p, `${friendly(sim, timer.entityId)} lleva ${formatDuration(t.for)} en ${normalize(current.state)}`, ROOT, vars);
     }
   }
 }
@@ -1183,6 +1319,13 @@ function runPending(sim: SimulationState, project: Project, p: PendingAction): S
   }
   if (p.wait) {
     const extra = p.automationId === undefined ? {} : { automationId: p.automationId };
+    const timedAt = p.wait.timedAt;
+    if (timedAt !== undefined && p.dueAt === timedAt && (p.wait.timeoutAt === undefined || timedAt <= p.wait.timeoutAt)) {
+      // Se cumple un disparador de hora o de sol de la espera, en su momento exacto.
+      const t = p.wait.triggers.find((x) => nextTimedOccurrence([x], timedAt - 1, sunSourceOf(project)) === timedAt);
+      const what = t ? describeTrigger(t, rest) : formatSimTime(timedAt);
+      return completeWait({ ...rest, pending: [...rest.pending, p] }, project, p, what, ROOT, { 'trigger.platform': t?.type ?? 'time' });
+    }
     if (!p.wait.continueOnTimeout) {
       let stopped = addLog(rest, 'warning', 'Tiempo de espera agotado: se detienen las acciones (continue_on_timeout: false)', extra);
       if (p.traceId !== undefined) stopped = setTraceAction(stopped, p.traceId, (p.traceOffset ?? 1) - 1, { status: 'error', detail: 'tiempo de espera agotado' });
@@ -1200,6 +1343,7 @@ function continuePending(sim: SimulationState, project: Project, p: PendingActio
   if (p.automationId !== undefined) ctx.automationId = p.automationId;
   if (p.scriptId !== undefined) ctx.scriptId = p.scriptId;
   if (p.variables !== undefined) ctx.variables = p.variables;
+  if (p.steps !== undefined) ctx.steps = p.steps;
   let ready: SimulationState = sim;
   if (p.traceId !== undefined && p.traceOffset !== undefined) {
     // El paso que esperaba (traceOffset - 1) queda hecho; `at` sigue siendo el inicio de la espera.
@@ -1346,7 +1490,8 @@ export function tick(sim: SimulationState, project: Project, deltaMs: number, op
       const t = event.automation.triggers[event.triggerIndex];
       const ready = advanceEnergy(result, project, defs, event.at);
       const trigger: TraceTrigger = { index: event.triggerIndex, description: t ? describeTrigger(t, ready) : event.reason };
-      result = runAutomationInternal({ ...ready, now: event.at }, project, event.automation, ROOT, event.reason, trigger);
+      const variables: Variables = { 'trigger.platform': t?.type ?? 'time' };
+      result = runAutomationInternal({ ...ready, now: event.at }, project, event.automation, ROOT, event.reason, trigger, { variables });
     }
   }
   return addLog(advanceEnergy(result, project, defs, to), 'error', 'Demasiados eventos en un solo avance del reloj; se han descartado los restantes');

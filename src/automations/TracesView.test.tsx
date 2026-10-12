@@ -69,3 +69,34 @@ describe('Trazas de automatizaciones', () => {
     expect(within(nested).getAllByRole('img', { name: 'No se cumple' }).length).toBeGreaterThan(0);
   });
 });
+
+describe('Trazas de wait_for_trigger', () => {
+  it('muestra «Esperando hasta las 22:00 o al atardecer»', async () => {
+    const p = makeProject({
+      devices: [makeDevice('hue-white-e27', 'l1', 0, 0, 'Luz')],
+      automations: [
+        {
+          id: 'a1',
+          name: 'Espera',
+          enabled: true,
+          mode: 'single',
+          triggers: [{ type: 'time', at: '07:00' }],
+          conditions: [],
+          actions: [
+            { type: 'wait_for_trigger', triggers: [{ type: 'time', at: '22:00' }, { type: 'sun', event: 'sunset' }] },
+            { type: 'service', service: 'light.turn_on', entityId: 'light.luz' },
+          ],
+        },
+      ],
+    });
+    useProjectStore.getState().loadProject(p);
+    useSimulationStore.getState().reset(p);
+    // 10:00: faltan la hora y el atardecer
+    useSimulationStore.setState((s) => ({ sim: { ...s.sim, now: Date.UTC(2026, 9, 12, 10, 0, 0) } }));
+    useUiStore.getState().reset();
+    useUiStore.getState().showAutomation('a1', 'traces');
+    render(<AutomationsPanel />);
+    await userEvent.click(screen.getByRole('button', { name: /Ejecutar acciones/ }));
+    expect(screen.getByLabelText('Detalle de la traza')).toHaveTextContent('Esperando hasta las 22:00 o al atardecer');
+  });
+});

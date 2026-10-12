@@ -9,6 +9,7 @@ import { areaId, automationRoom, entityRoomMap, groupRoom, sceneRoom, scriptRoom
 import { groupEntityId, groupHaName } from '../simulation/logic';
 import { automationToObject, scenesToYaml, scriptsToYaml, toYaml, type YamlMap, type YamlValue } from './yaml';
 import { zipFiles, type ZipEntry } from './zip';
+import { DEFAULT_ZONE_RADIUS, hasCoordinates, zoneConflicts, zoneGeo } from '../simulation/zones';
 
 export interface ExportFile {
   path: string;
@@ -109,29 +110,32 @@ const ZONE_ICONS: Record<ZoneKind, string> = { home: 'mdi:home', work: 'mdi:brie
 
 /**
  * Zonas del proyecto para HA real. zone.home es la ubicación de Home Assistant (no se declara en
- * YAML): se indica en un comentario con la latitud y longitud de los ajustes del proyecto. El resto
- * de zonas se declaran con esas mismas coordenadas como punto de partida (el proyecto no guarda
- * dónde está cada zona) para ajustarlas después.
+ * YAML): se indica en un comentario con sus coordenadas (las de la zona o las de los ajustes). Las
+ * zonas con coordenadas se exportan activas; las que no tienen, con las de la casa como punto de
+ * partida, `passive: true` y un TODO.
  */
 export function zonesSection(project: Pick<Project, 'zones' | 'settings'>): string | undefined {
   const zones = project.zones ?? [];
-  const settings = { ...defaultSettings(), ...project.settings };
-  const others = zones.filter((z) => z.kind !== 'home');
   if (zones.length === 0) return undefined;
-  const coords = `latitud ${settings.latitude}, longitud ${settings.longitude}`;
-  const lines = [`# zone.home: ubicación de Home Assistant (Ajustes → Sistema → General): ${coords}.`];
+  const settings = { ...defaultSettings(), ...project.settings };
+  const home = zones.find((z) => z.kind === 'home');
+  const homeGeo = home ? zoneGeo(home, project) : undefined;
+  const lat = homeGeo?.latitude ?? settings.latitude;
+  const lon = homeGeo?.longitude ?? settings.longitude;
+  const lines = [`# zone.home: ubicación de Home Assistant (Ajustes → Sistema → General): latitud ${lat}, longitud ${lon}${homeGeo && home?.radius !== undefined ? `, radio ${homeGeo.radius} m` : ''}.`];
+  const others = zones.filter((z) => z.kind !== 'home');
   if (others.length === 0) return `${lines.join('\n')}\n`;
-  lines.push('# Coordenadas de partida: las de la casa. Cámbialas por la ubicación real de cada zona.');
-  const items = others.map((z) => ({
-    name: z.name,
-    latitude: settings.latitude,
-    longitude: settings.longitude,
-    radius: 100,
-    icon: ZONE_ICONS[z.kind],
+  const missing = others.filter((z) => !hasCoordinates(z));
+  const items = others.map((z) => {
+    const geo = zoneGeo(z, project);
+    const item: YamlMap = { name: z.name, latitude: geo?.latitude ?? lat, longitude: geo?.longitude ?? lon, radius: z.radius ?? DEFAULT_ZONE_RADIUS, icon: ZONE_ICONS[z.kind] };
     // passive: no cambia el estado de las personas hasta que se ajusten las coordenadas.
-    passive: true,
-  }));
-  lines.push('# TODO: coordenadas reales de cada zona; después quita «passive: true».');
+    if (!geo) item.passive = true;
+    return item;
+  });
+  if (missing.length > 0) {
+    lines.push(`# TODO: coordenadas reales de ${missing.map((z) => `«${z.name}»`).join(', ')} (ahora tienen las de la casa); después quita «passive: true».`);
+  }
   return `${lines.join('\n')}\n${section('zone', toYaml(items))}`;
 }
 
@@ -331,9 +335,16 @@ export function pairingGuide(project: Project, defs: DeviceDefinition[]): string
       lines.push(`${n++}. Instala la app móvil de Home Assistant en el teléfono de cada persona e inicia sesión.`);
       lines.push(`${n++}. En Ajustes → Personas crea a ${people.map((p) => `**${p.name}** (\`person.${slugify(p.name)}\`)`).join(', ')} y asigna a cada una el device_tracker de su app.`);
     }
-    if (zones.length > 0) {
-      lines.push(`${n++}. Ajusta las coordenadas de las zonas de \`packages/general.yaml\` (${zones.map((z) => z.name).join(', ')}) y quita \`passive: true\`, o créalas en Ajustes → Áreas, etiquetas y zonas.`);
+    const missing = zones.filter((z) => !hasCoordinates(z));
+    const located = zones.filter((z) => hasCoordinates(z));
+    if (located.length > 0) {
+      lines.push(`${n++}. Las zonas ${located.map((z) => `**${z.name}**`).join(', ')} ya tienen coordenadas en \`packages/general.yaml\`: comprueba en el mapa de Ajustes → Áreas, etiquetas y zonas que el círculo es correcto.`);
     }
+    if (missing.length > 0) {
+      lines.push(`${n++}. Ajusta las coordenadas de ${missing.map((z) => `**${z.name}**`).join(', ')} en \`packages/general.yaml\` y quita \`passive: true\`, o créalas en Ajustes → Áreas, etiquetas y zonas.`);
+    }
+    const overlaps = zoneConflicts(project).filter((c) => c.kind === 'overlap');
+    for (const c of overlaps) lines.push(`${n++}. Revisa: ${c.message}.`);
     lines.push('');
   }
   return `${lines.join('\n').trimEnd()}\n`;

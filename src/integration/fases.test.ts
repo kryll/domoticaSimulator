@@ -293,7 +293,9 @@ describe('exportación con la sintaxis nueva de HA', () => {
     const p = createDemoProject();
     const general = projectToPackages({ ...p, settings: { ...p.settings!, latitude: 37.3891, longitude: -5.9845 } }, catalog).find((f) => f.path === 'packages/general.yaml');
     expect(general?.content).toContain('zone.home: ubicación de Home Assistant (Ajustes → Sistema → General): latitud 37.3891, longitud -5.9845.');
-    expect(general?.content).toContain('zone:\n  - name: Trabajo\n    latitude: 37.3891\n    longitude: -5.9845\n    radius: 100\n    icon: "mdi:briefcase"');
+    // La zona Trabajo de la demo tiene coordenadas propias: se exporta activa con ellas.
+    expect(general?.content).toContain('zone:\n  - name: Trabajo\n    latitude: 40.453\n    longitude: -3.6883\n    radius: 200\n    icon: "mdi:briefcase"');
+    expect(general?.content).not.toContain('passive: true');
     expect(general?.content).not.toMatch(/\bplatform: (state|zone)\b/);
   });
 });

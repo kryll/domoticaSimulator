@@ -1,7 +1,6 @@
 // Lógica pura de la Fase 3 que usa el motor: personas y zonas, grupos, notificaciones,
 // variables y expansión de acciones de control (choose, if, repeat). No importa engine.ts.
 import type {
-  Action,
   EntityGroup,
   EntityState,
   EntityStateValue,
@@ -275,23 +274,3 @@ export function renderData(
   return changed ? out : data;
 }
 
-// ---------- Expansión de acciones de control ----------
-
-/**
- * Siguiente vuelta de un repeat como lista de acciones a ejecutar a continuación.
- * `check` evalúa una lista de condiciones (todas deben cumplirse).
- */
-export function expandRepeat(a: Extract<Action, { type: 'repeat' }>, check: (conds: NonNullable<typeof a.while>) => boolean): Action[] {
-  if (a.count !== undefined) {
-    const n = Math.floor(a.count);
-    if (n <= 0) return [];
-    return n === 1 ? [...a.sequence] : [...a.sequence, { ...a, count: n - 1 }];
-  }
-  if (a.while !== undefined) return check(a.while) ? [...a.sequence, a] : [];
-  // until (hacer… hasta): la primera vuelta siempre; después, mientras no se cumplan todas.
-  if (a.until !== undefined) {
-    const again: Action = { type: 'repeat', while: [{ type: 'not', conditions: [{ type: 'and', conditions: a.until }] }], sequence: a.sequence };
-    return [...a.sequence, again];
-  }
-  return [];
-}

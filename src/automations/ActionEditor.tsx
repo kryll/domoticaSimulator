@@ -1,10 +1,12 @@
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import type { Action } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { EntityPicker } from './EntityPicker';
 import { ACTION_LABELS, actionFactories } from '../ui/automationOptions';
 import { ListEditor } from './ListEditor';
 import { AdvancedActionEditor } from './advanced/AdvancedActionEditor';
+import { ScopeItem, VariableHelp } from './advanced/VariableHelp';
+import { insertAt } from './advanced/scopeVars';
 import { Field, SelectField, TextField, inputClass } from '../ui/Field';
 import { dataToInput, parseDataInput, parseNumberInput } from '../ui/formValues';
 import { servicesForDomain } from '../simulation/serviceCatalog';
@@ -24,21 +26,35 @@ function sameData(a: ActionData, b: ActionData): boolean {
 function DataField({ value, onChange }: { value: ActionData; onChange: (data: ActionData) => void }) {
   const [draft, setDraft] = useState(() => dataToInput(value));
   const [seen, setSeen] = useState(value);
+  const caret = useRef<[number | null, number | null]>([null, null]);
   if (seen !== value) {
     setSeen(value);
     if (!sameData(parseDataInput(draft), value)) setDraft(dataToInput(value));
   }
+  const apply = (text: string) => {
+    setDraft(text);
+    const parsed = parseDataInput(text);
+    if (!sameData(parsed, value)) onChange(parsed);
+  };
   return (
-    <TextField
-      label="Datos (clave=valor)"
-      placeholder="brightness=200"
-      value={draft}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        const parsed = parseDataInput(e.target.value);
-        if (!sameData(parsed, value)) onChange(parsed);
-      }}
-    />
+    <div className="flex flex-col gap-1">
+      <TextField
+        label="Datos (clave=valor)"
+        placeholder="brightness=200"
+        value={draft}
+        onSelect={(e) => {
+          caret.current = [e.currentTarget.selectionStart, e.currentTarget.selectionEnd];
+        }}
+        onChange={(e) => apply(e.target.value)}
+      />
+      <VariableHelp
+        onInsert={(token) => {
+          const r = insertAt(draft, token, caret.current[0], caret.current[1]);
+          caret.current = [r.caret, r.caret];
+          apply(r.text);
+        }}
+      />
+    </div>
   );
 }
 
@@ -227,7 +243,11 @@ export function ActionListEditor({
       title={title}
       items={actions}
       onChange={onChange}
-      renderItem={(a, update) => <ActionEditor value={a} onChange={update} />}
+      renderItem={(a, update, i) => (
+        <ScopeItem actions={actions} index={i}>
+          <ActionEditor value={a} onChange={update} />
+        </ScopeItem>
+      )}
       addOptions={actionFactories}
       emptyText="Sin acciones."
     />

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type {
   Action,
   ChooseAction,
@@ -20,6 +20,8 @@ import { ActionListEditor } from '../ActionEditor';
 import { TriggerEditor } from '../TriggerEditor';
 import { DurationField } from '../DurationField';
 import { ConditionListEditor } from './ConditionListEditor';
+import { NestedScope, VariableHelp } from './VariableHelp';
+import { insertAt } from './scopeVars';
 
 type AdvancedAction = Extract<Action, { type: keyof typeof ADVANCED_ACTION_LABELS }>;
 
@@ -112,6 +114,10 @@ function WaitEditor({ value, onChange }: { value: WaitForTriggerAction; onChange
           addOptions={triggerFactories}
           emptyText="Añade el disparador que se espera."
         />
+        <p className="text-[11px] text-slate-500">
+          Puedes esperar a una hora («Hora»), al amanecer o al atardecer con desfase («Sol») o a que una entidad cambie y se mantenga un
+          tiempo («Cambio de estado» con «Durante»). Sigue en cuanto se cumple cualquiera.
+        </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-end">
           <DurationField
             label="Tiempo máximo (min:s, vacío = sin límite)"
@@ -200,6 +206,7 @@ function RepeatEditor({ value, onChange }: { value: RepeatAction; onChange: (a: 
 }
 
 function NotifyEditor({ value, onChange }: { value: NotifyAction; onChange: (a: NotifyAction) => void }) {
+  const caret = useRef<[number | null, number | null]>([null, null]);
   return (
     <div>
       <Header type="notify" />
@@ -217,8 +224,17 @@ function NotifyEditor({ value, onChange }: { value: NotifyAction; onChange: (a: 
         rows={2}
         value={value.message}
         placeholder="La puerta lleva {{ minutos }} minutos abierta"
+        onSelect={(e) => {
+          caret.current = [e.currentTarget.selectionStart, e.currentTarget.selectionEnd];
+        }}
         onChange={(e) => onChange({ ...value, message: e.target.value })}
-        hint="Admite variables con {{ nombre }}."
+      />
+      <VariableHelp
+        onInsert={(token) => {
+          const r = insertAt(value.message, token, caret.current[0], caret.current[1]);
+          caret.current = [r.caret, r.caret];
+          onChange({ ...value, message: r.text });
+        }}
       />
     </div>
   );
@@ -256,13 +272,25 @@ function VariablesEditor({ value, onChange }: { value: VariablesAction; onChange
 export function AdvancedActionEditor({ value, onChange }: { value: AdvancedAction; onChange: (a: Action) => void }) {
   switch (value.type) {
     case 'choose':
-      return <ChooseEditor value={value} onChange={onChange} />;
+      return (
+        <NestedScope>
+          <ChooseEditor value={value} onChange={onChange} />
+        </NestedScope>
+      );
     case 'if':
-      return <IfEditor value={value} onChange={onChange} />;
+      return (
+        <NestedScope>
+          <IfEditor value={value} onChange={onChange} />
+        </NestedScope>
+      );
     case 'wait_for_trigger':
       return <WaitEditor value={value} onChange={onChange} />;
     case 'repeat':
-      return <RepeatEditor value={value} onChange={onChange} />;
+      return (
+        <NestedScope repeat>
+          <RepeatEditor value={value} onChange={onChange} />
+        </NestedScope>
+      );
     case 'notify':
       return <NotifyEditor value={value} onChange={onChange} />;
     case 'variables':

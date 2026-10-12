@@ -7,6 +7,7 @@ import { ListEditor } from './ListEditor';
 import { TriggerEditor } from './TriggerEditor';
 import { ConditionEditor } from './ConditionEditor';
 import { ActionListEditor } from './ActionEditor';
+import { AutomationScope } from './advanced/VariableHelp';
 import { AutomationYamlEditor } from './AutomationYamlEditor';
 import { conditionFactories, triggerFactories } from '../ui/automationOptions';
 import { useUiStore, type AutomationView } from '../store/uiStore';
@@ -82,7 +83,9 @@ export function AutomationEditor({ automation, onChange }: AutomationEditorProps
             addOptions={conditionFactories}
             emptyText="Sin condiciones: se ejecuta siempre que se dispare."
           />
-          <ActionListEditor actions={automation.actions} onChange={(actions) => set('actions', actions)} />
+          <AutomationScope triggerTypes={automation.triggers.map((t) => t.type)}>
+            <ActionListEditor actions={automation.actions} onChange={(actions) => set('actions', actions)} />
+          </AutomationScope>
         </div>
       ) : (
         <AutomationYamlEditor automation={automation} onChange={onChange} />

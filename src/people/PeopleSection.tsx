@@ -5,7 +5,8 @@ import { personZoneId } from '../simulation/logic';
 import { Button } from '../ui/Button';
 import { TextField, inputClass } from '../ui/Field';
 import { usePeople, useZones } from './zones';
-import { addPerson, addZone, movePersonTo, removePerson, removeZone, updatePerson } from './personActions';
+import { addPerson, movePersonTo, removePerson, updatePerson } from './personActions';
+import { ZonesSection } from './ZonesSection';
 
 const OUTSIDE = '';
 
@@ -91,20 +92,12 @@ function PersonRow({ person }: { person: Person }) {
 /** Sección «Personas»: alta y baja de personas, su zona y llegadas/salidas rápidas (B9). */
 export function PeopleSection() {
   const people = usePeople();
-  const zones = useZones();
   const [draft, setDraft] = useState('');
-  const [zoneDraft, setZoneDraft] = useState('');
   const create = () => {
     const v = draft.trim();
     if (!v) return;
     addPerson(v);
     setDraft('');
-  };
-  const createZone = () => {
-    const v = zoneDraft.trim();
-    if (!v) return;
-    addZone(v, 'other');
-    setZoneDraft('');
   };
   return (
     <section aria-labelledby="people-title" className="flex flex-col gap-2">
@@ -132,38 +125,7 @@ export function PeopleSection() {
           + Añadir persona
         </Button>
       </form>
-      <details className="text-xs">
-        <summary className="cursor-pointer text-slate-600">Zonas ({zones.length})</summary>
-        <ul className="mt-1 flex flex-wrap gap-1">
-          {zones.map((z) => (
-            <li key={z.id} className="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5">
-              {z.kind === 'home' ? '🏠' : z.kind === 'work' ? '💼' : '📍'} {z.name}
-              {z.kind !== 'home' && (
-                <button
-                  type="button"
-                  className="text-slate-500 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                  aria-label={`Borrar la zona ${z.name}`}
-                  onClick={() => removeZone(z.id)}
-                >
-                  ✕
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-        <form
-          className="mt-1 flex items-end gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            createZone();
-          }}
-        >
-          <TextField label="Nueva zona" value={zoneDraft} placeholder="Trabajo" onChange={(e) => setZoneDraft(e.target.value)} fieldClassName="w-40" />
-          <Button type="submit" size="sm" disabled={!zoneDraft.trim()}>
-            + Añadir zona
-          </Button>
-        </form>
-      </details>
+      <ZonesSection />
     </section>
   );
 }

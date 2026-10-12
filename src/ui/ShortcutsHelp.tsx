@@ -8,7 +8,7 @@ const GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
       ['V', 'Edición: seleccionar y mover'],
       ['U', 'Uso: clic = acción principal'],
       ['C', 'Conectar dispositivos'],
-      ['R', 'Dibujar sala'],
+      ['R', 'Dibujar sala (menú «Dibujar ▾», que también dibuja paredes)'],
       ['P', 'Simular / pausar'],
       ['?', 'Mostrar esta ayuda'],
       ['Esc', 'Cerrar menú, popover o modo'],
@@ -22,6 +22,23 @@ const GROUPS: Array<{ title: string; items: Array<[string, string]> }> = [
       ['Doble clic', 'Control completo'],
       ['Clic derecho', 'Menú contextual'],
       ['Rueda', 'Brillo, posición, volumen o consigna (en Edición, con Mayús)'],
+    ],
+  },
+  {
+    title: 'Barra del lienzo y vistas',
+    items: [
+      ['Capas ▾', 'Cobertura, Clima y Señal (las leyendas se pliegan)'],
+      ['Herramientas ▾', 'Autoconectar y Sugerir router'],
+      ['Plano | Dashboard', 'Cambiar la vista del área central'],
+      ['Diseño · Lógica · Uso', 'Grupos de pestañas del panel inferior («Más ▾» si no caben)'],
+      ['Reloj', 'Fecha, sol de hoy e «Ir a…» una hora'],
+    ],
+  },
+  {
+    title: 'Automatizaciones',
+    items: [
+      ['{{ nombre }}', 'Variables en notificaciones y datos: «+ Insertar variable…» muestra las disponibles (repeat.index, trigger.*)'],
+      ['Esperar a un disparador', 'Hora, sol con desfase o estado con «Durante»; la traza indica «Esperando hasta las …»'],
     ],
   },
   {

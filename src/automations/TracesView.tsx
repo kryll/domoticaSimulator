@@ -9,7 +9,8 @@ import { Badge } from '../ui/Badge';
 import { EmptyState } from '../ui/Panel';
 import { cx } from '../ui/cx';
 import { automationDeviceIds } from '../ui/entityDevices';
-import { ACTION_STATUS, TRACE_RESULT, traceTriggerText } from '../ui/traceLabels';
+import { ACTION_STATUS, TRACE_RESULT, traceTriggerText, waitStatusText } from '../ui/traceLabels';
+import { describeTrigger } from '../simulation/trace';
 
 const EMPTY: AutomationTrace[] = [];
 
@@ -40,8 +41,15 @@ function ConditionTree({ items, label, nested = false }: { items: TraceCondition
   );
 }
 
-function TraceDetail({ trace }: { trace: AutomationTrace }) {
+function TraceDetail({ trace, automation }: { trace: AutomationTrace; automation: Automation }) {
   const result = TRACE_RESULT[trace.result];
+  // Esperas de wait_for_trigger: «Esperando hasta las 22:00», «Esperando al atardecer»…
+  const statusText = (index: number, status: string, fallback: string): string => {
+    const action = automation.actions[index];
+    if (status !== 'waiting' || action?.type !== 'wait_for_trigger') return fallback;
+    const sim = useSimulationStore.getState().sim;
+    return waitStatusText(action.triggers, (t) => describeTrigger(t, sim));
+  };
   return (
     <div className="flex flex-col gap-3 text-sm" aria-label="Detalle de la traza">
       <div className="flex flex-wrap items-center gap-2">
@@ -80,7 +88,7 @@ function TraceDetail({ trace }: { trace: AutomationTrace }) {
                   <span className="min-w-0 flex-1">
                     <span className="block text-slate-800">{a.description}</span>
                     <span className="block text-xs text-slate-600">
-                      {st.label}
+                      {statusText(a.index, a.status, st.label)}
                       {/* En las esperas la hora ya va en el detalle («hasta las …»). */}
                       {a.at !== undefined && a.status !== 'waiting' && ` · ${formatSimTime(a.at, { seconds: true })}`}
                       {a.detail && ` · ${a.detail}`}
@@ -170,7 +178,7 @@ export function TracesView({ automation }: { automation: Automation }) {
               );
             })}
           </ul>
-          {selected && <TraceDetail trace={selected} />}
+          {selected && <TraceDetail trace={selected} automation={automation} />}
         </div>
       )}
     </div>

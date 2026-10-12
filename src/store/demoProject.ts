@@ -254,7 +254,7 @@ export function createDemoProject(): Project {
       { id: 'demo-ana', name: 'Ana', color: '#e11d48' },
       { id: 'demo-luis', name: 'Luis', color: '#2563eb' },
     ],
-    zones: [{ id: 'demo-trabajo', name: 'Trabajo', kind: 'work' }],
+    zones: [{ id: 'demo-trabajo', name: 'Trabajo', kind: 'work', latitude: 40.453, longitude: -3.6883, radius: 200 }],
     groups: [{ id: 'demo-grupo-pb', name: 'Planta baja', domain: 'light', entityIds: ['light.luz_salon', 'light.luz_pasillo'] }],
   };
   return { ...base, connections: suggestConnections(base, catalog) };

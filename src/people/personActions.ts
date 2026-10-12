@@ -4,6 +4,7 @@ import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { newId } from '../ui/ids';
 import { movePerson } from '../simulation/people';
+import { projectZones } from '../simulation/logic';
 import { renameEntityRefs, renamePersonMapping } from '../devices/renaming';
 import { updateWithRename } from '../store/entityRename';
 
@@ -48,4 +49,21 @@ export function removeZone(id: Id): void {
 export function movePersonTo(personId: Id, zoneId: Id): void {
   const project = useProjectStore.getState().project;
   useSimulationStore.setState((s) => ({ sim: movePerson(s.sim, project, personId, zoneId) }));
+}
+
+/** Cambia una zona (coordenadas, radio...). `undefined` en un campo lo quita. */
+export function updateZone(id: Id, patch: Partial<Omit<Zone, 'id'>>): void {
+  useProjectStore.getState().update((p) => {
+    // La zona «Casa» implícita (sin declarar en el proyecto) se declara al editarla.
+    const zones = p.zones?.some((z) => z.id === id) ? (p.zones ?? []) : [...(p.zones ?? []), ...projectZones(p).filter((z) => z.id === id)];
+    return {
+      ...p,
+      zones: zones.map((z) => {
+        if (z.id !== id) return z;
+        const next: Zone = { ...z, ...patch };
+        for (const key of ['latitude', 'longitude', 'radius'] as const) if (key in patch && patch[key] === undefined) delete next[key];
+        return next;
+      }),
+    };
+  });
 }

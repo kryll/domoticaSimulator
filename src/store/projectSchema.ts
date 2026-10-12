@@ -422,7 +422,20 @@ function person(v: unknown, path: string): Person {
 
 function zone(v: unknown, path: string): Zone {
   const o = obj(v, path);
-  return { id: str(o, 'id', path), name: str(o, 'name', path), kind: oneOf(o, 'kind', ['home', 'work', 'other'] as const, path) };
+  const z: Zone = { id: str(o, 'id', path), name: str(o, 'name', path), kind: oneOf(o, 'kind', ['home', 'work', 'other'] as const, path) };
+  const within = (key: string, min: number, max: number): number | undefined => {
+    const v = optNum(o, key, path);
+    if (v !== undefined && (v < min || v > max)) fail(`${path}.${key}`, `debe estar entre ${min} y ${max}`);
+    return v;
+  };
+  const latitude = within('latitude', -90, 90);
+  const longitude = within('longitude', -180, 180);
+  const radius = within('radius', 10, 50_000);
+  if ((latitude === undefined) !== (longitude === undefined)) fail(path, 'debe tener latitud y longitud a la vez');
+  if (latitude !== undefined) z.latitude = latitude;
+  if (longitude !== undefined) z.longitude = longitude;
+  if (radius !== undefined) z.radius = radius;
+  return z;
 }
 
 function environment(v: unknown, path: string): EnvironmentSettings {

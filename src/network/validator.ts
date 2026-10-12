@@ -17,6 +17,7 @@ import { entityIdsForDevice, slugify } from '../devices/entities';
 import { collectEntityRefs, type EntityReference } from '../devices/renaming';
 import { findScene, findScript } from '../simulation/engine';
 import { groupEntityId, peopleEntities, projectZones } from '../simulation/logic';
+import { zoneConflicts } from '../simulation/zones';
 import { missingRequiredFields } from '../simulation/serviceCatalog';
 import { actionConditions, flattenActions } from '../automations/walk';
 import { canConnect } from './connections';
@@ -259,6 +260,15 @@ function serviceDomainRule(ctx: Ctx): ValidationIssue[] {
   return result;
 }
 
+/** Zonas solapadas (aviso) y sin coordenadas (información). */
+function zoneRule(ctx: Ctx): ValidationIssue[] {
+  return zoneConflicts(ctx.project).map((c) =>
+    c.kind === 'overlap'
+      ? issue('warning', 'zona-solapada', c.message, [], c.zoneIds.join(','))
+      : issue('info', 'zona-sin-coordenadas', c.message, [], c.zoneIds[0]),
+  );
+}
+
 function fase3RefsRule(ctx: Ctx): ValidationIssue[] {
   const result: ValidationIssue[] = [];
   const people = new Set((ctx.project.people ?? []).map((p) => p.id));
@@ -373,6 +383,7 @@ export function validateProject(project: Project, defs: DeviceDefinition[]): Val
     ...unknownEntityRule(ctx),
     ...fase3RefsRule(ctx),
     ...serviceDomainRule(ctx),
+    ...zoneRule(ctx),
     ...missingFieldRule(ctx),
     ...duplicateScriptNameRule(ctx),
     ...isolatedInfraRule(ctx),

@@ -1,5 +1,5 @@
 // Textos e iconos de las trazas de automatizaciones.
-import type { AutomationTrace, TraceActionStatus, TraceResult } from '../types';
+import type { AutomationTrace, TraceActionStatus, TraceResult, Trigger } from '../types';
 
 export const TRACE_RESULT: Record<TraceResult, { label: string; icon: string; tone: 'green' | 'amber' | 'red' | 'slate' | 'sky' }> = {
   ran: { label: 'Ejecutada', icon: '✓', tone: 'green' },
@@ -29,4 +29,22 @@ export function lastTraceByAutomation(traces: readonly AutomationTrace[] | undef
     if (!prev || t.startedAt >= prev.startedAt) map.set(t.automationId, t);
   }
   return map;
+}
+
+/** Texto de una espera de wait_for_trigger: «hasta las 22:00», «al atardecer»… */
+function waitPart(t: Trigger, describe: (t: Trigger) => string): string {
+  if (t.type === 'time') return `hasta las ${t.at.slice(0, 5)}`;
+  if (t.type === 'sun') {
+    const event = t.event === 'sunset' ? 'atardecer' : 'amanecer';
+    const off = t.offsetMinutes ?? 0;
+    if (off === 0) return `al ${event}`;
+    return `a ${Math.abs(off)} min ${off < 0 ? 'antes' : 'después'} del ${event}`;
+  }
+  return `a que ${describe(t).replace(/^./, (c) => c.toLowerCase())}`;
+}
+
+/** Estado de una espera en las trazas: «Esperando hasta las 22:00» o «Esperando al atardecer». */
+export function waitStatusText(triggers: Trigger[], describe: (t: Trigger) => string): string {
+  if (triggers.length === 0) return 'Esperando';
+  return `Esperando ${triggers.map((t) => waitPart(t, describe)).join(' o ')}`;
 }
