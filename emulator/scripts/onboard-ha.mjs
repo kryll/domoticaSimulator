@@ -115,6 +115,13 @@ function fillMqttForm(schema) {
   for (const field of Array.isArray(schema) ? schema : []) {
     if (field.type === 'expandable') values[field.name] = fillMqttForm(field.schema);
     else if (field.name in MQTT_VALUES) values[field.name] = MQTT_VALUES[field.name];
+    // Campos obligatorios que no conocemos (p. ej. set_ca_cert, set_client_cert): su valor por defecto.
+    else if ('default' in field) values[field.name] = field.default;
+    else if (field.required && (field.type === 'boolean' || field.selector?.boolean)) values[field.name] = false;
+    else if (field.required && field.selector?.select?.options?.length) {
+      const first = field.selector.select.options[0];
+      values[field.name] = typeof first === 'object' ? first.value : first;
+    }
   }
   if (!Array.isArray(schema) || schema.length === 0) return { ...MQTT_VALUES };
   return values;
