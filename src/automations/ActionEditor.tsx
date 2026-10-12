@@ -10,6 +10,7 @@ import { servicesForDomain } from '../simulation/serviceCatalog';
 import { entityCapabilities } from '../devices/capabilities';
 import { entityDomain } from '../devices/entities';
 import { ServiceDataFields } from './ServiceDataFields';
+import { isNotifyService, notifyAction } from '../simulation/notify';
 import { withRequiredDefaults } from '../ui/serviceFields';
 
 type ActionData = Extract<Action, { type: 'service' }>['data'];
@@ -46,10 +47,12 @@ type ServiceAction = Extract<Action, { type: 'service' }>;
 function ServiceActionEditor({ value, onChange }: { value: ServiceAction; onChange: (a: Action) => void }) {
   const project = useProjectStore((s) => s.project);
   const [advanced, setAdvanced] = useState(false);
-  const domain = value.entityId ? entityDomain(value.entityId) : '';
+  // Las notificaciones no tienen entidad de destino (entityId vacío).
+  const notify = isNotifyService(value.service);
+  const domain = notify ? 'notify' : value.entityId ? entityDomain(value.entityId) : '';
   const services = useMemo(
-    () => (value.entityId ? servicesForDomain(domain, entityCapabilities(project, value.entityId)) : []),
-    [project, domain, value.entityId],
+    () => (notify ? servicesForDomain('notify') : value.entityId ? servicesForDomain(domain, entityCapabilities(project, value.entityId)) : []),
+    [project, domain, value.entityId, notify],
   );
   const info = services.find((s) => s.service === value.service);
   const fieldKeys = new Set(info?.fields.map((f) => f.key) ?? []);
@@ -60,6 +63,21 @@ function ServiceActionEditor({ value, onChange }: { value: ServiceAction; onChan
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {notify ? (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-600">Destino</span>
+            <span className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm text-slate-700">
+              🔔 Notificación de Home Assistant (sin entidad)
+              <button
+                type="button"
+                className="ml-auto text-xs text-sky-700 hover:underline"
+                onClick={() => onChange({ type: 'service', service: '', entityId: '' })}
+              >
+                Usar una entidad
+              </button>
+            </span>
+          </div>
+        ) : (
         <EntityPicker
           label="Entidad"
           value={value.entityId}
@@ -71,6 +89,7 @@ function ServiceActionEditor({ value, onChange }: { value: ServiceAction; onChan
             else onChange({ ...value, entityId, service: first?.service ?? '', data: withRequiredDefaults(first?.fields ?? [], undefined) });
           }}
         />
+        )}
         {showAdvanced ? (
           <ServiceTextField value={value.service} services={services.map((s) => s.service)} onChange={(service) => onChange({ ...value, service })} />
         ) : (
@@ -97,6 +116,11 @@ function ServiceActionEditor({ value, onChange }: { value: ServiceAction; onChan
       )}
       {!showAdvanced && extraKeys.length > 0 && (
         <p className="text-xs text-amber-800">Otros datos: {extraKeys.join(', ')} (edítalos en modo avanzado)</p>
+      )}
+      {!notify && value.entityId === '' && (
+        <button type="button" className="self-start text-xs text-sky-700 hover:underline" onClick={() => onChange(notifyAction(''))}>
+          🔔 Enviar una notificación en su lugar
+        </button>
       )}
       {!custom && services.length > 0 && (
         <label className="flex items-center gap-1.5 self-start text-xs text-slate-600">

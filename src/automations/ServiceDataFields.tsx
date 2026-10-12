@@ -2,7 +2,7 @@ import { useId } from 'react';
 import type { EntityStateValue } from '../types';
 import type { ServiceField } from '../simulation/serviceCatalog';
 import { formatRgb, parseRgb } from '../devices/color';
-import { defaultFieldValue, includeField, missingRequired, type ServiceDataRecord } from '../ui/serviceFields';
+import { defaultFieldValue, includeField, isEmptyValue, missingRequired, type ServiceDataRecord } from '../ui/serviceFields';
 import { inputClass } from '../ui/Field';
 import { cx } from '../ui/cx';
 
@@ -20,11 +20,13 @@ function FieldControl({
   value,
   onChange,
   id,
+  describedBy,
 }: {
   field: ServiceField;
   value: EntityStateValue;
   onChange: (v: EntityStateValue) => void;
   id: string;
+  describedBy?: string;
 }) {
   switch (field.type) {
     case 'percent':
@@ -104,7 +106,16 @@ function FieldControl({
         </select>
       );
     case 'text':
-      return <input id={id} className={inputClass} value={String(value)} onChange={(e) => onChange(e.target.value)} />;
+      return (
+        <input
+          id={id}
+          className={inputClass}
+          value={String(value)}
+          aria-invalid={describedBy ? true : undefined}
+          aria-describedby={describedBy}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
   }
 }
 
@@ -130,10 +141,11 @@ export function ServiceDataFields({ fields, value, onChange }: ServiceDataFields
       {fields.map((field) => {
         const id = `${baseId}-${field.key}`;
         const errorId = `${id}-error`;
-        const current = value?.[field.key];
-        const included = current !== undefined;
         const required = field.required === true;
-        const isMissing = required && !included;
+        // Un texto obligatorio se escribe directamente (no tiene valor por defecto que «rellenar»).
+        const current = value?.[field.key] ?? (required && field.type === 'text' ? '' : undefined);
+        const included = current !== undefined;
+        const isMissing = required && isEmptyValue(current);
         return (
           <div key={field.key} className="grid grid-cols-[8.5rem,1fr] items-center gap-2">
             <span className="flex items-center gap-1.5">
@@ -156,7 +168,14 @@ export function ServiceDataFields({ fields, value, onChange }: ServiceDataFields
               </label>
             </span>
             {included ? (
-              <FieldControl field={field} value={current} id={id} onChange={(v) => emit(includeField(fields, value, field, v))} />
+              <span className="flex flex-col gap-0.5">
+                <FieldControl field={field} value={current} id={id} describedBy={isMissing ? errorId : undefined} onChange={(v) => emit(includeField(fields, value, field, v))} />
+                {isMissing && (
+                  <span id={errorId} role="alert" className="text-xs font-medium text-red-700">
+                    Obligatorio
+                  </span>
+                )}
+              </span>
             ) : isMissing ? (
               <span className="flex items-center gap-2">
                 <span id={errorId} role="alert" className="text-xs font-medium text-red-700">

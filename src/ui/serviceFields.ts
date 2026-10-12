@@ -39,7 +39,12 @@ export function withRequiredDefaults(fields: ServiceField[], data: ServiceDataRe
 
 /** Campos obligatorios sin valor. */
 export function missingRequired(fields: ServiceField[], data: ServiceDataRecord | undefined): ServiceField[] {
-  return fields.filter((f) => f.required && data?.[f.key] === undefined);
+  return fields.filter((f) => f.required && isEmptyValue(data?.[f.key]));
+}
+
+/** Sin valor: ausente o texto vacío. */
+export function isEmptyValue(v: EntityStateValue | undefined): boolean {
+  return v === undefined || (typeof v === 'string' && v.trim() === '');
 }
 
 /** Incluye un campo y quita los de su mismo grupo exclusivo (brillo absoluto o relativo...). */

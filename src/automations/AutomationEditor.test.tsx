@@ -171,3 +171,22 @@ describe('ServiceDataFields', () => {
     expect(actions[0]).toMatchObject({ service: 'climate.set_hvac_mode', data: { hvac_mode: expect.any(String) } });
   });
 });
+
+describe('acción de notificación', () => {
+  it('se crea sin entidad y exige el mensaje', async () => {
+    useProjectStore.getState().loadProject(makeProject());
+    let actions: Action[] = [];
+    function H() {
+      const [list, setList] = useState(actions);
+      return <ActionListEditor actions={list} onChange={(n) => { actions = n; setList(n); }} />;
+    }
+    render(<H />);
+    await userEvent.click(screen.getByRole('button', { name: '+ Notificación' }));
+    expect(actions[0]).toMatchObject({ type: 'service', service: 'notify.persistent_notification', entityId: '' });
+    expect(screen.queryByRole('combobox', { name: 'Entidad' })).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('Obligatorio');
+    await userEvent.type(screen.getByLabelText(/^Mensaje/), 'Hola');
+    expect(actions[0]).toMatchObject({ data: { message: 'Hola' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

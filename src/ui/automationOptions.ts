@@ -1,5 +1,6 @@
 // Etiquetas y plantillas de triggers, condiciones y acciones para los editores.
 import type { Action, Condition, Trigger } from '../types';
+import { notifyAction } from '../simulation/notify';
 
 export const TRIGGER_LABELS: Record<Trigger['type'], string> = {
   state: 'Cambio de estado',
@@ -42,6 +43,7 @@ export const ACTION_LABELS: Record<Action['type'], string> = {
 
 export const actionFactories: Array<{ label: string; create: () => Action }> = [
   { label: ACTION_LABELS.service, create: () => ({ type: 'service', service: '', entityId: '' }) },
+  { label: 'Notificación', create: () => notifyAction('') },
   { label: ACTION_LABELS.scene, create: () => ({ type: 'scene', sceneId: '' }) },
   { label: ACTION_LABELS.script, create: () => ({ type: 'script', scriptId: '' }) },
   { label: ACTION_LABELS.delay, create: () => ({ type: 'delay', seconds: 5 }) },
