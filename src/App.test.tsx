@@ -1,10 +1,16 @@
 import './test/flowMocks';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import { useProjectStore } from './store/projectStore';
 import { useUiStore } from './store/uiStore';
 import { makeProject } from './test/fixtures';
+
+/** Monta la app y espera a su arranque (planta activa, autoguardado) dentro de act. */
+async function renderApp() {
+  render(<App autoLoad={false} />);
+  await act(async () => {});
+}
 
 describe('App', () => {
   beforeEach(() => {
@@ -12,13 +18,13 @@ describe('App', () => {
     useProjectStore.getState().loadProject(makeProject());
   });
 
-  it('muestra el título', () => {
-    render(<App autoLoad={false} />);
+  it('muestra el título', async () => {
+    await renderApp();
     expect(screen.getByRole('heading', { name: 'HA Simulator' })).toBeInTheDocument();
   });
 
   it('muestra las zonas principales y las pestañas agrupadas', async () => {
-    render(<App autoLoad={false} />);
+    await renderApp();
     expect(screen.getByRole('complementary', { name: 'Catálogo de dispositivos' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Propiedades' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Validación/ })).toBeInTheDocument();
@@ -39,7 +45,7 @@ describe('App', () => {
   });
 
   it('añade un dispositivo desde el catálogo y muestra sus propiedades', async () => {
-    render(<App autoLoad={false} />);
+    await renderApp();
     await userEvent.type(screen.getByLabelText('Buscar dispositivo'), 'SNZB-03P');
     const results = screen.getByRole('list', { name: 'Resultados del catálogo' });
     const add = within(results).getAllByRole('button', { name: /^Añadir .* al lienzo$/ })[0];
@@ -55,7 +61,7 @@ describe('App', () => {
   });
 
   it('renombra el proyecto', async () => {
-    render(<App autoLoad={false} />);
+    await renderApp();
     const input = screen.getByLabelText('Nombre del proyecto');
     await userEvent.clear(input);
     await userEvent.type(input, 'Mi casa{Enter}');

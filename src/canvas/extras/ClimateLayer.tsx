@@ -76,7 +76,7 @@ export function ClimateLegend() {
           {outdoor !== undefined && <span className="text-slate-700">Exterior: <strong>{formatTemperature(outdoor)}</strong></span>}
         </>
       ) : (
-        <span className="text-slate-600">Sin datos de clima: activa el modelo térmico en los ajustes de simulación (⚙).</span>
+        <span className="text-slate-600">Sin datos de clima: activa el modelo térmico en ⚙ Ajustes → Simulación.</span>
       )}
     </div>
   );

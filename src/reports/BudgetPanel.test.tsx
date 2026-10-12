@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BudgetPanel } from './BudgetPanel';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
@@ -25,7 +25,7 @@ describe('BudgetPanel', () => {
     expect(screen.getByTestId('budget-total').textContent).not.toBe(before);
     expect(useProjectStore.getState().project.settings?.prices?.['hue-white-e27']).toBe(12.5);
 
-    useProjectStore.getState().undo();
+    act(() => useProjectStore.getState().undo());
     expect(useProjectStore.getState().project.settings?.prices?.['hue-white-e27']).toBeUndefined();
   });
 

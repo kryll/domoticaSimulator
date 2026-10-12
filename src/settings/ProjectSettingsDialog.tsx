@@ -8,7 +8,7 @@ import { Tabs } from '../ui/Tabs';
 import { tabPanelId } from '../ui/ids';
 import { parseMoneyInput } from '../ui/money';
 import { parseNumberInput } from '../ui/formValues';
-import { environmentSettings } from '../simulation/thermal';
+import { ENVIRONMENT_LIMITS, environmentSettings } from '../simulation/thermal';
 import { SPANISH_CITIES, TIME_ZONES } from './cities';
 
 const TABS_PREFIX = 'ajustes';
@@ -81,9 +81,10 @@ export function ProjectSettingsDialog() {
   const failure = inRange(failureRate, 0, 1);
   const seedNum = seed.trim() === '' ? null : inRange(seed, 0, Number.MAX_SAFE_INTEGER);
   const seedOk = seedNum === null || (seedNum !== undefined && Number.isInteger(seedNum));
-  const tauNum = inRange(tau, 0.5, 1000);
-  const windowNum = inRange(windowFactor, 1, 20);
-  const hvacNum = inRange(hvacRate, 0, 10);
+  const L = ENVIRONMENT_LIMITS;
+  const tauNum = inRange(tau, L.tauHours.min, L.tauHours.max);
+  const windowNum = inRange(windowFactor, L.windowFactor.min, L.windowFactor.max);
+  const hvacNum = inRange(hvacRate, L.hvacRatePerHour.min, L.hvacRatePerHour.max);
   const validSim =
     mean !== undefined && amp !== undefined && amp >= 0 && failure !== undefined && seedOk && tauNum !== undefined && windowNum !== undefined && hvacNum !== undefined;
   const validProject = latitude !== undefined && longitude !== undefined && kwh !== undefined;
@@ -271,9 +272,9 @@ export function ProjectSettingsDialog() {
                 invalid={!seedOk}
                 hint={seedOk ? 'Vacío = la de por defecto. Misma semilla, mismos fallos.' : 'Número entero igual o mayor que 0'}
               />
-              <NumberInput label="Inercia térmica (horas)" value={tau} onChange={setTau} invalid={tauNum === undefined} hint="Entre 0,5 y 1000" />
-              <NumberInput label="Pérdidas con ventana abierta (×)" value={windowFactor} onChange={setWindowFactor} invalid={windowNum === undefined} hint="Entre 1 y 20" />
-              <NumberInput label="Potencia de climatización (°C/h)" value={hvacRate} onChange={setHvacRate} invalid={hvacNum === undefined} hint="Entre 0 y 10" />
+              <NumberInput label="Inercia térmica (horas)" value={tau} onChange={setTau} invalid={tauNum === undefined} hint={`Entre ${fmt(L.tauHours.min)} y ${fmt(L.tauHours.max)}`} />
+              <NumberInput label="Pérdidas con ventana abierta (×)" value={windowFactor} onChange={setWindowFactor} invalid={windowNum === undefined} hint={`Entre ${fmt(L.windowFactor.min)} y ${fmt(L.windowFactor.max)}`} />
+              <NumberInput label="Potencia de climatización (°C/h)" value={hvacRate} onChange={setHvacRate} invalid={hvacNum === undefined} hint={`Entre ${fmt(L.hvacRatePerHour.min)} y ${fmt(L.hvacRatePerHour.max)}`} />
             </div>
           </div>
         </div>

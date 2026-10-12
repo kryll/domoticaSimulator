@@ -1,5 +1,6 @@
 // Geometría de la minigráfica de historial (solo interfaz, sin dependencias de React).
 import type { HistorySample } from '../types';
+import { isGap } from '../simulation/history';
 
 export interface SparkBox {
   width: number;
@@ -7,12 +8,7 @@ export interface SparkBox {
   pad: number;
 }
 
-const GAP = new Set(['unavailable', 'unknown']);
-
-/** ¿La muestra es un hueco (entidad no disponible o desconocida)? */
-export function isGap(v: string | number): boolean {
-  return typeof v === 'string' && GAP.has(v.toLowerCase());
-}
+export { isGap } from '../simulation/history';
 
 /** ¿Serie numérica? Números y, como mucho, huecos de no disponible. */
 export function isNumericWithGaps(samples: HistorySample[]): boolean {

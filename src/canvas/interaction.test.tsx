@@ -12,7 +12,7 @@ const LIGHT = 'light.luz_salon';
 const node = (id: string) => screen.getByTestId(`device-node-${id}`);
 const state = (id: string) => useSimulationStore.getState().sim.entities[id];
 
-function setup() {
+async function setup() {
   const project = makeProject({
     devices: [
       makeDevice('hue-white-color-e27', 'luz', 100, 100, 'Luz salón'),
@@ -26,6 +26,8 @@ function setup() {
   useUiStore.getState().setActiveFloor('f1');
   setHoveredDevice(null);
   render(<App autoLoad={false} />);
+  // Espera al arranque de la app (fija la planta activa) dentro de act.
+  await act(async () => {});
 }
 
 describe('interacción directa en el lienzo', () => {
@@ -44,7 +46,7 @@ describe('interacción directa en el lienzo', () => {
     fireEvent.click(node('luz'), { shiftKey: true });
     expect(useUiStore.getState().selection).toEqual({ kind: 'device', id: 'luz' });
     // Mayús+clic no cambia el estado
-    await new Promise((r) => setTimeout(r, 300));
+    await act(() => new Promise((r) => setTimeout(r, 300)));
     expect(state(LIGHT)?.state).toBe('on');
   });
 
@@ -189,13 +191,18 @@ describe('interacción directa en el lienzo', () => {
     expect(screen.getByRole('menuitem', { name: /Añadir a escena/ })).toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('la rueda sobre un sensor sin nivel no se intercepta (deja el zoom)', () => {
+  it('la rueda sobre un sensor sin nivel no se intercepta (deja el zoom)', async () => {
     fireEvent.keyDown(document.body, { key: 'u' });
     const step = vi.spyOn(useSimulationStore.getState(), 'step');
     const ev = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true });
-    node('mov').dispatchEvent(ev);
+    // La rueda que no se intercepta hace zoom: React Flow actualiza el encuadre de forma asíncrona.
+    await act(async () => {
+      node('mov').dispatchEvent(ev);
+    });
     expect(step).not.toHaveBeenCalled();
-    node('luz').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true }));
+    await act(async () => {
+      node('luz').dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true }));
+    });
     expect(step).toHaveBeenCalledWith('luz', -1);
     expect(node('mov')).not.toHaveClass('nowheel');
     expect(node('luz')).toHaveClass('nowheel');
