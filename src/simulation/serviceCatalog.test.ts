@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { applyService } from './services';
-import { isKnownService, serviceName, servicesForDomain } from './serviceCatalog';
+import { catalog } from '../devices/catalog';
+import { project } from '../devices/testUtils';
+import { callService, createSimulationState, runActions } from './engine';
+import { notifyAction } from './notify';
+import { exclusiveConflicts, isKnownService, missingRequiredFields, serviceName, servicesForDomain } from './serviceCatalog';
 
 const DOMAINS = ['light', 'switch', 'fan', 'cover', 'lock', 'climate', 'media_player', 'vacuum', 'camera', 'button'];
 
@@ -60,5 +64,56 @@ describe('serviceCatalog (B6)', () => {
     expect(media.find((s) => s.service === 'media_player.select_source')?.fields[0]).toMatchObject({ type: 'select', options: [{ value: 'TV', label: 'TV' }, { value: 'HDMI 1', label: 'HDMI 1' }] });
     expect(media.find((s) => s.service === 'media_player.volume_mute')?.fields[0]?.type).toBe('boolean');
     expect(servicesForDomain('cover').find((s) => s.service === 'cover.set_cover_position')?.fields[0]).toMatchObject({ key: 'position', type: 'percent' });
+  });
+});
+
+describe('campos excluyentes y obligatorios', () => {
+  it('grupos excluyentes de la luz y detección de conflictos', () => {
+    const fields = servicesForDomain('light', { colorModes: ['color_temp', 'rgb'] })[0]?.fields ?? [];
+    expect(fields.map((f) => [f.key, f.exclusiveGroup])).toEqual([
+      ['brightness_pct', 'brightness'],
+      ['brightness_step_pct', 'brightness'],
+      ['color_temp_kelvin', 'color'],
+      ['rgb_color', 'color'],
+    ]);
+    expect(exclusiveConflicts('light.turn_on', { brightness_pct: 50, brightness_step_pct: 10 }).map((g) => g.map((f) => f.key))).toEqual([['brightness_pct', 'brightness_step_pct']]);
+    expect(exclusiveConflicts('light.turn_on', { brightness_pct: 50, rgb_color: '[1, 2, 3]' })).toEqual([]);
+  });
+
+  it('campos obligatorios', () => {
+    const required = DOMAINS.concat('notify')
+      .flatMap((d) => servicesForDomain(d, { presetModes: ['eco'] }))
+      .flatMap((s) => s.fields.filter((f) => f.required).map((f) => `${s.service}.${f.key}`));
+    expect(required.sort()).toEqual(
+      [
+        'climate.set_hvac_mode.hvac_mode',
+        'climate.set_preset_mode.preset_mode',
+        'media_player.volume_set.volume_level',
+        'media_player.volume_mute.is_volume_muted',
+        'media_player.select_source.source',
+        'media_player.play_media.media_content_id',
+        'media_player.play_media.media_content_type',
+        'cover.set_cover_position.position',
+        'fan.set_percentage.percentage',
+        'camera.snapshot.filename',
+        'camera.record.filename',
+        'notify.persistent_notification.message',
+      ].sort(),
+    );
+    expect(missingRequiredFields('fan.set_percentage', {}).map((f) => f.key)).toEqual(['percentage']);
+    expect(missingRequiredFields('fan.set_percentage', { percentage: 30 })).toEqual([]);
+    expect(missingRequiredFields('desconocido.x', {})).toEqual([]);
+  });
+
+  it('notify.persistent_notification deja una notificación en el registro', () => {
+    const p = project([]);
+    let sim = createSimulationState(p, catalog, 0);
+    sim = callService(sim, p, '', 'notify.persistent_notification', { message: 'Hola', title: 'Aviso' });
+    expect(sim.log.at(-1)).toMatchObject({ level: 'info', message: 'Notificación: Aviso — Hola', notification: { title: 'Aviso', message: 'Hola' } });
+    sim = runActions(sim, p, [notifyAction('Sin título')]);
+    expect(sim.log.at(-1)?.notification).toEqual({ message: 'Sin título' });
+    sim = callService(sim, p, '', 'notify.persistent_notification', {});
+    expect(sim.log.at(-1)).toMatchObject({ level: 'warning', message: 'Servicio notify.persistent_notification: falta el mensaje ("message")' });
+    expect(serviceName('notify.persistent_notification')).toBe('Notificación persistente');
   });
 });

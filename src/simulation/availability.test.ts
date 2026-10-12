@@ -141,10 +141,8 @@ describe('revisión de la fase 2', () => {
       dev('s', 'aqara-door-window', undefined, { integration: 'zha' }),
       dev('plug', 'tapo-p110'),
     ];
-    const connections = [
-      { id: 'c1', sourceId: 'co', targetId: 'ha', protocol: 'zigbee' as const },
-      { id: 'c2', sourceId: 's', targetId: 'r', protocol: 'zigbee' as const },
-    ];
+    // r y s no tienen conexiones dibujadas: usan enlaces implícitos (antes dependía del orden).
+    const connections = [{ id: 'c1', sourceId: 'co', targetId: 'ha', protocol: 'zigbee' as const }];
     const failures = { ...NO_FAILURES, devicesDown: ['co'] };
     const forward = computeUnavailable(project(devices, { connections }), catalog, failures);
     const backward = computeUnavailable(project([...devices].reverse(), { connections }), catalog, failures);
@@ -153,8 +151,7 @@ describe('revisión de la fase 2', () => {
   });
 
   it('HA reiniciando: cancela las esperas y bloquea servicios, escenas y scripts', () => {
-    let sim = motionPulse(start(), demo, 'binary_sensor.movimiento_pasillo_motion');
-    sim = { ...sim, now: Date.UTC(2026, 9, 12, 22) };
+    let sim = createSimulationState(demo, catalog, Date.UTC(2026, 9, 12, 22));
     sim = motionPulse(sim, demo, 'binary_sensor.movimiento_pasillo_motion');
     sim = runScript(sim, demo, 'demo-script-salir');
     expect(userWaits(sim).length).toBe(2);
@@ -162,14 +159,14 @@ describe('revisión de la fase 2', () => {
     expect(userWaits(sim)).toEqual([]);
     expect(sim.pending.some((p) => p.timer)).toBe(true); // el autoapagado del sensor sigue
     expect(lastTrace(sim, 'demo-auto-movimiento')?.actions[1]).toMatchObject({ status: 'skipped', detail: 'cancelada: Home Assistant se reinició' });
-    const before = sim.entities['light.luz_cocina_switch'];
+    const before = sim.entities['switch.luz_cocina_switch'];
     sim = callService(sim, demo, 'switch.luz_cocina_switch', 'turn_on');
-    expect(sim.entities['light.luz_cocina_switch']).toBe(before);
+    expect(sim.entities['switch.luz_cocina_switch']).toBe(before);
     expect(sim.log.at(-1)).toMatchObject({ level: 'warning', message: 'Servicio switch.turn_on no ejecutado: Home Assistant se está reiniciando' });
     sim = activateScene(sim, demo, 'demo-escena-cine');
-    expect(sim.log.at(-1)?.message).toBe('Escena demo-escena-cine no ejecutado: Home Assistant se está reiniciando');
+    expect(sim.log.at(-1)?.message).toBe('Escena Cine no activada: Home Assistant se está reiniciando');
     sim = runScript(sim, demo, 'demo-script-salir');
-    expect(sim.log.at(-1)?.message).toMatch(/^Script demo-script-salir no ejecutado/);
+    expect(sim.log.at(-1)?.message).toBe('Script Salir de casa no ejecutado: Home Assistant se está reiniciando');
     expect(userWaits(sim)).toEqual([]);
     sim = setFailures(sim, demo, catalog, { haRestarting: false });
     expect(callService(sim, demo, 'switch.luz_cocina_switch', 'turn_on').entities['switch.luz_cocina_switch']?.state).toBe('on');

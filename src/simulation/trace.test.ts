@@ -141,3 +141,23 @@ describe('trazas de ejecución (B4)', () => {
     expect(trace?.result).toBe('ran');
   });
 });
+
+describe('revisión de trazas', () => {
+  it('and/or incluyen las subcondiciones con su resultado', () => {
+    const sim = start();
+    const and = explainCondition({ type: 'and', conditions: [{ type: 'time', after: '20:00' }, { type: 'or', conditions: [{ type: 'state', entityId: 'light.luz_salon', state: 'off' }] }] }, sim, MADRID);
+    expect(and.result).toBe(false);
+    expect(and.children?.map((c) => [c.index, c.result])).toEqual([[0, false], [1, true]]);
+    expect(and.children?.[1]?.children?.[0]).toMatchObject({ index: 0, result: true, detail: 'está Apagada' });
+    const p: Project = { ...demo, automations: [{ ...demo.automations[0]!, conditions: [{ type: 'or', conditions: [{ type: 'time', after: '20:00' }] }] }] };
+    const traced = testTrigger(sim, p, 'demo-auto-movimiento', 0);
+    expect(lastTrace(traced, 'demo-auto-movimiento')?.conditions[0]?.children).toHaveLength(1);
+  });
+
+  it('en una espera, at es la hora de inicio y no hay detalle con la hora', () => {
+    let sim = motionPulse(start(at(22)), demo, 'binary_sensor.movimiento_pasillo_motion');
+    expect(lastTrace(sim, 'demo-auto-movimiento')?.actions[1]).toEqual({ index: 1, description: 'Esperar 2 min', status: 'waiting', at: at(22) });
+    sim = tick(sim, demo, 3 * MINUTE_MS);
+    expect(lastTrace(sim, 'demo-auto-movimiento')?.actions[1]).toEqual({ index: 1, description: 'Esperar 2 min', status: 'done', at: at(22) });
+  });
+});

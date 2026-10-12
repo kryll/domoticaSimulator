@@ -1,6 +1,6 @@
 import { useProjectStore } from './projectStore';
 import { startSimulationSync, stopSimulationLoop, useSimulationStore } from './simulationStore';
-import { simNowFromLocalDate } from '../simulation/clock';
+import { simNowForProject } from '../simulation/clock';
 import { makeDevice, makeProject } from '../test/fixtures';
 
 const sim = () => useSimulationStore.getState();
@@ -52,8 +52,8 @@ describe('simulationStore: reloj y renombrado', () => {
     useSimulationStore.getState().reset(project);
   });
 
-  it('arranca con la hora local de pared (simNowFromLocalDate)', () => {
-    const expected = simNowFromLocalDate(new Date());
+  it('arranca con la hora de pared de la zona del proyecto (simNowForProject)', () => {
+    const expected = simNowForProject(useProjectStore.getState().project, new Date());
     expect(Math.abs(useSimulationStore.getState().sim.now - expected)).toBeLessThan(5000);
   });
 

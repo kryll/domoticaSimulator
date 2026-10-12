@@ -110,3 +110,19 @@ describe('baterías', () => {
     expect(sim.entities['climate.termo_climate']?.state).not.toBe('unavailable');
   });
 });
+
+describe('consumo de dispositivos no disponibles', () => {
+  it('sin Internet o desconectado sigue consumiendo su carga; solo el corte de luz la pone a 0', () => {
+    const demo = createDemoProject();
+    const cafetera = demo.devices.find((d) => d.id === 'demo-cafetera');
+    if (!cafetera) throw new Error('demo');
+    let sim = callService(start(demo), demo, 'switch.cafetera', 'turn_on');
+    const on = devicePowerWatts(cafetera, def(cafetera.definitionId), sim);
+    expect(on).toBeCloseTo(1200.5);
+    sim = setFailures(sim, demo, catalog, { internet: true });
+    expect(sim.entities['switch.cafetera']?.state).toBe('unavailable');
+    expect(devicePowerWatts(cafetera, def(cafetera.definitionId), sim)).toBeCloseTo(on);
+    sim = setFailures(sim, demo, catalog, { internet: false, powerOutage: true });
+    expect(devicePowerWatts(cafetera, def(cafetera.definitionId), sim)).toBe(0);
+  });
+});

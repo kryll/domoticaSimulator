@@ -8,6 +8,7 @@ import {
   isTimeBetween,
   minutesOfDay,
   parseHHMM,
+  simNowForProject,
   simNowFromLocalDate,
   startOfDay,
   fixedSunTimes,
@@ -87,6 +88,15 @@ describe('reloj', () => {
       expect(timeZoneOffsetMinutes(Date.UTC(2025, 0, 21), 'Europe/Madrid')).toBe(60);
       expect(timeZoneOffsetMinutes(Date.UTC(2025, 0, 21), 'Zona/Inventada')).toBe(0);
     });
+  });
+
+  it('simNowFromLocalDate con zona horaria y simNowForProject', () => {
+    const real = new Date(Date.UTC(2026, 5, 21, 10, 30, 15, 500)); // 10:30:15 UTC
+    expect(formatSimTime(simNowFromLocalDate(real, 'Europe/Madrid'), { seconds: true })).toBe('12:30:15');
+    expect(formatSimTime(simNowFromLocalDate(real, 'America/New_York'), { seconds: true })).toBe('06:30:15');
+    expect(formatSimTime(simNowForProject({}, real))).toBe('12:30');
+    expect(formatSimTime(simNowForProject({ settings: { latitude: 0, longitude: 0, electricityPriceEurKwh: 0.1, timeZone: 'Asia/Tokyo' } }, real))).toBe('19:30');
+    expect(formatSimDate(simNowForProject({ settings: { latitude: 0, longitude: 0, electricityPriceEurKwh: 0.1, timeZone: 'Pacific/Auckland' } }, real))).toBe('21/06/2026');
   });
 
   it('simNowFromLocalDate conserva la hora de pared local', () => {

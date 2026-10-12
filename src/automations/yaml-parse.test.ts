@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { automationsToYaml, automationToYaml } from '../export/yaml';
-import { sameState } from '../simulation/engine';
+import { automationsToYaml, automationToYaml, scriptsToYaml } from '../export/yaml';
+import { notifyAction } from '../simulation/notify';
+import { scriptKeys } from '../simulation/scriptKeys';
+import { findScript, sameState } from '../simulation/engine';
 import type { Automation, Scene, Script } from '../types';
 import { parseAutomationsYaml, parseAutomationYaml, parseScalar, parseYaml } from './yaml-parse';
 
@@ -286,5 +288,46 @@ actions:
 
   it('una condición de sol sin after ni before es un error', () => {
     expect(() => parseAutomationYaml('triggers:\n  - trigger: time\n    at: "07:00"\nconditions:\n  - condition: sun\n')).toThrow(/after.*before/);
+  });
+});
+
+describe('revisión de la fase 2 (YAML)', () => {
+  it('conserva estados numéricos en to/from/state', () => {
+    const a: Automation = {
+      ...full,
+      triggers: [{ type: 'state', entityId: 'sensor.t', from: 20, to: 21.5 }],
+      conditions: [{ type: 'state', entityId: 'sensor.t', state: 21.5 }],
+      actions: [],
+    };
+    const yaml = automationToYaml(a);
+    expect(yaml).toContain('from: 20\n    to: 21.5');
+    const back = parseAutomationYaml(yaml);
+    expect(back.triggers[0]).toEqual({ type: 'state', entityId: 'sensor.t', from: 20, to: 21.5 });
+    expect(back.conditions[0]).toEqual({ type: 'state', entityId: 'sensor.t', state: 21.5 });
+  });
+
+  it('notify.persistent_notification sin target, ida y vuelta', () => {
+    const a: Automation = { ...full, conditions: [], actions: [notifyAction('Fuga en el baño', 'Aviso')] };
+    const yaml = automationToYaml(a);
+    expect(yaml).toContain('  - action: notify.persistent_notification\n    data:\n      message: Fuga en el baño\n      title: Aviso\n');
+    expect(yaml).not.toContain('entity_id: ""');
+    expect(parseAutomationYaml(yaml).actions).toEqual(a.actions);
+  });
+
+  it('scripts con el mismo nombre: claves iguales en scripts.yaml, acciones y findScript', () => {
+    const dup: Script[] = [
+      { id: 'x1', name: 'Salir', sequence: [] },
+      { id: 'x2', name: 'Salir', sequence: [] },
+    ];
+    expect(scriptKeys(dup)).toEqual({ x1: 'salir', x2: 'salir_2' });
+    const text = scriptsToYaml({ scripts: dup } as never);
+    expect(text).toContain('salir:\n');
+    expect(text).toContain('salir_2:\n');
+    const a: Automation = { ...full, conditions: [], actions: [{ type: 'script', scriptId: 'x2' }] };
+    const yaml = automationToYaml(a, { scenes, scripts: dup });
+    expect(yaml).toContain('entity_id: script.salir_2');
+    expect(parseAutomationYaml(yaml, { scenes, scripts: dup }).actions).toEqual([{ type: 'script', scriptId: 'x2' }]);
+    expect(findScript({ scripts: dup }, 'script.salir_2')?.id).toBe('x2');
+    expect(findScript({ scripts: dup }, 'script.salir')?.id).toBe('x1');
   });
 });

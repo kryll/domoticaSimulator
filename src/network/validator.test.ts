@@ -206,3 +206,49 @@ describe('validateProject', () => {
     expect(dup[0]?.message).toContain('switch.enchufe_switch');
   });
 });
+
+describe('reglas de la revisión de la fase 2', () => {
+  it('servicio-falta-campo: acción sin un campo obligatorio (error)', () => {
+    const p = project([dev('ha', 'ha-green')], {
+      automations: [
+        {
+          id: 'a',
+          name: 'Volumen',
+          enabled: true,
+          mode: 'single',
+          triggers: [{ type: 'time', at: '08:00' }],
+          conditions: [],
+          actions: [
+            { type: 'service', service: 'media_player.volume_set', entityId: 'media_player.x' },
+            { type: 'service', service: 'cover.set_cover_position', entityId: 'cover.x', data: { position: 30 } },
+            { type: 'service', service: 'notify.persistent_notification', entityId: '', data: { title: 'Sin mensaje' } },
+          ],
+        },
+      ],
+      scripts: [{ id: 's', name: 'Modo', sequence: [{ type: 'service', service: 'climate.set_hvac_mode', entityId: 'climate.x' }] }],
+    });
+    const issues = validateProject(p, catalog).filter((i) => i.code === 'servicio-falta-campo');
+    expect(issues.map((i) => i.message)).toEqual([
+      'La automatización «Volumen» llama a media_player.volume_set (acción 1) sin el campo obligatorio «Volumen» (volume_level)',
+      'La automatización «Volumen» llama a notify.persistent_notification (acción 3) sin el campo obligatorio «Mensaje» (message)',
+      'El script «Modo» llama a climate.set_hvac_mode (acción 1) sin el campo obligatorio «Modo» (hvac_mode)',
+    ]);
+    expect(issues.every((i) => i.severity === 'error')).toBe(true);
+    // notify sin entidad no cuenta como entidad desconocida
+    expect(validateProject(p, catalog).some((i) => i.code === 'entidad-desconocida' && i.message.includes('(vacía)'))).toBe(false);
+  });
+
+  it('nombre-script-duplicado (warning)', () => {
+    const p = project([dev('ha', 'ha-green')], {
+      scripts: [
+        { id: 's1', name: 'Salir de casa', sequence: [] },
+        { id: 's2', name: 'Salir de Casa', sequence: [] },
+        { id: 's3', name: 'Otro', sequence: [] },
+      ],
+    });
+    const issues = validateProject(p, catalog).filter((i) => i.code === 'nombre-script-duplicado');
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ severity: 'warning' });
+    expect(issues[0]?.message).toContain('script.salir_de_casa, script.salir_de_casa_2');
+  });
+});

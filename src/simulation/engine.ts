@@ -360,7 +360,7 @@ export function cancelAllRuns(sim: SimulationState, detail = HA_RESTART_CANCEL_D
 /** Aviso y bloqueo mientras Home Assistant se reinicia. */
 function haBlocked(sim: SimulationState, what: string, extra: { entityId?: string; automationId?: Id } = {}): SimulationState | undefined {
   if (!isHaRestarting(sim)) return undefined;
-  return addLog(sim, 'warning', `${what} no ejecutado: Home Assistant se está reiniciando`, extra);
+  return addLog(sim, 'warning', `${what}: Home Assistant se está reiniciando`, extra);
 }
 
 function runAutomationInternal(
@@ -547,7 +547,7 @@ interface Outcome {
 const outcome = (sim: SimulationState, ok: boolean, detail?: string): Outcome => (detail === undefined ? { sim, ok } : { sim, ok, detail });
 
 function activateSceneInternal(sim: SimulationState, project: Project, sceneId: Id, exec: Exec): Outcome {
-  const blocked = haBlocked(sim, `Escena ${sceneId}`);
+  const blocked = haBlocked(sim, `Escena ${findScene(project, sceneId)?.name ?? sceneId} no activada`);
   if (blocked) return outcome(blocked, false, 'Home Assistant se está reiniciando');
   const scene = findScene(project, sceneId);
   if (!scene) return outcome(addLog(sim, 'warning', `Escena desconocida: ${sceneId}`), false, 'escena desconocida');
@@ -571,7 +571,7 @@ function activateSceneInternal(sim: SimulationState, project: Project, sceneId: 
 }
 
 function runScriptInternal(sim: SimulationState, project: Project, scriptId: Id, ctx: RunCtx, exec: Exec): Outcome {
-  const blocked = haBlocked(sim, `Script ${scriptId}`);
+  const blocked = haBlocked(sim, `Script ${findScript(project, scriptId)?.name ?? scriptId} no ejecutado`);
   if (blocked) return outcome(blocked, false, 'Home Assistant se está reiniciando');
   const script = findScript(project, scriptId);
   if (!script) return outcome(addLog(sim, 'warning', `Script desconocido: ${scriptId}`), false, 'script desconocido');
@@ -611,7 +611,7 @@ function callServiceCore(
   ctx: RunCtx,
   exec: Exec,
 ): Outcome {
-  const blocked = haBlocked(sim, `Servicio ${fullService}`, { entityId });
+  const blocked = haBlocked(sim, `Servicio ${fullService.includes('.') ? fullService : `${entityDomain(entityId)}.${fullService}`} no ejecutado`, { entityId });
   if (blocked) return outcome(blocked, false, 'Home Assistant se está reiniciando');
   if (isNotifyService(fullService)) return sendNotification(sim, fullService, data, ctx);
   const target = entityDomain(entityId);
