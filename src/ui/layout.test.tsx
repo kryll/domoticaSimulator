@@ -29,9 +29,9 @@ describe('barra superior compacta', () => {
     render(<TopBar />);
     expect(screen.queryByText('Archivo ▾')).toBeNull();
     await userEvent.click(screen.getByLabelText('Proyecto'));
-    expect(screen.getByRole('button', { name: 'Compartir enlace…' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Configuración HA (packages .zip)…' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Escenarios de fallo…/ }));
+    expect(screen.getByRole('menuitem', { name: 'Compartir enlace…' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Configuración HA (packages .zip)…' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: /Escenarios de fallo…/ }));
     expect(await screen.findByRole('dialog', { name: 'Escenarios de fallo' })).toBeInTheDocument();
   });
 
@@ -40,8 +40,8 @@ describe('barra superior compacta', () => {
     render(<TopBar />);
     expect(screen.getByText(/Archivo/)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Ajustes/ })).toHaveLength(1);
-    await userEvent.click(screen.getByText(/Archivo/));
-    await userEvent.click(screen.getByRole('button', { name: 'Compartir enlace…' }));
+    await userEvent.click(screen.getByRole('button', { name: /Archivo/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Compartir enlace…' }));
     expect(useExtrasStore.getState().dialog).toBe('share');
   });
 });

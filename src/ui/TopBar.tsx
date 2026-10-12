@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { createDemoProject, createEmptyProject, exportProjectJson, importProjectJson } from '../store/persistence';
@@ -49,43 +49,119 @@ function ProjectName() {
   );
 }
 
-function Menu({ label, children, align = 'right', ariaLabel }: { label: ReactNode; children: ReactNode; align?: 'left' | 'right'; ariaLabel?: string }) {
-  const ref = useRef<HTMLDetailsElement>(null);
+interface MenuProps {
+  label: ReactNode;
+  children: ReactNode;
+  align?: 'left' | 'right';
+  ariaLabel?: string;
+}
+
+/** Elementos del menú que pueden recibir el foco (en orden). */
+function menuItems(menu: HTMLElement | null): HTMLElement[] {
+  return [...(menu?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? [])];
+}
+
+/**
+ * Menú de la barra superior (patrón «menu button» de WAI-ARIA): role=menu, flechas, Inicio/Fin,
+ * Escape cierra y devuelve el foco al botón, Tab cierra.
+ */
+export function Menu({ label, children, align = 'right', ariaLabel }: MenuProps) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const focusOnOpen = useRef<'first' | 'last'>('first');
+
   useEffect(() => {
+    if (!open) return;
+    const items = menuItems(menuRef.current);
+    (focusOnOpen.current === 'last' ? items[items.length - 1] : items[0])?.focus();
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) ref.current.open = false;
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, []);
+  }, [open]);
+
+  const close = (focusButton = true) => {
+    setOpen(false);
+    if (focusButton) buttonRef.current?.focus();
+  };
+
+  const onMenuKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const items = menuItems(menuRef.current);
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    if (e.key === 'ArrowDown') items[(i + 1) % items.length]?.focus();
+    else if (e.key === 'ArrowUp') items[(i - 1 + items.length) % items.length]?.focus();
+    else if (e.key === 'Home') items[0]?.focus();
+    else if (e.key === 'End') items[items.length - 1]?.focus();
+    else if (e.key === 'Escape') close();
+    else if (e.key === 'Tab') {
+      close(false);
+      return;
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   return (
-    <details ref={ref} className="relative">
-      <summary
+    <div ref={wrapRef} className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
         aria-label={ariaLabel}
-        className="flex cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-      >
-        {label} ▾
-      </summary>
-      <div
-        className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} z-40 mt-1 flex max-h-[80vh] w-64 flex-col overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg`}
         onClick={() => {
-          if (ref.current) ref.current.open = false;
+          focusOnOpen.current = 'first';
+          setOpen((o) => !o);
         }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            focusOnOpen.current = e.key === 'ArrowUp' ? 'last' : 'first';
+            setOpen(true);
+          }
+        }}
+        className="flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
       >
-        {children}
-      </div>
-    </details>
+        {label} <span aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div
+          ref={menuRef}
+          id={menuId}
+          role="menu"
+          aria-label={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
+          onKeyDown={onMenuKey}
+          className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} z-40 mt-1 flex max-h-[80vh] w-64 flex-col overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg`}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('[role="menuitem"]')) close(false);
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 
 function MenuHeader({ children }: { children: ReactNode }) {
-  return <div className="px-3 pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</div>;
+  return (
+    <div role="presentation" className="px-3 pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+      {children}
+    </div>
+  );
 }
 
 function MenuItem({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
+      role="menuitem"
+      tabIndex={-1}
       onClick={onClick}
       className="px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50 focus:bg-sky-50 focus:outline-none"
     >
