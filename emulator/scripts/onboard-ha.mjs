@@ -105,6 +105,21 @@ function wsCall(token, command) {
   });
 }
 
+// Rellena el formulario del flujo de MQTT a partir del esquema que devuelve HA. Las versiones
+// recientes agrupan campos en secciones (tipo «expandable», p. ej. «other_settings») que son
+// obligatorias como objeto aunque vayan vacías.
+const MQTT_VALUES = { broker: MQTT_HOST, port: MQTT_PORT, username: 'homeassistant', password: MQTT_PASSWORD };
+
+function fillMqttForm(schema) {
+  const values = {};
+  for (const field of Array.isArray(schema) ? schema : []) {
+    if (field.type === 'expandable') values[field.name] = fillMqttForm(field.schema);
+    else if (field.name in MQTT_VALUES) values[field.name] = MQTT_VALUES[field.name];
+  }
+  if (!Array.isArray(schema) || schema.length === 0) return { ...MQTT_VALUES };
+  return values;
+}
+
 async function existingToken() {
   try {
     const token = (await readFile(TOKEN_FILE, 'utf8')).trim();
@@ -137,7 +152,7 @@ async function ensureMqtt(token) {
     if (step.type === 'menu') input = { next_step_id: step.menu_options.includes('broker') ? 'broker' : step.menu_options[0] };
     else if (step.type === 'form') {
       if (step.errors && Object.keys(step.errors).length > 0) throw new Error(`MQTT: ${JSON.stringify(step.errors)}`);
-      input = { broker: MQTT_HOST, port: MQTT_PORT, username: 'homeassistant', password: MQTT_PASSWORD };
+      input = fillMqttForm(step.data_schema);
     } else throw new Error(`Paso inesperado del flujo de MQTT: ${JSON.stringify(step)}`);
     step = (await http('POST', `/api/config/config_entries/flow/${step.flow_id}`, { token, json: input })).data;
   }
