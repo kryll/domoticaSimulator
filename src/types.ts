@@ -25,7 +25,18 @@ export type Integration =
   | 'shelly'
   | 'hue'
   | 'google_cast'
-  | 'alexa_media_player';
+  | 'alexa_media_player'
+  // Integraciones oficiales de HA añadidas por el backend: sin ellas no se pueden
+  // modelar con realismo Z-Wave, sensores BLE de Xiaomi, Netatmo, Reolink, Sonos,
+  // televisores Samsung/LG y enchufes TP-Link.
+  | 'zwave_js'
+  | 'xiaomi_ble'
+  | 'netatmo'
+  | 'reolink'
+  | 'sonos'
+  | 'samsungtv'
+  | 'webostv'
+  | 'tplink';
 
 export type Brand =
   | 'IKEA'
@@ -42,7 +53,9 @@ export type Brand =
   | 'Reolink'
   | 'Sonos'
   | 'Samsung'
-  | 'LG';
+  | 'LG'
+  // Nabu Casa: servidor Home Assistant Green y antenas Connect (Z-Wave/Zigbee).
+  | 'Home Assistant';
 
 /** Forma en que Home Assistant habla con la integración. */
 export type IotClass = 'local_push' | 'local_polling' | 'cloud_push' | 'cloud_polling';

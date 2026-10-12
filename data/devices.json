@@ -1,1 +1,2532 @@
-[]
+[
+  {
+    "id": "ha-green",
+    "brand": "Home Assistant",
+    "model": "Home Assistant Green",
+    "name": "Servidor Home Assistant Green",
+    "category": "server",
+    "protocols": [
+      "ethernet"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "ha_server",
+    "power": "mains",
+    "entities": [],
+    "icon": "server"
+  },
+  {
+    "id": "ha-connect-zwa-2",
+    "brand": "Home Assistant",
+    "model": "Connect ZWA-2",
+    "name": "Antena Z-Wave Connect ZWA-2",
+    "category": "hub",
+    "protocols": [
+      "zwave"
+    ],
+    "integrations": [
+      "zwave_js"
+    ],
+    "iotClass": "local_push",
+    "role": "coordinator",
+    "power": "usb",
+    "rangeMeters": 40,
+    "entities": [],
+    "icon": "usb"
+  },
+  {
+    "id": "sonoff-zbdongle-p",
+    "brand": "SONOFF",
+    "model": "ZBDongle-P",
+    "name": "SONOFF Zigbee 3.0 USB Dongle Plus",
+    "category": "hub",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "coordinator",
+    "power": "usb",
+    "rangeMeters": 30,
+    "entities": [],
+    "icon": "usb"
+  },
+  {
+    "id": "sonoff-zbdongle-e",
+    "brand": "SONOFF",
+    "model": "ZBDongle-E",
+    "name": "SONOFF Zigbee 3.0 USB Dongle Plus-E",
+    "category": "hub",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "coordinator",
+    "power": "usb",
+    "rangeMeters": 30,
+    "entities": [],
+    "icon": "usb"
+  },
+  {
+    "id": "hue-bridge-v2",
+    "brand": "Philips Hue",
+    "model": "BSB002",
+    "name": "Philips Hue Bridge",
+    "category": "hub",
+    "protocols": [
+      "zigbee",
+      "ethernet"
+    ],
+    "integrations": [
+      "hue"
+    ],
+    "iotClass": "local_push",
+    "role": "hub",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [],
+    "icon": "hub"
+  },
+  {
+    "id": "aqara-hub-m2",
+    "brand": "Aqara",
+    "model": "HM2-G01",
+    "name": "Aqara Hub M2",
+    "category": "hub",
+    "protocols": [
+      "zigbee",
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "homekit_device",
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "hub",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [],
+    "icon": "hub"
+  },
+  {
+    "id": "aqara-hub-m3",
+    "brand": "Aqara",
+    "model": "HM-G01D",
+    "name": "Aqara Hub M3 (border router Thread)",
+    "category": "hub",
+    "protocols": [
+      "zigbee",
+      "thread",
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "matter",
+      "homekit_device"
+    ],
+    "iotClass": "local_push",
+    "role": "hub",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [],
+    "icon": "hub"
+  },
+  {
+    "id": "ikea-dirigera",
+    "brand": "IKEA",
+    "model": "DIRIGERA",
+    "name": "IKEA DIRIGERA (hub + border router Thread)",
+    "category": "hub",
+    "protocols": [
+      "zigbee",
+      "thread",
+      "ethernet"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "hub",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [],
+    "icon": "hub"
+  },
+  {
+    "id": "google-nest-hub-2",
+    "brand": "Google",
+    "model": "Nest Hub (2.ª gen.)",
+    "name": "Google Nest Hub 2.ª gen.",
+    "category": "display",
+    "protocols": [
+      "wifi",
+      "thread"
+    ],
+    "integrations": [
+      "google_cast"
+    ],
+    "iotClass": "local_push",
+    "role": "border_router",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Pantalla",
+        "initialState": "off"
+      }
+    ],
+    "icon": "display"
+  },
+  {
+    "id": "amazon-echo-4",
+    "brand": "Amazon",
+    "model": "Echo (4.ª gen.)",
+    "name": "Amazon Echo 4.ª gen.",
+    "category": "speaker",
+    "protocols": [
+      "wifi",
+      "thread"
+    ],
+    "integrations": [
+      "alexa_media_player"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "border_router",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle"
+      }
+    ],
+    "icon": "speaker"
+  },
+  {
+    "id": "tplink-deco-x50",
+    "brand": "TP-Link",
+    "model": "Deco X50",
+    "name": "TP-Link Deco X50 (Wi-Fi 6 mesh)",
+    "category": "network",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "tplink"
+    ],
+    "iotClass": "local_polling",
+    "role": "access_point",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [],
+    "icon": "router"
+  },
+  {
+    "id": "sonoff-rf-bridge-r2",
+    "brand": "SONOFF",
+    "model": "RF BridgeR2",
+    "name": "SONOFF RF Bridge 433",
+    "category": "hub",
+    "protocols": [
+      "rf433",
+      "wifi"
+    ],
+    "integrations": [
+      "ewelink"
+    ],
+    "iotClass": "cloud_push",
+    "role": "hub",
+    "power": "usb",
+    "rangeMeters": 40,
+    "entities": [],
+    "icon": "hub"
+  },
+  {
+    "id": "hue-white-color-e27",
+    "brand": "Philips Hue",
+    "model": "LCA001",
+    "name": "Hue White and Color Ambiance E27",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "hue",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "Philips Hue",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off"
+      }
+    ],
+    "icon": "bulb"
+  },
+  {
+    "id": "hue-white-e27",
+    "brand": "Philips Hue",
+    "model": "LWA017",
+    "name": "Hue White E27",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "hue",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "Philips Hue",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off"
+      }
+    ],
+    "icon": "bulb"
+  },
+  {
+    "id": "hue-lightstrip-plus",
+    "brand": "Philips Hue",
+    "model": "LCL001",
+    "name": "Hue Lightstrip Plus",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "hue",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "Philips Hue",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off"
+      }
+    ],
+    "icon": "bulb"
+  },
+  {
+    "id": "ikea-tradfri-e27-ws",
+    "brand": "IKEA",
+    "model": "LED1836G9",
+    "name": "IKEA TRÅDFRI E27 806 lm",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "IKEA",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off"
+      }
+    ],
+    "icon": "bulb"
+  },
+  {
+    "id": "ikea-tradfri-gu10",
+    "brand": "IKEA",
+    "model": "LED1837R5",
+    "name": "IKEA TRÅDFRI GU10 400 lm",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "IKEA",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off"
+      }
+    ],
+    "icon": "bulb"
+  },
+  {
+    "id": "ikea-kajplats-e27",
+    "brand": "IKEA",
+    "model": "KAJPLATS E27",
+    "name": "IKEA KAJPLATS E27 (Matter sobre Thread)",
+    "category": "light",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off"
+      }
+    ],
+    "icon": "bulb"
+  },
+  {
+    "id": "aqara-bulb-t1",
+    "brand": "Aqara",
+    "model": "ZNLDP13LM",
+    "name": "Aqara LED Bulb T1",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "Aqara",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off"
+      }
+    ],
+    "icon": "bulb"
+  },
+  {
+    "id": "xiaomi-led-bulb-essential",
+    "brand": "Xiaomi",
+    "model": "MJDPL01YL",
+    "name": "Xiaomi Mi Smart LED Bulb Essential",
+    "category": "light",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "xiaomi_miio"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off"
+      }
+    ],
+    "icon": "bulb"
+  },
+  {
+    "id": "tuya-wifi-bulb-e27",
+    "brand": "Tuya",
+    "model": "Smart LED Bulb E27 RGBCW",
+    "name": "Bombilla Tuya Wi-Fi E27",
+    "category": "light",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "tuya"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off"
+      }
+    ],
+    "icon": "bulb"
+  },
+  {
+    "id": "sonoff-s26r2",
+    "brand": "SONOFF",
+    "model": "S26R2TPF",
+    "name": "SONOFF S26 R2 (Wi-Fi)",
+    "category": "plug",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "ewelink"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off"
+      }
+    ],
+    "icon": "plug"
+  },
+  {
+    "id": "sonoff-s26r2zb",
+    "brand": "SONOFF",
+    "model": "S26R2ZB",
+    "name": "SONOFF S26 R2 Zigbee",
+    "category": "plug",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off"
+      }
+    ],
+    "icon": "plug"
+  },
+  {
+    "id": "shelly-plug-s-gen3",
+    "brand": "Shelly",
+    "model": "S3PL-00112EU",
+    "name": "Shelly Plug S Gen3",
+    "category": "plug",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug"
+  },
+  {
+    "id": "tapo-p110",
+    "brand": "TP-Link",
+    "model": "Tapo P110",
+    "name": "TP-Link Tapo P110",
+    "category": "plug",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "tplink"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug"
+  },
+  {
+    "id": "tapo-p110m",
+    "brand": "TP-Link",
+    "model": "Tapo P110M",
+    "name": "TP-Link Tapo P110M (Matter)",
+    "category": "plug",
+    "protocols": [
+      "matter",
+      "wifi"
+    ],
+    "integrations": [
+      "matter",
+      "tplink"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug"
+  },
+  {
+    "id": "tuya-wifi-plug",
+    "brand": "Tuya",
+    "model": "Smart Plug 16A (Wi-Fi)",
+    "name": "Enchufe Tuya Wi-Fi 16 A",
+    "category": "plug",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "tuya"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug"
+  },
+  {
+    "id": "ikea-tretakt",
+    "brand": "IKEA",
+    "model": "E2204",
+    "name": "IKEA TRETAKT",
+    "category": "plug",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "IKEA",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off"
+      }
+    ],
+    "icon": "plug"
+  },
+  {
+    "id": "ikea-grillplats",
+    "brand": "IKEA",
+    "model": "GRILLPLATS",
+    "name": "IKEA GRILLPLATS (Matter sobre Thread)",
+    "category": "plug",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug"
+  },
+  {
+    "id": "aqara-smart-plug-eu",
+    "brand": "Aqara",
+    "model": "SP-EUC01",
+    "name": "Aqara Smart Plug EU",
+    "category": "plug",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "Aqara",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug"
+  },
+  {
+    "id": "shelly-1pm-gen3",
+    "brand": "Shelly",
+    "model": "S3SW-001P16EU",
+    "name": "Shelly 1PM Gen3",
+    "category": "switch",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch"
+  },
+  {
+    "id": "shelly-2pm-gen3",
+    "brand": "Shelly",
+    "model": "S3SW-002P16EU",
+    "name": "Shelly 2PM Gen3",
+    "category": "switch",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch_0",
+        "domain": "switch",
+        "name": "Canal 1",
+        "initialState": "off"
+      },
+      {
+        "key": "switch_1",
+        "domain": "switch",
+        "name": "Canal 2",
+        "initialState": "off"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch"
+  },
+  {
+    "id": "shelly-wave-1pm",
+    "brand": "Shelly",
+    "model": "Qubino Wave 1PM Mini",
+    "name": "Shelly Qubino Wave 1PM Mini (Z-Wave)",
+    "category": "switch",
+    "protocols": [
+      "zwave"
+    ],
+    "integrations": [
+      "zwave_js"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch"
+  },
+  {
+    "id": "sonoff-minir4",
+    "brand": "SONOFF",
+    "model": "MINIR4",
+    "name": "SONOFF MINI R4 Extreme",
+    "category": "switch",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "ewelink"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off"
+      }
+    ],
+    "icon": "switch"
+  },
+  {
+    "id": "sonoff-zbminil2",
+    "brand": "SONOFF",
+    "model": "ZBMINIL2",
+    "name": "SONOFF ZBMINI L2 (sin neutro)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off"
+      }
+    ],
+    "icon": "switch"
+  },
+  {
+    "id": "aqara-wireless-mini-switch",
+    "brand": "Aqara",
+    "model": "WXKG11LM",
+    "name": "Aqara Wireless Mini Switch",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "action",
+        "domain": "sensor",
+        "name": "Acción",
+        "initialState": "none"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "button"
+  },
+  {
+    "id": "ikea-styrbar",
+    "brand": "IKEA",
+    "model": "E2001/E2002",
+    "name": "IKEA STYRBAR mando",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "IKEA",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "action",
+        "domain": "sensor",
+        "name": "Acción",
+        "initialState": "none"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "button"
+  },
+  {
+    "id": "aqara-door-window",
+    "brand": "Aqara",
+    "model": "MCCGQ11LM",
+    "name": "Aqara Door and Window Sensor",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "door",
+        "domain": "binary_sensor",
+        "name": "Puerta",
+        "deviceClass": "door",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "aqara-motion-p1",
+    "brand": "Aqara",
+    "model": "RTCGQ14LM",
+    "name": "Aqara Motion Sensor P1",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      },
+      {
+        "key": "illuminance",
+        "domain": "sensor",
+        "name": "Iluminancia",
+        "deviceClass": "illuminance",
+        "unit": "lx",
+        "initialState": 120
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "aqara-temp-hum",
+    "brand": "Aqara",
+    "model": "WSDCGQ11LM",
+    "name": "Aqara Temperature and Humidity Sensor",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 21.5
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      },
+      {
+        "key": "pressure",
+        "domain": "sensor",
+        "name": "Presión",
+        "deviceClass": "pressure",
+        "unit": "hPa",
+        "initialState": 1013
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "aqara-water-leak",
+    "brand": "Aqara",
+    "model": "SJCGQ11LM",
+    "name": "Aqara Water Leak Sensor",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "leak",
+        "domain": "binary_sensor",
+        "name": "Fuga de agua",
+        "deviceClass": "moisture",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "aqara-door-p2",
+    "brand": "Aqara",
+    "model": "DW-S02D",
+    "name": "Aqara Door and Window Sensor P2 (Thread)",
+    "category": "sensor",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "door",
+        "domain": "binary_sensor",
+        "name": "Puerta",
+        "deviceClass": "door",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "aqara-motion-p2",
+    "brand": "Aqara",
+    "model": "ML-S02D",
+    "name": "Aqara Motion and Light Sensor P2 (Thread)",
+    "category": "sensor",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      },
+      {
+        "key": "illuminance",
+        "domain": "sensor",
+        "name": "Iluminancia",
+        "deviceClass": "illuminance",
+        "unit": "lx",
+        "initialState": 120
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "aqara-fp2",
+    "brand": "Aqara",
+    "model": "PS-S02D",
+    "name": "Aqara Presence Sensor FP2",
+    "category": "sensor",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "homekit_device"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "usb",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "occupancy",
+        "domain": "binary_sensor",
+        "name": "Presencia",
+        "deviceClass": "occupancy",
+        "initialState": "off"
+      },
+      {
+        "key": "illuminance",
+        "domain": "sensor",
+        "name": "Iluminancia",
+        "deviceClass": "illuminance",
+        "unit": "lx",
+        "initialState": 120
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "ikea-vallhorn",
+    "brand": "IKEA",
+    "model": "E2134",
+    "name": "IKEA VALLHORN sensor de movimiento",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "IKEA",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      },
+      {
+        "key": "illuminance",
+        "domain": "sensor",
+        "name": "Iluminancia",
+        "deviceClass": "illuminance",
+        "unit": "lx",
+        "initialState": 120
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "ikea-parasoll",
+    "brand": "IKEA",
+    "model": "E2013",
+    "name": "IKEA PARASOLL sensor de puerta",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "IKEA",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "door",
+        "domain": "binary_sensor",
+        "name": "Puerta",
+        "deviceClass": "door",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "ikea-myggspray",
+    "brand": "IKEA",
+    "model": "MYGGSPRAY",
+    "name": "IKEA MYGGSPRAY (Matter sobre Thread)",
+    "category": "sensor",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      },
+      {
+        "key": "illuminance",
+        "domain": "sensor",
+        "name": "Iluminancia",
+        "deviceClass": "illuminance",
+        "unit": "lx",
+        "initialState": 120
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "sonoff-snzb-02d",
+    "brand": "SONOFF",
+    "model": "SNZB-02D",
+    "name": "SONOFF SNZB-02D temperatura y humedad",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 21.5
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "sonoff-snzb-03p",
+    "brand": "SONOFF",
+    "model": "SNZB-03P",
+    "name": "SONOFF SNZB-03P movimiento",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "sonoff-snzb-04p",
+    "brand": "SONOFF",
+    "model": "SNZB-04P",
+    "name": "SONOFF SNZB-04P puerta",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "door",
+        "domain": "binary_sensor",
+        "name": "Puerta",
+        "deviceClass": "door",
+        "initialState": "off"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "sonoff-dw2-rf",
+    "brand": "SONOFF",
+    "model": "DW2-RF",
+    "name": "SONOFF DW2 sensor de puerta RF 433",
+    "category": "sensor",
+    "protocols": [
+      "rf433"
+    ],
+    "integrations": [
+      "ewelink"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "door",
+        "domain": "binary_sensor",
+        "name": "Puerta",
+        "deviceClass": "door",
+        "initialState": "off"
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "sonoff-pir3-rf",
+    "brand": "SONOFF",
+    "model": "PIR3-RF",
+    "name": "SONOFF PIR3 movimiento RF 433",
+    "category": "sensor",
+    "protocols": [
+      "rf433"
+    ],
+    "integrations": [
+      "ewelink"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "xiaomi-lywsd03mmc",
+    "brand": "Xiaomi",
+    "model": "LYWSD03MMC",
+    "name": "Xiaomi Mi Temperature and Humidity Monitor 2",
+    "category": "sensor",
+    "protocols": [
+      "ble"
+    ],
+    "integrations": [
+      "xiaomi_ble"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 10,
+    "entities": [
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 21.5
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "shelly-ht-gen3",
+    "brand": "Shelly",
+    "model": "S3SN-0U12A",
+    "name": "Shelly H&T Gen3",
+    "category": "sensor",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 21.5
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "netatmo-weather-station",
+    "brand": "Netatmo",
+    "model": "NWS01",
+    "name": "Netatmo Estación meteorológica",
+    "category": "sensor",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "netatmo",
+      "homekit_device"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "usb",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 21.5
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      },
+      {
+        "key": "co2",
+        "domain": "sensor",
+        "name": "CO₂",
+        "deviceClass": "carbon_dioxide",
+        "unit": "ppm",
+        "initialState": 450
+      },
+      {
+        "key": "pressure",
+        "domain": "sensor",
+        "name": "Presión",
+        "deviceClass": "pressure",
+        "unit": "hPa",
+        "initialState": 1013
+      },
+      {
+        "key": "noise",
+        "domain": "sensor",
+        "name": "Ruido",
+        "deviceClass": "sound_pressure",
+        "unit": "dB",
+        "initialState": 35
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "tuya-zigbee-temp-hum",
+    "brand": "Tuya",
+    "model": "TS0201",
+    "name": "Sensor Tuya Zigbee temperatura y humedad",
+    "category": "sensor",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 21.5
+      },
+      {
+        "key": "humidity",
+        "domain": "sensor",
+        "name": "Humedad",
+        "deviceClass": "humidity",
+        "unit": "%",
+        "initialState": 50
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "sensor"
+  },
+  {
+    "id": "netatmo-thermostat",
+    "brand": "Netatmo",
+    "model": "NTH01",
+    "name": "Netatmo Termostato Inteligente",
+    "category": "climate",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "netatmo",
+      "homekit_device"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "climate",
+        "domain": "climate",
+        "name": "Termostato",
+        "initialState": "heat"
+      },
+      {
+        "key": "temperature",
+        "domain": "sensor",
+        "name": "Temperatura",
+        "deviceClass": "temperature",
+        "unit": "°C",
+        "initialState": 20
+      }
+    ],
+    "icon": "thermostat"
+  },
+  {
+    "id": "aqara-thermostat-e1",
+    "brand": "Aqara",
+    "model": "SRTS-A01",
+    "name": "Aqara Radiator Thermostat E1",
+    "category": "climate",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "climate",
+        "domain": "climate",
+        "name": "Termostato",
+        "initialState": "heat"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "thermostat"
+  },
+  {
+    "id": "tuya-zigbee-trv",
+    "brand": "Tuya",
+    "model": "TS0601 TRV",
+    "name": "Válvula termostática Tuya Zigbee",
+    "category": "climate",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "climate",
+        "domain": "climate",
+        "name": "Termostato",
+        "initialState": "heat"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "thermostat"
+  },
+  {
+    "id": "shelly-wave-shutter",
+    "brand": "Shelly",
+    "model": "Qubino Wave Shutter",
+    "name": "Shelly Qubino Wave Shutter (Z-Wave)",
+    "category": "cover",
+    "protocols": [
+      "zwave"
+    ],
+    "integrations": [
+      "zwave_js"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "cover",
+        "domain": "cover",
+        "name": "Persiana",
+        "deviceClass": "shutter",
+        "initialState": "closed"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      }
+    ],
+    "icon": "blinds"
+  },
+  {
+    "id": "shelly-2pm-gen3-cover",
+    "brand": "Shelly",
+    "model": "S3SW-002P16EU (modo persiana)",
+    "name": "Shelly 2PM Gen3 en modo persiana",
+    "category": "cover",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "cover",
+        "domain": "cover",
+        "name": "Persiana",
+        "deviceClass": "shutter",
+        "initialState": "closed"
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      }
+    ],
+    "icon": "blinds"
+  },
+  {
+    "id": "aqara-roller-shade-e1",
+    "brand": "Aqara",
+    "model": "ZNJLBL01LM",
+    "name": "Aqara Roller Shade Driver E1",
+    "category": "cover",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "cover",
+        "domain": "cover",
+        "name": "Estor",
+        "deviceClass": "shutter",
+        "initialState": "closed"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "blinds"
+  },
+  {
+    "id": "ikea-fyrtur",
+    "brand": "IKEA",
+    "model": "E1757",
+    "name": "IKEA FYRTUR estor opaco",
+    "category": "cover",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "IKEA",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "cover",
+        "domain": "cover",
+        "name": "Estor",
+        "deviceClass": "shutter",
+        "initialState": "closed"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "blinds"
+  },
+  {
+    "id": "aqara-u200",
+    "brand": "Aqara",
+    "model": "ZNMS20LM",
+    "name": "Aqara Smart Lock U200 (Matter sobre Thread)",
+    "category": "lock",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "lock",
+        "domain": "lock",
+        "name": "Cerradura",
+        "initialState": "locked"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "lock"
+  },
+  {
+    "id": "aqara-u100",
+    "brand": "Aqara",
+    "model": "ZNMS19LM",
+    "name": "Aqara Smart Lock U100",
+    "category": "lock",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "lock",
+        "domain": "lock",
+        "name": "Cerradura",
+        "initialState": "locked"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "lock"
+  },
+  {
+    "id": "reolink-rlc-810a",
+    "brand": "Reolink",
+    "model": "RLC-810A",
+    "name": "Reolink RLC-810A (PoE)",
+    "category": "camera",
+    "protocols": [
+      "ethernet"
+    ],
+    "integrations": [
+      "reolink"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "poe",
+    "entities": [
+      {
+        "key": "camera",
+        "domain": "camera",
+        "name": "Cámara",
+        "initialState": "idle"
+      },
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      }
+    ],
+    "icon": "camera"
+  },
+  {
+    "id": "reolink-e1-zoom",
+    "brand": "Reolink",
+    "model": "E1 Zoom",
+    "name": "Reolink E1 Zoom (Wi-Fi)",
+    "category": "camera",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "reolink"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "camera",
+        "domain": "camera",
+        "name": "Cámara",
+        "initialState": "idle"
+      },
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      }
+    ],
+    "icon": "camera"
+  },
+  {
+    "id": "reolink-video-doorbell",
+    "brand": "Reolink",
+    "model": "Video Doorbell PoE",
+    "name": "Reolink Video Doorbell PoE",
+    "category": "camera",
+    "protocols": [
+      "ethernet"
+    ],
+    "integrations": [
+      "reolink"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "poe",
+    "entities": [
+      {
+        "key": "camera",
+        "domain": "camera",
+        "name": "Cámara",
+        "initialState": "idle"
+      },
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off"
+      },
+      {
+        "key": "visitor",
+        "domain": "binary_sensor",
+        "name": "Timbre",
+        "deviceClass": "occupancy",
+        "initialState": "off"
+      }
+    ],
+    "icon": "camera"
+  },
+  {
+    "id": "sonos-era-100",
+    "brand": "Sonos",
+    "model": "Era 100",
+    "name": "Sonos Era 100",
+    "category": "speaker",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "sonos"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle"
+      }
+    ],
+    "icon": "speaker"
+  },
+  {
+    "id": "sonos-beam-gen2",
+    "brand": "Sonos",
+    "model": "Beam (Gen 2)",
+    "name": "Sonos Beam (Gen 2)",
+    "category": "speaker",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "sonos"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Barra de sonido",
+        "initialState": "idle"
+      }
+    ],
+    "icon": "speaker"
+  },
+  {
+    "id": "google-nest-mini",
+    "brand": "Google",
+    "model": "Nest Mini (2.ª gen.)",
+    "name": "Google Nest Mini",
+    "category": "speaker",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "google_cast"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle"
+      }
+    ],
+    "icon": "speaker"
+  },
+  {
+    "id": "google-chromecast-gtv",
+    "brand": "Google",
+    "model": "Chromecast con Google TV",
+    "name": "Chromecast con Google TV",
+    "category": "display",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "google_cast"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "usb",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Chromecast",
+        "initialState": "off"
+      }
+    ],
+    "icon": "tv"
+  },
+  {
+    "id": "amazon-echo-dot-5",
+    "brand": "Amazon",
+    "model": "Echo Dot (5.ª gen.)",
+    "name": "Amazon Echo Dot 5.ª gen.",
+    "category": "speaker",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "alexa_media_player"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle"
+      }
+    ],
+    "icon": "speaker"
+  },
+  {
+    "id": "samsung-qled-q80",
+    "brand": "Samsung",
+    "model": "QE55Q80C",
+    "name": "Samsung QLED Q80C 55\"",
+    "category": "display",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "samsungtv"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Televisor",
+        "initialState": "off"
+      }
+    ],
+    "icon": "tv"
+  },
+  {
+    "id": "lg-oled-c3",
+    "brand": "LG",
+    "model": "OLED55C3",
+    "name": "LG OLED evo C3 55\"",
+    "category": "display",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "webostv"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Televisor",
+        "initialState": "off"
+      }
+    ],
+    "icon": "tv"
+  },
+  {
+    "id": "xiaomi-robot-vacuum-s10",
+    "brand": "Xiaomi",
+    "model": "B106GL",
+    "name": "Xiaomi Robot Vacuum S10",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "xiaomi_miio"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked"
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "vacuum"
+  }
+]
