@@ -3,7 +3,7 @@ import type { Zone } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { DEFAULT_ZONE_RADIUS, MAX_ZONE_RADIUS, MIN_ZONE_RADIUS, zoneConflicts, zoneGeo, type ZoneConflict } from '../simulation/zones';
 import { Button } from '../ui/Button';
-import { TextField, inputClass } from '../ui/Field';
+import { TextField } from '../ui/Field';
 import { parseNumberInput } from '../ui/formValues';
 import { useZones } from './zones';
 import { addZone, removeZone, updateZone } from './personActions';
@@ -79,7 +79,7 @@ function ZoneRow({ zone, conflicts }: { zone: Zone; conflicts: ZoneConflict[] })
         <CoordField label="Radio (m)" value={zone.radius ?? DEFAULT_ZONE_RADIUS} min={MIN_ZONE_RADIUS} max={MAX_ZONE_RADIUS} onCommit={(radius) => updateZone(zone.id, { radius })} />
       </div>
       <div className="flex flex-wrap items-center gap-1">
-        {homeGeo && (
+        {homeGeo && !inherits && (
           <Button
             size="sm"
             variant="ghost"
@@ -96,7 +96,7 @@ function ZoneRow({ zone, conflicts }: { zone: Zone; conflicts: ZoneConflict[] })
           <select
             aria-label={`Desplazar la zona ${zone.name}`}
             value=""
-            className={`${inputClass} w-auto py-0.5 text-xs`}
+            className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
             onChange={(e) => {
               const o = OFFSETS.find((x) => x.value === e.target.value);
               if (o) updateZone(zone.id, offsetKm(geo.latitude, geo.longitude, o.km, o.bearing));
