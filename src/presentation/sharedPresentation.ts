@@ -9,6 +9,14 @@ export function hasSharedPresentation(hash: string = typeof window === 'undefine
   return hash.startsWith('#p=') && wantsPresentation(hash);
 }
 
+/**
+ * ¿La URL trae un proyecto compartido (#p=...) para ofrecer abrirlo («Proyecto compartido»)?
+ * Con «modo=presentacion» se abre directamente en el visor (ver App), sin ese aviso.
+ */
+export function hasSharedHash(hash: string = typeof window === 'undefined' ? '' : window.location.hash): boolean {
+  return hash.startsWith('#p=') && !hasSharedPresentation(hash);
+}
+
 function clearHash() {
   try {
     window.history.replaceState(null, '', window.location.pathname + window.location.search);

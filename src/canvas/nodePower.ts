@@ -42,3 +42,19 @@ export function parseNodePower(key: string): NodePower {
   if (key.startsWith('b:')) return { batteryPct: n };
   return {};
 }
+
+/**
+ * Parte de la simulación de la que dependen los datos de los nodos del lienzo. Sin `now`, la
+ * energía ni las baterías: el lienzo solo se recalcula cuando cambian estados, temporizadores,
+ * el registro o los fallos (se compara campo a campo con useShallow).
+ */
+export function canvasSimSlice(sim: SimulationState): Pick<SimulationState, 'entities' | 'pending' | 'offline' | 'log' | 'failures' | 'failureOffline'> {
+  return {
+    entities: sim.entities,
+    pending: sim.pending,
+    offline: sim.offline,
+    log: sim.log,
+    failures: sim.failures,
+    failureOffline: sim.failureOffline,
+  };
+}

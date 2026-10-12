@@ -16,13 +16,14 @@ import {
   type OnNodeDrag,
   type EdgeMouseHandler,
 } from '@xyflow/react';
-import type { Device, DeviceDefinition, IssueSeverity, Project, SimulationState } from '../types';
+import type { IssueSeverity, Project, SimulationState } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore, type CanvasMode, type SelectionKind } from '../store/uiStore';
 import { deviceIcon } from '../devices/presentation';
 import { devicePresentation } from './viewCache';
 import { mergeNodes } from './mergeNodes';
+import { canvasSimSlice } from './nodePower';
 import { useShallow } from 'zustand/react/shallow';
 import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
 import { addDeviceFromDefinition, connectDevices } from './actions';
@@ -232,16 +233,7 @@ export function Canvas() {
   const showCoverage = useUiStore((s) => s.showCoverage);
   const focusRequest = useUiStore((s) => s.focusRequest);
   // Sin `now`: el lienzo solo se recalcula cuando cambian estados, temporizadores o fallos.
-  const simParts = useSimulationStore(
-    useShallow((s) => ({
-      entities: s.sim.entities,
-      pending: s.sim.pending,
-      offline: s.sim.offline,
-      log: s.sim.log,
-      failures: s.sim.failures,
-      failureOffline: s.sim.failureOffline,
-    })),
-  );
+  const simParts = useSimulationStore(useShallow((s) => canvasSimSlice(s.sim)));
   const popoverDeviceId = useUiStore((s) => s.popoverDeviceId);
   const connectFromId = useUiStore((s) => s.connectFromId);
   const readOnly = useViewStore((s) => s.presentation);

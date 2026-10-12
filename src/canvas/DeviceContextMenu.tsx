@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useUiStore } from '../store/uiStore';
 import { isDeviceOffline } from '../simulation/events';
 import { capturableEntities } from '../simulation/scenes';
@@ -26,8 +27,12 @@ export function DeviceContextMenu() {
 function DeviceMenuBody({ deviceId, x, y }: { deviceId: string; x: number; y: number }) {
   const close = useCallback(() => useUiStore.getState().openContextMenu(null), []);
   const device = useProjectStore((s) => s.project.devices.find((d) => d.id === deviceId));
-  const sim = useSimulationStore((s) => s.sim);
+  // Solo lo que usa el menú: sin `now` ni la energía, que cambian en cada tick.
+  const parts = useSimulationStore(
+    useShallow((s) => ({ entities: s.sim.entities, offline: s.sim.offline, failures: s.sim.failures, failureOffline: s.sim.failureOffline })),
+  );
   if (!device) return null;
+  const sim = { ...useSimulationStore.getState().sim, ...parts };
 
   const def = definitionOf(device);
   const store = useSimulationStore.getState();

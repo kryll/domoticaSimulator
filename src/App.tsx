@@ -13,21 +13,20 @@ import { startAutosave } from './store/autosave';
 import { startInteractAutoplay, startSimulationSync, stopSimulationLoop } from './store/simulationStore';
 import { useUiStore } from './store/uiStore';
 import { loadInitialProject } from './store/bootstrap';
-import { ExtraDialogs, hasSharedHash } from './ui/ExtraDialogs';
+import { ExtraDialogs } from './ui/ExtraDialogs';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { SaveConflictDialog, SaveErrorBanner } from './ui/SaveIndicator';
 import { useAutomationsWorkspaceOpen, useViewStore, welcomeDone } from './store/viewStore';
 import { Tour } from './onboarding/Tour';
 import { WelcomeDialog } from './onboarding/WelcomeDialog';
 import { PresentationView } from './presentation/PresentationView';
-import { hasSharedPresentation, openSharedPresentation } from './presentation/sharedPresentation';
+import { hasSharedHash, hasSharedPresentation, openSharedPresentation } from './presentation/sharedPresentation';
 import { SkipLinks } from './ui/SkipLinks';
 import { useIsDesktop } from './ui/breakpoints';
 import { useLayoutStore } from './store/layoutStore';
 import { MobileDrawers } from './ui/MobileDrawers';
 import { UpdatePrompt } from './pwa/UpdatePrompt';
 import { Tanda3Dialogs } from './ui/Tanda3Dialogs';
-import { RecoverProjectDialog } from './ui/RecoverProjectDialog';
 import { useRecoveryStore } from './store/recoveryStore';
 
 function isEditable(target: EventTarget | null): boolean {
@@ -71,6 +70,7 @@ const VersionsDialog = lazy(() => import('./ui/VersionsDialog').then((m) => ({ d
 const TemplateGallery = lazy(() => import('./automations/TemplateGallery').then((m) => ({ default: m.TemplateGallery })));
 const AutomationsWorkspace = lazy(() => import('./automations/AutomationsWorkspace').then((m) => ({ default: m.AutomationsWorkspace })));
 const ProposalDialog = lazy(() => import('./proposal/ProposalDialog').then((m) => ({ default: m.ProposalDialog })));
+const RecoverProjectDialog = lazy(() => import('./ui/RecoverProjectDialog').then((m) => ({ default: m.RecoverProjectDialog })));
 
 function LazyDialogs() {
   const help = useUiStore((s) => s.shortcutsOpen);
@@ -80,6 +80,7 @@ function LazyDialogs() {
   const versions = useUiStore((s) => s.versionsOpen);
   const automations = useAutomationsWorkspaceOpen();
   const proposal = useViewStore((s) => s.proposalOpen);
+  const unreadable = useRecoveryStore((s) => s.unreadable !== null);
   return (
     <Suspense fallback={null}>
       {help && <ShortcutsHelp />}
@@ -89,6 +90,7 @@ function LazyDialogs() {
       {versions && <VersionsDialog />}
       {automations && <AutomationsWorkspace />}
       {proposal && <ProposalDialog />}
+      {unreadable && <RecoverProjectDialog />}
     </Suspense>
   );
 }
@@ -204,7 +206,6 @@ export function App({ autoLoad = true }: AppProps) {
         <SaveConflictDialog />
         <WelcomeDialog />
         <Tour />
-        <RecoverProjectDialog />
         <UpdatePrompt />
         <Tanda3Dialogs />
       </div>

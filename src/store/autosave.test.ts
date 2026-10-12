@@ -193,3 +193,14 @@ describe('respaldo síncrono al cerrar', () => {
     await vi.waitFor(() => expect(store().dirty).toBe(false));
   });
 });
+
+describe('cambios pendientes al arrancar', () => {
+  it('si el proyecto ya está sin guardar al arrancar (respaldo aplicado), se guarda sin esperar a otra edición', async () => {
+    store().loadProject(makeProject({ revision: 3 }));
+    store().setSaveState({ dirty: true });
+    const t = setup();
+    await vi.waitFor(() => expect(store().dirty).toBe(false));
+    expect(t.save).toHaveBeenCalledTimes(1);
+    t.stop();
+  });
+});

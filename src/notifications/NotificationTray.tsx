@@ -62,7 +62,7 @@ export function NotificationTray() {
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        aria-controls={panelId}
+        aria-controls={open ? panelId : undefined}
         aria-label={unread > 0 ? `Notificaciones (${unread} sin leer)` : 'Notificaciones'}
         title="Notificaciones del móvil simulado"
         className="relative rounded-md px-2 py-1 text-base hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"

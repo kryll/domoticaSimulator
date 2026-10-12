@@ -205,6 +205,8 @@ export function startAutosave(delayMs = 800, deps: AutosaveDeps = defaultAutosav
 
   const handle = { flush, deps };
   active = handle;
+  // Cambios pendientes al arrancar (p. ej. el respaldo de cierre recién aplicado): se guardan ya.
+  if (store().dirty) schedule();
 
   return () => {
     if (stopped) return;

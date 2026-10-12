@@ -11,7 +11,7 @@ export function CollapsibleLegend({ children }: { children: ReactNode }) {
       <button
         type="button"
         aria-expanded={open}
-        aria-controls={id}
+        aria-controls={open ? id : undefined}
         onClick={() => setOpen((o) => !o)}
         className="rounded-md border border-slate-200 bg-white/95 px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
         title={open ? 'Plegar la leyenda' : 'Mostrar la leyenda'}

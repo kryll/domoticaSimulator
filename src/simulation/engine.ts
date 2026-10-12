@@ -1,4 +1,9 @@
 // Motor de simulación: funciones puras e inmutables (no leen el reloj del sistema).
+// Partes ya separadas: registro (simLog.ts), temporizadores internos (timers.ts), renombrado
+// (rename.ts) y eventos del reloj (timedEvents.ts). Deuda pendiente: la ejecución de acciones
+// (runActionsInternal y servicios), los disparadores de estado y la energía siguen aquí porque
+// comparten applyChange/runAutomationInternal (dependencia circular); separarlos pide pasar esas
+// funciones como parámetro.
 import type {
   Action,
   Automation,
@@ -8,8 +13,6 @@ import type {
   EntityState,
   EntityStateValue,
   Id,
-  LogEntry,
-  LogLevel,
   PendingAction,
   Project,
   Scene,
@@ -29,7 +32,7 @@ import type {
 import { catalog } from '../devices/catalog';
 import { entitiesForDevice, entityDomain, initialEntityStates, slugify } from '../devices/entities';
 import { entityCapabilities, findEntityOwner } from '../devices/capabilities';
-import { mapActionEntities, mapTriggerEntities, triggerIdOf } from '../automations/walk';
+import { triggerIdOf } from '../automations/walk';
 import { resolveServiceTargets } from '../devices/areas';
 import {
   aggregateGroupState,
@@ -46,7 +49,7 @@ import {
   WAIT_FOREVER,
   type Variables,
 } from './logic';
-import { ATTRIBUTE_SEPARATOR, recordAttributeSamples, recordSample, sampleValue } from './history';
+import { recordAttributeSamples, recordSample, sampleValue } from './history';
 import { latencyFor, nextRandom } from './latency';
 import { applyEnvironment } from './thermal';
 import {
@@ -54,8 +57,6 @@ import {
   formatSimDate,
   formatSimTime,
   HOUR_MS,
-  MINUTE_MS,
-  parseHHMM,
   projectSunLocation,
   SECOND_MS,
   startOfDay,
@@ -94,14 +95,18 @@ import { DEFAULT_ALARM_CODE } from './services';
 import { applyTimelineEvent } from './timeline';
 
 export { capturableEntities, captureSceneEntities, type CapturableEntities } from './scenes';
+// Módulos extraídos del motor (mismo comportamiento); se reexportan para no cambiar las importaciones.
+export { appendLog, MAX_LOG_ENTRIES } from './simLog';
+export { cancelTimer, entityTimerKey, findTimer, isTimer, scheduleTimer, userWaits } from './timers';
+export { renameEntities } from './rename';
+export { timePatternOccurrences, timePatternSets, timePatternValues } from './timedEvents';
+import { addLog, nextSeq, type LogExtra } from './simLog';
+import { cancelStateFor, cancelTimer, entityTimerKey, isTimer, scheduleTimer, userWaits } from './timers';
+import { collectTimedEvents, earliestPending, MAX_TICK_DAYS, MAX_TICK_EVENTS, timePatternOccurrences, triggerOffsetsMs } from './timedEvents';
 export { sameState } from './stateUtils';
 
 /** Profundidad máxima de llamadas anidadas (automatización → acción → automatización...). */
 export const MAX_DEPTH = 10;
-/** Entradas máximas del registro (se conservan las más recientes, al final). */
-export const MAX_LOG_ENTRIES = 500;
-const MAX_TICK_EVENTS = 10_000;
-const MAX_TICK_DAYS = 400;
 
 interface RunCtx {
   automationId?: Id;
@@ -132,43 +137,6 @@ interface Exec {
 
 const ROOT: Exec = { depth: 0, chain: [] };
 
-// ---------- Registro ----------
-
-function nextSeq(log: LogEntry[]): number {
-  const last = log[log.length - 1];
-  const n = last ? Number(last.id.replace(/^log-/, '')) : 0;
-  return Number.isFinite(n) ? n + 1 : log.length + 1;
-}
-
-/** Añade una entrada al registro (id secuencial, registro acotado). */
-export function appendLog(
-  sim: SimulationState,
-  level: LogLevel,
-  message: string,
-  extra: { entityId?: string; automationId?: Id } = {},
-): SimulationState {
-  return addLog(sim, level, message, extra);
-}
-
-interface LogExtra {
-  entityId?: string;
-  automationId?: Id;
-  /** Fase 3 (B14): cambio de estado registrado. */
-  change?: LogEntry['change'];
-  /** Notificación enviada (acción notify o servicio notify.*). */
-  notification?: LogEntry['notification'];
-}
-
-function addLog(sim: SimulationState, level: LogLevel, message: string, extra: LogExtra = {}): SimulationState {
-  const entry: LogEntry = { id: `log-${nextSeq(sim.log)}`, timestamp: sim.now, level, message };
-  if (extra.entityId !== undefined) entry.entityId = extra.entityId;
-  if (extra.automationId !== undefined) entry.automationId = extra.automationId;
-  if (extra.change !== undefined) entry.change = extra.change;
-  if (extra.notification !== undefined) entry.notification = extra.notification;
-  const log = [...sim.log, entry];
-  return { ...sim, log: log.length > MAX_LOG_ENTRIES ? log.slice(log.length - MAX_LOG_ENTRIES) : log };
-}
-
 // ---------- Estados ----------
 
 const normalize = normalizeState;
@@ -195,127 +163,6 @@ export function formatDuration(seconds: number): string {
   if (m) parts.push(`${m} min`);
   if (sec || parts.length === 0) parts.push(`${sec} s`);
   return parts.join(' ');
-}
-
-// ---------- Temporizadores internos ----------
-
-/** Clave del temporizador propio de una entidad (autoapagado, recorrido, vuelta a la base). */
-export function entityTimerKey(entityId: string): string {
-  return `entity:${entityId}`;
-}
-
-/** ¿Es un temporizador interno del motor (no una espera de automatización o script)? */
-export function isTimer(p: PendingAction): boolean {
-  return p.timer !== undefined;
-}
-
-/** Esperas (delay) de automatizaciones y scripts, sin los temporizadores internos. */
-export function userWaits(sim: SimulationState): PendingAction[] {
-  return sim.pending.filter((p) => !isTimer(p));
-}
-
-/** Programa un temporizador interno; sustituye al que tenga la misma clave. */
-export function scheduleTimer(sim: SimulationState, key: string, dueAt: number, timer: SimTimer): SimulationState {
-  const pending = sim.pending.filter((p) => p.key !== key);
-  return { ...sim, pending: [...pending, { id: `timer:${key}`, dueAt, actions: [], timer, key }] };
-}
-
-export function cancelTimer(sim: SimulationState, key: string): SimulationState {
-  if (!sim.pending.some((p) => p.key === key)) return sim;
-  return { ...sim, pending: sim.pending.filter((p) => p.key !== key) };
-}
-
-/** Temporizador interno con esa clave, si existe. */
-export function findTimer(sim: SimulationState, key: string): PendingAction | undefined {
-  return sim.pending.find((p) => p.key === key);
-}
-
-function cancelStateFor(sim: SimulationState, entityId: string, project?: Project, next?: EntityStateValue): SimulationState {
-  const stillInRange = (p: PendingAction): boolean => {
-    // Tanda 3: numeric_state con `for` sigue contando mientras el valor no salga del rango.
-    if (p.timer?.kind !== 'state_for' || !project || next === undefined) return false;
-    const timer = p.timer;
-    const t = project.automations.find((a) => a.id === timer.automationId)?.triggers[timer.triggerIndex];
-    return t?.type === 'numeric_state' && inNumericRange(next, t.above, t.below);
-  };
-  const keep = sim.pending.filter((p) => !((p.timer?.kind === 'state_for' || p.timer?.kind === 'wait_for') && p.timer.entityId === entityId) || stillInRange(p));
-  return keep.length === sim.pending.length ? sim : { ...sim, pending: keep };
-}
-
-// ---------- Renombrado ----------
-
-function renameKey<T>(record: Record<string, T>, mapping: Record<string, string>): Record<string, T> {
-  const out: Record<string, T> = {};
-  for (const [k, v] of Object.entries(record)) out[mapping[k] ?? k] = v;
-  return out;
-}
-
-function renameTimer(timer: SimTimer, mapping: Record<string, string>): SimTimer {
-  const ren = (id: string): string => mapping[id] ?? id;
-  switch (timer.kind) {
-    case 'set_states':
-      return { ...timer, setStates: renameKey(timer.setStates, mapping) };
-    case 'cover_step':
-    case 'state_for':
-    case 'service_call':
-    case 'wait_for':
-    case 'helper_timer':
-      return { ...timer, entityId: ren(timer.entityId) };
-    case 'timeline_event':
-      return timer.step.entityId === undefined ? timer : { ...timer, step: { ...timer.step, entityId: ren(timer.step.entityId) } };
-  }
-}
-
-function renameActions(actions: Action[], mapping: Record<string, string>): Action[] {
-  return actions.map((a) => mapActionEntities(a, (id) => mapping[id] ?? id));
-}
-
-function renamePending(p: PendingAction, mapping: Record<string, string>): PendingAction {
-  const next: PendingAction = { ...p, actions: renameActions(p.actions, mapping) };
-  if (p.wait) next.wait = { ...p.wait, triggers: p.wait.triggers.map((t) => mapTriggerEntities(t, (id) => mapping[id] ?? id)) };
-  if (p.timer) {
-    next.timer = renameTimer(p.timer, mapping);
-    const entityId = p.key?.startsWith('entity:') ? p.key.slice(7) : undefined;
-    if (entityId !== undefined && mapping[entityId]) {
-      next.key = entityTimerKey(mapping[entityId] ?? entityId);
-      next.id = `timer:${next.key}`;
-    }
-  }
-  return next;
-}
-
-/**
- * Traslada el estado de la simulación a entity_id nuevos (dispositivo renombrado): entidades,
- * temporizadores (claves, entityId, setStates, state_for), esperas, cola y dispositivos offline.
- * `mapping`: entity_id anterior -> entity_id nuevo. Función pura.
- */
-export function renameEntities(sim: SimulationState, mapping: Record<string, string>): SimulationState {
-  const pairs = Object.entries(mapping).filter(([from, to]) => from !== to);
-  if (pairs.length === 0) return sim;
-  const map = Object.fromEntries(pairs);
-  const next: SimulationState = {
-    ...sim,
-    entities: renameKey(sim.entities, map),
-    pending: sim.pending.map((p) => renamePending(p, map)),
-  };
-  if (sim.queue) next.queue = sim.queue.map((p) => renamePending(p, map));
-  if (sim.joins) next.joins = Object.fromEntries(Object.entries(sim.joins).map(([id, j]) => [id, { ...j, cont: renamePending(j.cont, map) }]));
-  if (sim.history) {
-    // Series de estado y de atributos («entity#atributo») con el entity_id nuevo.
-    const history: NonNullable<SimulationState['history']> = {};
-    for (const [key, samples] of Object.entries(sim.history)) {
-      const cut = key.indexOf(ATTRIBUTE_SEPARATOR);
-      const id = cut === -1 ? key : key.slice(0, cut);
-      history[(map[id] ?? id) + (cut === -1 ? '' : key.slice(cut))] = samples;
-    }
-    next.history = history;
-  }
-  if (sim.offline) {
-    const offline: Record<Id, Record<string, EntityState>> = {};
-    for (const [deviceId, states] of Object.entries(sim.offline)) offline[deviceId] = renameKey(states, map);
-    next.offline = offline;
-  }
-  return next;
 }
 
 // ---------- Creación ----------
@@ -1449,108 +1296,6 @@ export function runActions(sim: SimulationState, project: Project, actions: Acti
 }
 
 // ---------- Reloj ----------
-
-interface TimedEvent {
-  at: number;
-  automation: Automation;
-  reason: string;
-  triggerIndex: number;
-}
-
-function triggerOffsetsMs(t: Trigger, day: number, sun: SunSource): { at: number; reason: string } | undefined {
-  if (t.type === 'time') {
-    try {
-      return { at: day + parseHHMM(t.at) * MINUTE_MS, reason: `hora ${t.at}` };
-    } catch {
-      return undefined;
-    }
-  }
-  if (t.type === 'sun') {
-    const times = sunTimesAt(day, sun);
-    const base = t.event === 'sunrise' ? times.sunrise : times.sunset;
-    return { at: base + (t.offsetMinutes ?? 0) * MINUTE_MS, reason: t.event === 'sunrise' ? 'amanecer' : 'atardecer' };
-  }
-  return undefined;
-}
-
-function collectTimedEvents(project: Project, from: number, to: number, sun: SunSource): TimedEvent[] {
-  const events: TimedEvent[] = [];
-  const firstDay = startOfDay(from) - DAY_MS; // por si un offset negativo cae en el día anterior
-  const lastDay = Math.min(startOfDay(to) + DAY_MS, firstDay + MAX_TICK_DAYS * DAY_MS);
-  for (const automation of project.automations) {
-    for (const [triggerIndex, t] of automation.triggers.entries()) {
-      if (t.enabled === false) continue;
-      if (t.type === 'time_pattern') {
-        for (const at of timePatternOccurrences(t, from, to, MAX_TICK_EVENTS)) events.push({ at, reason: 'patrón de hora', automation, triggerIndex });
-        continue;
-      }
-      if (t.type !== 'time' && t.type !== 'sun') continue;
-      for (let day = firstDay; day <= lastDay; day += DAY_MS) {
-        const occ = triggerOffsetsMs(t, day, sun);
-        if (occ && occ.at > from && occ.at <= to) events.push({ ...occ, automation, triggerIndex });
-      }
-    }
-  }
-  return events.sort((a, b) => a.at - b.at);
-}
-
-/** Valores (0..max-1) que cumplen un campo de time_pattern ("5", "*", "/5"); undefined si no es válido. */
-export function timePatternValues(field: string | undefined, max: number, fallback: 'any' | 'zero'): number[] | undefined {
-  const all = Array.from({ length: max }, (_, i) => i);
-  if (field === undefined) return fallback === 'any' ? all : [0];
-  const f = String(field).trim();
-  if (f === '*') return all;
-  const every = /^\/(\d+)$/.exec(f);
-  if (every) {
-    const n = Number(every[1]);
-    return n > 0 && n < max ? all.filter((v) => v % n === 0) : undefined;
-  }
-  if (/^\d+$/.test(f) && Number(f) < max) return [Number(f)];
-  return undefined;
-}
-
-/** Valores de horas, minutos y segundos de un time_pattern con los valores por defecto de HA. */
-export function timePatternSets(t: { hours?: string; minutes?: string; seconds?: string }): { hours: number[]; minutes: number[]; seconds: number[] } | undefined {
-  if (t.hours === undefined && t.minutes === undefined && t.seconds === undefined) return undefined;
-  // Como HA: si se indica una unidad mayor, las menores sin valor valen 0.
-  const hours = timePatternValues(t.hours, 24, 'any');
-  const minutes = timePatternValues(t.minutes, 60, t.hours !== undefined ? 'zero' : 'any');
-  const seconds = timePatternValues(t.seconds, 60, t.hours !== undefined || t.minutes !== undefined ? 'zero' : 'any');
-  return hours && minutes && seconds ? { hours, minutes, seconds } : undefined;
-}
-
-/** Horas (ms) en (from, to] en que se cumple un time_pattern, como mucho `limit`. */
-export function timePatternOccurrences(t: { hours?: string; minutes?: string; seconds?: string }, from: number, to: number, limit: number): number[] {
-  const sets = timePatternSets(t);
-  if (!sets) return [];
-  const out: number[] = [];
-  const lastDay = Math.min(startOfDay(to), startOfDay(from) + MAX_TICK_DAYS * DAY_MS);
-  for (let day = startOfDay(from); day <= lastDay; day += DAY_MS) {
-    for (const h of sets.hours) {
-      const hourStart = day + h * HOUR_MS;
-      if (hourStart + HOUR_MS <= from || hourStart > to) continue;
-      for (const m of sets.minutes) {
-        const minuteStart = hourStart + m * MINUTE_MS;
-        if (minuteStart + MINUTE_MS <= from || minuteStart > to) continue;
-        for (const sec of sets.seconds) {
-          const at = minuteStart + sec * SECOND_MS;
-          if (at <= from || at > to) continue;
-          out.push(at);
-          if (out.length >= limit) return out;
-        }
-      }
-    }
-  }
-  return out;
-}
-
-function earliestPending(sim: SimulationState, to: number): PendingAction | undefined {
-  let best: PendingAction | undefined;
-  for (const p of sim.pending) {
-    if (p.dueAt <= to && (!best || p.dueAt < best.dueAt)) best = p;
-  }
-  return best;
-}
 
 function runTimer(sim: SimulationState, project: Project, timer: SimTimer): SimulationState {
   switch (timer.kind) {
