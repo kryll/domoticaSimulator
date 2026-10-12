@@ -7,6 +7,7 @@ import { effectiveIotClass } from '../devices/roles';
 import { useSimulationStore } from '../store/simulationStore';
 import { cx } from '../ui/cx';
 import { NodeBody } from './nodes/bodies';
+import { LOW_BATTERY_LEVEL } from '../simulation/energy';
 
 const DevicePopover = lazy(() => import('./DevicePopover').then((m) => ({ default: m.DevicePopover })));
 
@@ -57,7 +58,15 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
     highlighted,
     connectMode,
     crossFloorLinks,
+    watts,
+    batteryPct,
   } = data;
+  const lowBattery = batteryPct !== undefined && batteryPct < LOW_BATTERY_LEVEL;
+  // Evita repetir en la fila inferior lo que ya muestran los indicadores de potencia y batería.
+  const secondary =
+    view?.secondary && ((batteryPct !== undefined && /^Batería/.test(view.secondary)) || (watts !== undefined && /^[\d,.]+ W$/.test(view.secondary)))
+      ? undefined
+      : view?.secondary;
   const linkFloors = [...new Set(crossFloorLinks.map((l) => l.floorName))];
   const color = PROTOCOL_COLORS[device.protocol];
   const cloud = definition ? isCloud(effectiveIotClass(device, definition)) : false;
@@ -168,9 +177,27 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
               ☁
             </span>
           )}
-          {!unavailable && view?.secondary && (
-            <span className="min-w-0 truncate text-[10px] text-slate-500" title={view.secondary}>
-              {view.secondary}
+          {!unavailable && watts !== undefined && (
+            <span className="shrink-0 text-[10px] font-semibold tabular-nums text-amber-700" data-testid="node-watts">
+              · {watts} W
+            </span>
+          )}
+          {batteryPct !== undefined && (
+            <span
+              className={cx(
+                'shrink-0 rounded px-0.5 text-[10px] font-semibold tabular-nums',
+                lowBattery ? 'bg-red-100 text-red-700' : 'text-slate-500',
+              )}
+              title={lowBattery ? `Batería baja: ${batteryPct} %` : `Batería ${batteryPct} %`}
+              data-testid="node-battery"
+            >
+              <span aria-hidden="true">{lowBattery ? '🪫' : '🔋'}</span>
+              {batteryPct} %{lowBattery && <span className="sr-only"> (batería baja)</span>}
+            </span>
+          )}
+          {!unavailable && secondary && (
+            <span className="min-w-0 truncate text-[10px] text-slate-500" title={secondary}>
+              {secondary}
             </span>
           )}
         </div>

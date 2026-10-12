@@ -5,6 +5,7 @@ import { createDemoProject, createEmptyProject, exportProjectJson, importProject
 import { openAsNewProject, openProject } from '../store/bootstrap';
 import { catalog } from '../devices/catalog';
 import { SimulationControls } from '../simulation/SimulationControls';
+import { ScenariosMenu } from '../simulation/ScenariosMenu';
 import { Button } from './Button';
 import { ProjectsDialog } from './ProjectsDialog';
 import { downloadText, readFileAsText, safeFilename } from './download';
@@ -150,11 +151,25 @@ export function TopBar() {
           <MenuItem onClick={() => safely(async () => downloadText((await import('../export/csv')).devicesToCsv(project(), catalog), `${base()}-dispositivos.csv`, 'text/csv'))}>
             Inventario (CSV)
           </MenuItem>
+          <MenuItem
+            onClick={() =>
+              safely(async () => {
+                const bom = await import('../export/bom');
+                downloadText(bom.bomToCsv(bom.billOfMaterials(project(), catalog)), `${base()}-presupuesto.csv`, 'text/csv');
+              })
+            }
+          >
+            Presupuesto (CSV)
+          </MenuItem>
           <MenuItem onClick={() => safely(async () => (await import('../export/png')).exportCanvasPng(`${base()}-plano.png`), 'Imagen exportada')}>
             Imagen del plano (PNG)
           </MenuItem>
           <MenuItem onClick={() => useExtrasStore.getState().openDialog('packages')}>Configuración HA (packages .zip)…</MenuItem>
         </Menu>
+        <ScenariosMenu />
+        <Button size="sm" variant="ghost" onClick={() => useUiStore.getState().setSettingsOpen(true)} aria-label="Ajustes del proyecto" title="Ajustes del proyecto">
+          ⚙ <span className="hidden xl:inline">Ajustes</span>
+        </Button>
         <input
           ref={fileRef}
           type="file"

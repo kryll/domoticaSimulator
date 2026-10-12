@@ -1,3 +1,4 @@
+import type { AutomationTrace } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { useSimulationStore } from '../store/simulationStore';
@@ -8,6 +9,23 @@ import { Badge } from '../ui/Badge';
 import { EmptyState } from '../ui/Panel';
 import { cx } from '../ui/cx';
 import { AutomationEditor } from './AutomationEditor';
+import { useMemo } from 'react';
+import { lastTraceByAutomation, TRACE_RESULT } from '../ui/traceLabels';
+
+function LastRun({ trace }: { trace: AutomationTrace | undefined }) {
+  if (!trace) return null;
+  const r = TRACE_RESULT[trace.result];
+  const time = formatSimTime(trace.startedAt);
+  const tone =
+    r.tone === 'green' ? 'text-emerald-700' : r.tone === 'red' ? 'text-red-700' : r.tone === 'amber' ? 'text-amber-700' : 'text-slate-500';
+  return (
+    <span className={cx('text-[10px] tabular-nums', tone)} title={`Última ejecución: ${r.label} a las ${time}`}>
+      <span aria-hidden="true">{r.icon} </span>
+      <span className="sr-only">Última ejecución: {r.label} a las </span>
+      {time}
+    </span>
+  );
+}
 
 /** Lista de automatizaciones del proyecto con su editor. */
 export function AutomationsPanel() {
@@ -21,6 +39,9 @@ export function AutomationsPanel() {
   const runAutomation = useSimulationStore((s) => s.runAutomation);
   const running = useSimulationStore((s) => s.running);
   const pending = useSimulationStore((s) => s.sim.pending);
+  const traces = useSimulationStore((s) => s.sim.traces);
+  const lastTraces = useMemo(() => lastTraceByAutomation(traces), [traces]);
+  const openTemplates = useUiStore((s) => s.openTemplates);
   const notify = useUiStore((s) => s.notify);
   const waits = selected ? pending.filter((p) => !isTimer(p) && p.automationId === selected.id) : [];
   const nextDue = waits.reduce<number | undefined>((min, p) => (min === undefined || p.dueAt < min ? p.dueAt : min), undefined);
@@ -36,6 +57,9 @@ export function AutomationsPanel() {
             onClick={() => selectAutomation(addAutomation().id)}
           >
             + Nueva automatización
+          </Button>
+          <Button size="sm" className="mt-1 w-full" onClick={() => openTemplates({})}>
+            ✨ Desde plantilla
           </Button>
         </div>
         <ul className="min-h-0 flex-1 overflow-auto" aria-label="Automatizaciones">
@@ -53,6 +77,7 @@ export function AutomationsPanel() {
               >
                 <span className="truncate">{a.name}</span>
                 <span className="flex shrink-0 items-center gap-1">
+                  <LastRun trace={lastTraces.get(a.id)} />
                   {pending.some((p) => !isTimer(p) && p.automationId === a.id) && (
                     <span title="Tiene esperas pendientes" aria-label="Tiene esperas pendientes">
                       ⏳

@@ -2,7 +2,7 @@ import type { Condition } from '../types';
 import { EntityPicker } from './EntityPicker';
 import { CONDITION_LABELS, conditionFactories } from '../ui/automationOptions';
 import { ListEditor } from './ListEditor';
-import { TextField } from '../ui/Field';
+import { SelectField, TextField } from '../ui/Field';
 import { parseNumberInput, parseStateInput, stateToInput } from '../ui/formValues';
 import { DurationField } from './DurationField';
 import { NotConditionEditor, ZoneConditionEditor } from './advanced/ConditionListEditor';
@@ -80,6 +80,77 @@ export function ConditionEditor({ value, onChange }: { value: Condition; onChang
           </div>
         </div>
       );
+    case 'sun': {
+      const eventOptions = [
+        { value: 'sunrise', label: 'Amanecer' },
+        { value: 'sunset', label: 'Atardecer' },
+      ];
+      const night = value.after === 'sunset' && value.before === 'sunrise';
+      const day = value.after === 'sunrise' && value.before === 'sunset';
+      return (
+        <div>
+          {header}
+          <div className="mb-2 flex flex-wrap gap-1" role="group" aria-label="Atajos de la condición de sol">
+            <button
+              type="button"
+              aria-pressed={night}
+              className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-xs aria-pressed:border-indigo-500 aria-pressed:bg-indigo-50"
+              onClick={() => onChange({ type: 'sun', after: 'sunset', before: 'sunrise' })}
+            >
+              🌙 Es de noche
+            </button>
+            <button
+              type="button"
+              aria-pressed={day}
+              className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-xs aria-pressed:border-amber-500 aria-pressed:bg-amber-50"
+              onClick={() => onChange({ type: 'sun', after: 'sunrise', before: 'sunset' })}
+            >
+              ☀️ Es de día
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <SelectField
+              label="Después de"
+              value={value.after ?? ''}
+              placeholder="—"
+              options={eventOptions}
+              onChange={(e) => {
+                const next = { ...value };
+                if (e.target.value === '') delete next.after;
+                else next.after = e.target.value as 'sunrise' | 'sunset';
+                onChange(next);
+              }}
+            />
+            <TextField
+              label="Desfase después (min)"
+              type="number"
+              value={value.afterOffsetMinutes ?? ''}
+              disabled={!value.after}
+              onChange={(e) => onChange({ ...value, afterOffsetMinutes: parseNumberInput(e.target.value) })}
+            />
+            <SelectField
+              label="Antes de"
+              value={value.before ?? ''}
+              placeholder="—"
+              options={eventOptions}
+              onChange={(e) => {
+                const next = { ...value };
+                if (e.target.value === '') delete next.before;
+                else next.before = e.target.value as 'sunrise' | 'sunset';
+                onChange(next);
+              }}
+            />
+            <TextField
+              label="Desfase antes (min)"
+              type="number"
+              value={value.beforeOffsetMinutes ?? ''}
+              disabled={!value.before}
+              onChange={(e) => onChange({ ...value, beforeOffsetMinutes: parseNumberInput(e.target.value) })}
+            />
+          </div>
+        </div>
+      );
+    }
     case 'and':
     case 'or':
       return (

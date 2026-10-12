@@ -4,6 +4,7 @@ import { TimelinesPanel } from './TimelinesPanel';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { makeDevice, makeProject } from '../test/fixtures';
+import { pickEntity } from '../test/pickEntity';
 
 describe('TimelinesPanel', () => {
   beforeEach(() => {
@@ -17,22 +18,21 @@ describe('TimelinesPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: '+ Nueva prueba' }));
     await userEvent.click(screen.getByRole('button', { name: '+ Evento' }));
     const steps = screen.getByRole('group', { name: 'Pasos' });
-    await userEvent.selectOptions(within(steps).getByLabelText('Entidad'), 'light.luz_salon');
+    await pickEntity('Entidad', 'light.luz_salon');
     await userEvent.click(screen.getByRole('button', { name: '+ Comprobación' }));
-    const pickers = within(steps).getAllByLabelText('Entidad');
-    await userEvent.selectOptions(pickers[1] as HTMLElement, 'light.luz_salon');
+    await pickEntity('Entidad', 'light.luz_salon', 1);
     const times = within(steps).getAllByLabelText('Hora');
     fireEvent.change(times[1] as HTMLElement, { target: { value: '08:00:05' } });
 
     await userEvent.click(screen.getByRole('button', { name: '▶ Ejecutar' }));
-    expect(screen.getByRole('status')).toHaveTextContent('✓ Superada');
+    expect(screen.getByText(/✓ Superada/)).toHaveAttribute('role', 'status');
     const results = screen.getByRole('list', { name: 'Resultados de la prueba' });
     expect(within(results).getAllByRole('listitem')).toHaveLength(2);
 
     // si se espera otro estado, la prueba falla
     fireEvent.change(within(steps).getByLabelText('Valor esperado'), { target: { value: 'off' } });
     await userEvent.click(screen.getByRole('button', { name: '▶ Ejecutar' }));
-    expect(screen.getByRole('status')).toHaveTextContent('✗ 1 fallo');
+    expect(screen.getByText(/✗ 1 fallo/)).toHaveAttribute('role', 'status');
   });
 
   it('graba los pasos desde el registro', async () => {

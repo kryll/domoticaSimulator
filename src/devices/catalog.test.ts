@@ -66,6 +66,15 @@ describe('catálogo', () => {
     for (const d of catalog.filter((x) => !infra.includes(x.role))) expect(d.entities.length, d.id).toBeGreaterThan(0);
   });
 
+  it('todas las definiciones tienen un precio orientativo razonable (B8)', () => {
+    for (const d of catalog) {
+      expect(d.priceEur, d.id).toBeGreaterThan(3);
+      expect(d.priceEur, d.id).toBeLessThan(2000);
+    }
+    expect(parseDefinition({ ...valid, priceEur: 12.5 }).priceEur).toBe(12.5);
+    expect(() => parseDefinition({ ...valid, priceEur: -1 })).toThrow(/priceEur/);
+  });
+
   it('el servidor HA usa la integración propia de Home Assistant', () => {
     expect(def('ha-green').integrations).toEqual(['homeassistant']);
     expect(INTEGRATION_LABELS.homeassistant).toBe('Home Assistant');

@@ -44,7 +44,17 @@ export function LogbookPanel() {
             <li key={e.id} className={cx('flex gap-3 border-b border-slate-100 px-3 py-1', LEVEL_STYLE[e.level])}>
               <time className="shrink-0 text-slate-500">{formatSimTime(e.timestamp)}</time>
               <span className="w-12 shrink-0 font-semibold uppercase">{LEVEL_LABEL[e.level]}</span>
-              <span className="min-w-0 flex-1 whitespace-pre-wrap font-sans">{e.message}</span>
+              {e.notification ? (
+                <span className="min-w-0 flex-1 font-sans" data-testid="log-notification">
+                  <span role="img" aria-label="Notificación" className="mr-1">
+                    🔔
+                  </span>
+                  {e.notification.title && <strong className="mr-1">{e.notification.title}:</strong>}{e.notification.title && ' '}
+                  <span className="whitespace-pre-wrap">{e.notification.message}</span>
+                </span>
+              ) : (
+                <span className="min-w-0 flex-1 whitespace-pre-wrap font-sans">{e.message}</span>
+              )}
               {e.entityId && <code className="shrink-0 text-slate-500">{e.entityId}</code>}
             </li>
           ))}

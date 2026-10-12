@@ -1,76 +1,269 @@
-import { useMemo } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
-import { projectEntities } from '../canvas/analysis';
-import { Field, inputClass } from '../ui/Field';
-import { disambiguate, entityLabel } from '../ui/entityLabel';
+import { inputClass } from '../ui/Field';
+import { cx } from '../ui/cx';
+import { entityGroups, searchGroups, type EntityOption } from '../ui/entityOptions';
 
 export interface EntityPickerProps {
   label: string;
   value: string;
   onChange: (entityId: string) => void;
   /** Limita a ciertos dominios (light, sensor...). */
-  domains?: string[];
+  domains?: readonly string[];
+  /** Limita a ciertas device_class (motion, door, temperature...). */
+  deviceClasses?: readonly string[];
   /** Solo sensores con estado numérico (para disparadores y condiciones numéricas). */
   numericOnly?: boolean;
+  /** Lista cerrada de entity_id admitidos. */
+  allowedIds?: readonly string[];
+  hint?: string;
+  /** Entrada opcional: añade «— Ninguna —» (valor vacío). */
+  optional?: boolean;
 }
 
-function isNumericValue(v: unknown): boolean {
-  if (typeof v === 'number') return Number.isFinite(v);
-  return typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v));
-}
+/** Opción «— Ninguna —» de las entradas opcionales. */
+const NONE: EntityOption = { entityId: '', label: '— Ninguna —', icon: '', stateText: '', domain: '', deviceId: '', search: '' };
 
-const NO_ROOM = 'Sin sala';
-
-/** Selector de entidades del proyecto («Dispositivo · Entidad») agrupadas por sala. */
-export function EntityPicker({ label, value, onChange, domains, numericOnly }: EntityPickerProps) {
+/**
+ * Selector de entidades accesible (patrón combobox de ARIA): búsqueda, agrupado por planta y
+ * sala, «Dispositivo · Entidad» con icono y estado actual.
+ */
+export function EntityPicker({ label, value, onChange, domains, deviceClasses, numericOnly, allowedIds, hint, optional }: EntityPickerProps) {
   const project = useProjectStore((s) => s.project);
   const states = useSimulationStore((s) => s.sim.entities);
-  const groups = useMemo(() => {
-    const roomNames = new Map(project.rooms.map((r) => [r.id, r.name]));
-    const items: Array<{ entityId: string; label: string; group: string }> = [];
-    const all = projectEntities(project);
-    const perDevice = new Map<string, number>();
-    for (const ref of all) perDevice.set(ref.device.id, (perDevice.get(ref.device.id) ?? 0) + 1);
-    for (const ref of all) {
-      if (domains && !domains.includes(ref.definition.domain)) continue;
-      if (numericOnly) {
-        const st = states[ref.entityId]?.state ?? ref.definition.initialState;
-        if (ref.definition.domain !== 'sensor' || !isNumericValue(st)) continue;
-      }
-      items.push({
-        entityId: ref.entityId,
-        label: entityLabel(ref.device.name, ref.definition.name, perDevice.get(ref.device.id) === 1),
-        group: (ref.device.roomId && roomNames.get(ref.device.roomId)) || NO_ROOM,
-      });
+  const baseId = useId();
+  const inputId = `${baseId}-input`;
+  const listId = `${baseId}-list`;
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const groups = useMemo(
+    () => entityGroups(project, states, { domains, deviceClasses, numericOnly, allowedIds }),
+    // domains/deviceClasses suelen ser literales: se comparan por contenido.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [project, states, domains?.join(), deviceClasses?.join(), numericOnly, allowedIds?.join()],
+  );
+  const filtered = useMemo(() => searchGroups(groups, query), [groups, query]);
+  const showNone = optional === true && query.trim() === '';
+  const flat = useMemo<EntityOption[]>(
+    () => [...(showNone ? [NONE] : []), ...filtered.flatMap((g) => g.options)],
+    [filtered, showNone],
+  );
+  const resultCount = flat.length - (showNone ? 1 : 0);
+  const selected = useMemo(() => groups.flatMap((g) => g.options).find((o) => o.entityId === value), [groups, value]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) close();
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`);
+    el?.scrollIntoView?.({ block: 'nearest' });
+  }, [active, open]);
+
+  const close = () => {
+    setOpen(false);
+    setQuery('');
+  };
+  const choose = (opt: EntityOption | undefined) => {
+    if (!opt) return;
+    onChange(opt.entityId);
+    close();
+  };
+  const openList = () => {
+    setOpen(true);
+    const idx = flat.findIndex((o) => o.entityId === value);
+    setActive(idx >= 0 ? idx : 0);
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        if (!open) openList();
+        else setActive((i) => Math.min(flat.length - 1, i + 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        if (!open) openList();
+        else setActive((i) => Math.max(0, i - 1));
+        break;
+      case 'Home':
+        if (open) {
+          e.preventDefault();
+          setActive(0);
+        }
+        break;
+      case 'End':
+        if (open) {
+          e.preventDefault();
+          setActive(Math.max(0, flat.length - 1));
+        }
+        break;
+      case 'Enter':
+        if (open) {
+          e.preventDefault();
+          choose(flat[active]);
+        }
+        break;
+      case 'Escape':
+        if (open) {
+          e.preventDefault();
+          e.stopPropagation();
+          close();
+        }
+        break;
+      case 'Tab':
+        if (open) close();
+        break;
     }
-    const map = new Map<string, Array<{ entityId: string; label: string }>>();
-    for (const item of disambiguate(items)) {
-      const list = map.get(item.group) ?? [];
-      list.push(item);
-      map.set(item.group, list);
-    }
-    return [...map.entries()].sort(([a], [b]) => (a === NO_ROOM ? 1 : b === NO_ROOM ? -1 : a.localeCompare(b, 'es')));
-  }, [project, domains, numericOnly, states]);
-  const known = groups.some(([, list]) => list.some((e) => e.entityId === value));
+  };
+
+  const activeOption = open ? flat[active] : undefined;
+  const hintId = `${baseId}-hint`;
+  const countId = `${baseId}-count`;
+  const optionId = (o: EntityOption) => `${baseId}-opt-${o.entityId.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+  const display = open ? query : selected ? selected.label : value ? `${value} (no existe)` : '';
+  let index = showNone ? 0 : -1;
 
   return (
-    <Field label={label}>
-      {(id) => (
-        <select id={id} className={inputClass} value={value} onChange={(e) => onChange(e.target.value)} title={value || undefined}>
-          <option value="">— Elige una entidad —</option>
-          {value && !known && <option value={value}>{value} (no existe)</option>}
-          {groups.map(([group, list]) => (
-            <optgroup key={group} label={group}>
-              {list.map((e) => (
-                <option key={e.entityId} value={e.entityId} title={e.entityId}>
-                  {e.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+    <div ref={rootRef} className="relative flex flex-col gap-1">
+      <label htmlFor={inputId} className="text-xs font-medium text-slate-600">
+        {label}
+      </label>
+      <div className="relative">
+        {!open && selected && (
+          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm" aria-hidden="true">
+            {selected.icon}
+          </span>
+        )}
+        <input
+          id={inputId}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={activeOption ? optionId(activeOption) : undefined}
+          aria-invalid={value !== '' && !selected ? true : undefined}
+          aria-describedby={hint ? hintId : undefined}
+          autoComplete="off"
+          spellCheck={false}
+          className={cx(inputClass, 'pr-14', !open && selected && 'pl-7', value && !selected && 'text-red-700')}
+          placeholder={open ? 'Buscar entidad…' : optional ? '— Ninguna —' : '— Elige una entidad —'}
+          title={value || undefined}
+          value={display}
+          onFocus={() => {
+            if (!open) openList();
+          }}
+          onClick={() => {
+            if (!open) openList();
+          }}
+          onChange={(e) => {
+            if (!open) setOpen(true);
+            setQuery(e.target.value);
+            setActive(0);
+          }}
+          onKeyDown={onKeyDown}
+        />
+        {!open && selected && (
+          <span className="pointer-events-none absolute right-6 top-1/2 max-w-[40%] -translate-y-1/2 truncate text-[11px] text-slate-500">
+            {selected.stateText}
+          </span>
+        )}
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={open ? `Cerrar lista de ${label}` : `Abrir lista de ${label}`}
+          className="absolute right-1 top-1/2 -translate-y-1/2 px-1 text-xs text-slate-500"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => (open ? close() : openList())}
+        >
+          ▾
+        </button>
+      </div>
+      {hint && (
+        <p id={hintId} className="text-xs text-slate-500">
+          {hint}
+        </p>
       )}
-    </Field>
+      <span id={countId} className="sr-only" role="status" aria-live="polite">
+        {open ? (resultCount === 1 ? '1 resultado' : `${resultCount} resultados`) : ''}
+      </span>
+      {open && (
+        <ul
+          ref={listRef}
+          id={listId}
+          role="listbox"
+          aria-label={`Opciones: ${label}`}
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 min-w-[16rem] overflow-auto rounded-md border border-slate-200 bg-white py-1 text-sm shadow-lg"
+        >
+          {showNone && (
+            <li
+              id={optionId(NONE)}
+              role="option"
+              aria-selected={value === ''}
+              data-index={0}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setActive(0)}
+              onClick={() => choose(NONE)}
+              className={cx('cursor-pointer px-3 py-1 italic', active === 0 ? 'bg-sky-100 text-sky-900' : 'text-slate-600')}
+            >
+              — Ninguna —
+            </li>
+          )}
+          {resultCount === 0 && (
+            <li role="presentation" className="px-3 py-2 text-xs text-slate-500">
+              Sin resultados
+            </li>
+          )}
+          {filtered.map((g) => (
+            <li key={g.label} role="presentation">
+              <ul role="group" aria-label={g.label}>
+                <li role="presentation" className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  {g.label}
+                </li>
+                {g.options.map((o) => {
+                  index++;
+                  const i = index;
+                  const isActive = i === active;
+                  return (
+                    <li
+                      key={o.entityId}
+                      id={optionId(o)}
+                      role="option"
+                      aria-selected={o.entityId === value}
+                      data-index={i}
+                      title={o.entityId}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setActive(i)}
+                      onClick={() => choose(o)}
+                      className={cx(
+                        'flex cursor-pointer items-center gap-2 px-3 py-1',
+                        isActive ? 'bg-sky-100 text-sky-900' : 'text-slate-700',
+                        o.entityId === value && 'font-semibold',
+                      )}
+                    >
+                      <span aria-hidden="true">{o.icon}</span>
+                      <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                      <span className="shrink-0 text-[11px] text-slate-500">{o.stateText}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

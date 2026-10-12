@@ -46,7 +46,8 @@ const logic: Automation = {
 describe('YAML de la Fase 3', () => {
   it('ida y vuelta de todos los tipos nuevos con contexto', () => {
     const text = automationToYaml(logic, ctx);
-    expect(text).toContain('platform: zone');
+    expect(text).toContain('trigger: zone');
+    expect(text).toContain('trigger: device');
     expect(text).toContain('entity_id: person.ana_lopez');
     expect(text).toContain('zone: zone.home');
     expect(text).toContain('zone: zone.oficina');
@@ -55,7 +56,15 @@ describe('YAML de la Fase 3', () => {
     expect(text).toContain('wait_for_trigger:');
     expect(text).toContain('timeout: "00:01:30"');
     expect(text).toContain('continue_on_timeout: false');
-    expect(text).toContain('service: notify.notify');
+    expect(text).toContain('action: notify.notify');
+    // Sintaxis actual de HA en todos los niveles, también en la lógica anidada.
+    expect(text).toMatch(/^triggers:$/m);
+    expect(text).toMatch(/^conditions:$/m);
+    expect(text).toMatch(/^actions:$/m);
+    expect(text).not.toMatch(/\bplatform:/);
+    expect(text).not.toMatch(/\bservice:/);
+    expect(text).toContain('wait_for_trigger:\n      - trigger: state');
+    expect(text).toContain('sequence:\n          - action: light.turn_on');
     expect(parseAutomationYaml(text, ctx)).toEqual(logic);
   });
 

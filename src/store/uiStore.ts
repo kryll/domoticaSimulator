@@ -3,9 +3,15 @@ import type { Id } from '../types';
 
 /** select = edición; interact = uso (clic = acción principal). */
 export type CanvasMode = 'select' | 'room' | 'connect' | 'interact' | 'wall';
-export type BottomTab = 'validation' | 'automations' | 'scenes' | 'logbook' | ExtraBottomTab;
+export type BottomTab = 'validation' | 'impact' | 'automations' | 'scenes' | 'budget' | 'energy' | 'logbook' | ExtraBottomTab;
 /** Pestañas de la Fase 3 (ver ui/extraTabs.ts). */
 export type ExtraBottomTab = 'home' | 'dashboard' | 'tests';
+
+/** Pestañas del diálogo de ajustes: proyecto (Fase 2) y simulación (Fase 3). */
+export type SettingsTab = 'project' | 'simulation';
+
+/** Pestaña del editor de una automatización. */
+export type AutomationView = 'visual' | 'yaml' | 'traces';
 
 export type Selection =
   | { kind: 'device'; id: Id }
@@ -75,6 +81,14 @@ export interface UiState {
   shortcutsOpen: boolean;
   /** Ya se ofreció pasar a modo Uso al pulsar Simular. */
   interactOffered: boolean;
+  /** Diálogo «Ajustes del proyecto». */
+  settingsOpen: boolean;
+  /** Pestaña inicial del diálogo de ajustes (proyecto o simulación, abierta desde ⚙). */
+  settingsTab: SettingsTab;
+  /** Galería de plantillas abierta (opcionalmente centrada en un dispositivo). */
+  templateGallery: { deviceId?: Id } | null;
+  /** Pestaña activa del editor de automatizaciones. */
+  automationView: AutomationView;
 
   setActiveFloor: (id: Id | null) => void;
   select: (selection: Selection | null) => void;
@@ -95,6 +109,11 @@ export interface UiState {
   setAddToScene: (entityIds: string[] | null) => void;
   setShortcutsOpen: (open: boolean) => void;
   setInteractOffered: (offered: boolean) => void;
+  setSettingsOpen: (open: boolean, tab?: SettingsTab) => void;
+  openTemplates: (opts: { deviceId?: Id } | null) => void;
+  setAutomationView: (view: AutomationView) => void;
+  /** Abre una automatización en el panel inferior (opcionalmente en una pestaña). */
+  showAutomation: (id: Id, view?: AutomationView) => void;
   reset: () => void;
 }
 
@@ -120,13 +139,22 @@ const initial = {
   addToScene: null,
   shortcutsOpen: false,
   interactOffered: false,
+  settingsOpen: false,
+  settingsTab: 'project' as SettingsTab,
+  templateGallery: null,
+  automationView: 'visual' as AutomationView,
 };
 
 export const useUiStore = create<UiState>()((set) => ({
   ...initial,
   setActiveFloor: (id) => set({ activeFloorId: id, selection: null, popoverDeviceId: null, contextMenu: null }),
   select: (selection) => set({ selection }),
-  setHighlighted: (ids) => set({ highlightedDeviceIds: ids }),
+  setHighlighted: (ids) =>
+    set((s) =>
+      s.highlightedDeviceIds.length === ids.length && s.highlightedDeviceIds.every((id, i) => id === ids[i])
+        ? s
+        : { highlightedDeviceIds: ids },
+    ),
   setCanvasMode: (mode) =>
     set((s) => ({ canvasMode: mode, connectFromId: mode === 'connect' ? s.connectFromId : null, contextMenu: null })),
   setBottomTab: (tab) => set({ bottomTab: tab, bottomOpen: true }),
@@ -153,5 +181,10 @@ export const useUiStore = create<UiState>()((set) => ({
   setAddToScene: (entityIds) => set({ addToScene: entityIds }),
   setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
   setInteractOffered: (offered) => set({ interactOffered: offered }),
+  setSettingsOpen: (open, tab = 'project') => set(open ? { settingsOpen: true, settingsTab: tab } : { settingsOpen: false }),
+  openTemplates: (opts) => set({ templateGallery: opts, contextMenu: null }),
+  setAutomationView: (view) => set({ automationView: view }),
+  showAutomation: (id, view) =>
+    set((s) => ({ selectedAutomationId: id, bottomTab: 'automations', bottomOpen: true, automationView: view ?? s.automationView })),
   reset: () => set({ ...initial }),
 }));

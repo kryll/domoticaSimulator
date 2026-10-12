@@ -15,7 +15,7 @@ import type {
 import { DAY_MS, formatSimTime, MINUTE_MS, parseHHMM, startOfDay } from './clock';
 import { activateScene, callService, createSimulationState, runScript, sameState, setEntityState, tick } from './engine';
 import { openDoor, pressButton, triggerMotion } from './events';
-import { movePerson } from './people';
+import { findZone, movePerson } from './people';
 
 export interface TimelineStepResult {
   /** Índice del paso en timeline.steps. */
@@ -106,7 +106,7 @@ function applyEvent(sim: SimulationState, project: Project, step: TimelineEventS
   }
 }
 
-function describeEvent(step: TimelineEventStep): string {
+function describeEvent(step: TimelineEventStep, project: Project): string {
   switch (step.event) {
     case 'state':
       return `${step.entityId ?? '?'} → ${String(step.value)}`;
@@ -118,12 +118,16 @@ function describeEvent(step: TimelineEventStep): string {
       return `pulsación ${String(step.value ?? 'single')} en ${step.entityId ?? '?'}`;
     case 'door':
       return `${truthy(step.value) ? 'abrir' : 'cerrar'} ${step.entityId ?? '?'}`;
-    case 'person':
-      return `${step.personId ?? '?'} → ${step.zoneId || 'fuera'}`;
+    case 'person': {
+      // Nombres, no ids: «Ana → Trabajo».
+      const person = project.people?.find((p) => p.id === step.personId)?.name ?? step.personId ?? '?';
+      const zone = step.zoneId ? (findZone(project, step.zoneId)?.name ?? step.zoneId) : 'fuera';
+      return `${person} → ${zone}`;
+    }
     case 'scene':
-      return `escena ${step.sceneId ?? '?'}`;
+      return `escena ${project.scenes.find((x) => x.id === step.sceneId)?.name ?? step.sceneId ?? '?'}`;
     case 'script':
-      return `script ${step.scriptId ?? '?'}`;
+      return `script ${project.scripts.find((x) => x.id === step.scriptId)?.name ?? step.scriptId ?? '?'}`;
   }
 }
 
@@ -159,7 +163,7 @@ export function runTimeline(project: Project, defs: DeviceDefinition[], timeline
         return;
       }
       sim = next;
-      results.push({ index, step, at, ok: true, actual: null, expected: null, message: `Evento: ${describeEvent(step)}` });
+      results.push({ index, step, at, ok: true, actual: null, expected: null, message: `Evento: ${describeEvent(step, project)}` });
       return;
     }
     const actual = observe(sim, step);

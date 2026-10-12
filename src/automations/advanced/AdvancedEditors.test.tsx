@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { Action, Condition, Trigger } from '../../types';
 import { useProjectStore } from '../../store/projectStore';
 import { makeDevice, makeProject } from '../../test/fixtures';
+import { pickEntity } from '../../test/pickEntity';
 import { ActionListEditor } from '../ActionEditor';
 import { ConditionEditor } from '../ConditionEditor';
 import { TriggerEditor } from '../TriggerEditor';
@@ -67,7 +68,7 @@ describe('editores de lógica (B11)', () => {
     expect(actions[0]).toEqual({ type: 'choose', choices: [{ conditions: [], sequence: [] }] });
     const option = screen.getByRole('group', { name: 'Opción 1: entonces' });
     await userEvent.click(within(option).getByRole('button', { name: '+ Llamar a servicio' }));
-    await userEvent.selectOptions(within(option).getByLabelText('Entidad'), 'light.luz_salon');
+    await pickEntity('Entidad', 'light.luz_salon');
     const conds = screen.getByRole('group', { name: 'Opción 1: si se cumple' });
     await userEvent.click(within(conds).getByRole('button', { name: '+ Ninguna (NO)' }));
     expect(actions[0]).toMatchObject({
@@ -162,10 +163,12 @@ describe('editores de personas y zonas (B9)', () => {
   it('disparador «Acción de mando» ofrece las acciones del mando', async () => {
     let value: Trigger = { type: 'device_action', entityId: '', action: 'single' };
     render(<TriggerHarness initial={value} onChange={(t) => (value = t)} />);
-    const select = screen.getByLabelText('Mando');
-    const option = within(select).getAllByRole('option').find((o) => (o as HTMLOptionElement).value.endsWith('_action'));
-    if (!option) throw new Error('sin mando');
-    await userEvent.selectOptions(select, (option as HTMLOptionElement).value);
+    // «Mando» es el EntityPicker (combobox con búsqueda) limitado a los sensores de acción.
+    await userEvent.click(screen.getByRole('combobox', { name: 'Mando' }));
+    const options = within(screen.getByRole('listbox', { name: 'Opciones: Mando' })).getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.every((o) => (o.getAttribute('title') ?? '').endsWith('_action'))).toBe(true);
+    await userEvent.click(options[0] as HTMLElement);
     await userEvent.selectOptions(screen.getByLabelText('Acción'), 'double');
     expect(value).toMatchObject({ type: 'device_action', action: 'double' });
     expect((value as { entityId: string }).entityId).toMatch(/^sensor\..*_action$/);

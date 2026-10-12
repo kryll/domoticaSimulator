@@ -1,5 +1,5 @@
 // Validador del proyecto: reglas de red y de dominio con códigos estables y mensajes en español.
-import type { Brand, Condition, Device, Integration, DeviceDefinition, Id, IssueSeverity, Project, ValidationIssue } from '../types';
+import type { Action, Brand, Condition, Device, Integration, DeviceDefinition, Id, IssueSeverity, Project, Trigger, ValidationIssue } from '../types';
 import { INTEGRATION_LABELS } from '../devices/labels';
 import { isCloud } from '../devices/catalog';
 import {
@@ -13,10 +13,12 @@ import {
   requiredHubBrand,
   zigbeeNetworkOf,
 } from '../devices/roles';
-import { entityIdsForDevice } from '../devices/entities';
+import { entityIdsForDevice, slugify } from '../devices/entities';
 import { collectEntityRefs, type EntityReference } from '../devices/renaming';
 import { findScene, findScript } from '../simulation/engine';
 import { groupEntityId, peopleEntities, projectZones } from '../simulation/logic';
+import { missingRequiredFields } from '../simulation/serviceCatalog';
+import { actionConditions, flattenActions } from '../automations/walk';
 import { canConnect } from './connections';
 import { isInRange } from './coverage';
 import { analyzeMesh } from './mesh';
@@ -235,10 +237,12 @@ function fase3RefsRule(ctx: Ctx): ValidationIssue[] {
   const result: ValidationIssue[] = [];
   const people = new Set((ctx.project.people ?? []).map((p) => p.id));
   const zones = new Set(projectZones(ctx.project).map((z) => z.id));
+  const leaves = (c: Condition): Condition[] => (c.type === 'and' || c.type === 'or' || c.type === 'not' ? c.conditions.flatMap(leaves) : [c]);
   for (const a of ctx.project.automations) {
-    const refs = [...a.triggers, ...a.conditions.flatMap(function walk(c: Condition): Condition[] {
-      return c.type === 'and' || c.type === 'or' || c.type === 'not' ? c.conditions.flatMap(walk) : [c];
-    })];
+    // También los de las acciones anidadas (wait_for_trigger, condiciones de choose/if/repeat).
+    const nested = flattenActions(a.actions);
+    const triggers: Trigger[] = [...a.triggers, ...nested.flatMap((x) => (x.type === 'wait_for_trigger' ? x.triggers : []))];
+    const refs = [...triggers, ...[...a.conditions, ...nested.flatMap(actionConditions)].flatMap(leaves)];
     for (const r of refs) {
       if (r.type !== 'zone') continue;
       if (!people.has(r.personId)) result.push(issue('error', 'persona-desconocida', `La automatización «${a.name}» usa una persona que no existe (${r.personId})`, [], `${a.id}:${r.personId}`));
@@ -283,6 +287,40 @@ function roomRule(ctx: Ctx): ValidationIssue[] {
     .map((d) => issue('info', 'dispositivo-sin-sala', `«${d.name}» no está asignado a ninguna sala`, [d.id]));
 }
 
+function missingFieldRule(ctx: Ctx): ValidationIssue[] {
+  const result: ValidationIssue[] = [];
+  const check = (kind: EntityReference['kind'], ownerId: string, ownerName: string, actions: Action[]): void => {
+    actions.forEach((top, i) => {
+      // La acción de primer nivel y las anidadas (choose/if/repeat) cuentan como «acción i + 1».
+      flattenActions([top]).forEach((a, j) => {
+        if (a.type !== 'service') return;
+        for (const f of missingRequiredFields(a.service, a.data)) {
+          const key = j === 0 ? `${kind}:${ownerId}:${i}:${f.key}` : `${kind}:${ownerId}:${i}.${j}:${f.key}`;
+          result.push(
+            issue('error', 'servicio-falta-campo', `${KIND_LABELS[kind]} «${ownerName}» llama a ${a.service} (acción ${i + 1}) sin el campo obligatorio «${f.label}» (${f.key})`, [], key),
+          );
+        }
+      });
+    });
+  };
+  for (const a of ctx.project.automations) check('automation', a.id, a.name, a.actions);
+  for (const s of ctx.project.scripts) check('script', s.id, s.name, s.sequence);
+  return result;
+}
+
+function duplicateScriptNameRule(ctx: Ctx): ValidationIssue[] {
+  const groups = new Map<string, string[]>();
+  for (const s of ctx.project.scripts) {
+    const slug = slugify(s.name);
+    groups.set(slug, [...(groups.get(slug) ?? []), s.name]);
+  }
+  return [...groups.entries()]
+    .filter(([, list]) => list.length > 1)
+    .map(([slug, list]) =>
+      issue('warning', 'nombre-script-duplicado', `Hay ${list.length} scripts con el mismo nombre (${list.map((n) => `«${n}»`).join(', ')}): sus entity_id serán script.${slug}, script.${slug}_2...; cámbiales el nombre para distinguirlos`, [], slug),
+    );
+}
+
 const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1, info: 2 };
 
 /** Valida el proyecto. Devuelve los problemas ordenados por gravedad (errores primero). */
@@ -308,6 +346,8 @@ export function validateProject(project: Project, defs: DeviceDefinition[]): Val
     ...duplicateEntityRule(ctx),
     ...unknownEntityRule(ctx),
     ...fase3RefsRule(ctx),
+    ...missingFieldRule(ctx),
+    ...duplicateScriptNameRule(ctx),
     ...isolatedInfraRule(ctx),
     ...cloudRule(ctx),
     ...roomRule(ctx),

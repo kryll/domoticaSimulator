@@ -1,9 +1,10 @@
 // Parser YAML mínimo (bloques, escalares, comillas, flujo simple) y conversión a Automation.
-import type { Action, Automation, ChooseOption, Condition, EntityStateValue, RepeatAction, Trigger } from '../types';
+import type { Action, Automation, ChooseOption, Condition, EntityStateValue, RepeatAction, SunEvent, Trigger } from '../types';
 import { isYamlMap, type YamlContext, type YamlMap, type YamlValue } from '../export/yaml';
 import { resolvePersonRef, resolveZoneRef } from '../export/yamlLogic';
 import { findScene, findScript } from '../simulation/engine';
 import { parseHHMM } from '../simulation/clock';
+import { NOTIFY_PERSISTENT } from '../simulation/notify';
 
 // ---------- Lexer de líneas ----------
 
@@ -277,6 +278,13 @@ function offsetMinutes(v: YamlValue, where: string): number {
   return m[1] === '-' ? -total : total;
 }
 
+function sunEvent(v: YamlValue, where: string): SunEvent {
+  const event = str(v, where);
+  if (event !== 'sunrise' && event !== 'sunset') throw new Error(`Evento solar no válido en ${where}: "${event}" (sunrise o sunset)`);
+  return event;
+}
+
+/** Acepta la sintaxis actual (`trigger: state`) y la antigua (`platform: state`). */
 export function parseTrigger(v: YamlValue, i = 0, ctx?: Ctx): Trigger {
   const where = `el disparador ${i + 1}`;
   const m = asMap(v, where);
@@ -301,9 +309,7 @@ export function parseTrigger(v: YamlValue, i = 0, ctx?: Ctx): Trigger {
     case 'time':
       return { type: 'time', at: hhmm(req(m, 'at', where), where) };
     case 'sun': {
-      const event = str(req(m, 'event', where), where);
-      if (event !== 'sunrise' && event !== 'sunset') throw new Error(`Evento solar no válido en ${where}: "${event}"`);
-      const t: Trigger = { type: 'sun', event };
+      const t: Trigger = { type: 'sun', event: sunEvent(req(m, 'event', where), where) };
       if (m.offset !== undefined && m.offset !== null) t.offsetMinutes = offsetMinutes(m.offset, where);
       return t;
     }
@@ -338,6 +344,19 @@ export function parseCondition(v: YamlValue, i = 0, ctx?: Ctx): Condition {
       const c: Condition = { type: 'time' };
       if (m.after !== undefined && m.after !== null) c.after = hhmm(m.after, where);
       if (m.before !== undefined && m.before !== null) c.before = hhmm(m.before, where);
+      return c;
+    }
+    case 'sun': {
+      const c: Condition = { type: 'sun' };
+      if (m.after !== undefined && m.after !== null) {
+        c.after = sunEvent(m.after, where);
+        if (m.after_offset !== undefined && m.after_offset !== null) c.afterOffsetMinutes = offsetMinutes(m.after_offset, where);
+      }
+      if (m.before !== undefined && m.before !== null) {
+        c.before = sunEvent(m.before, where);
+        if (m.before_offset !== undefined && m.before_offset !== null) c.beforeOffsetMinutes = offsetMinutes(m.before_offset, where);
+      }
+      if (c.after === undefined && c.before === undefined) throw new Error(`La condición de sol de ${where} necesita "after" o "before"`);
       return c;
     }
     case 'and':
@@ -403,6 +422,7 @@ function resolveScript(entityId: string, ctx: Ctx | undefined, where: string): s
   return script.id;
 }
 
+/** Acepta la sintaxis actual (`action: light.turn_on`) y la antigua (`service: light.turn_on`). */
 export function parseAction(v: YamlValue, i = 0, ctx?: Ctx): Action {
   const where = `la acción ${i + 1}`;
   const m = asMap(v, where);
@@ -415,7 +435,8 @@ export function parseAction(v: YamlValue, i = 0, ctx?: Ctx): Action {
   if (service === 'script.turn_on') return { type: 'script', scriptId: resolveScript(entityIdOf(m, where), ctx, where) };
   if (service.startsWith('script.')) return { type: 'script', scriptId: resolveScript(service, ctx, where) };
   if (!/^[a-z_]+\.[a-z0-9_]+$/.test(service)) throw new Error(`Servicio no válido en ${where}: "${service}"`);
-  const action: Action = { type: 'service', service, entityId: entityIdOf(m, where) };
+  const noTarget = service.startsWith('notify.') && m.entity_id === undefined && m.target === undefined;
+  const action: Action = { type: 'service', service, entityId: noTarget ? '' : entityIdOf(m, where) };
   const data = serviceData(m, where);
   if (data) action.data = data;
   return action;
@@ -427,7 +448,7 @@ function objectToAutomation(m: YamlMap, ctx: Ctx | undefined, fallbackId: string
   const mode = m.mode === undefined || m.mode === null ? 'single' : str(m.mode, 'mode');
   const validMode = MODES.find((x) => x === mode);
   if (!validMode) throw new Error(`Modo no válido: "${mode}" (single, restart, queued o parallel)`);
-  const triggers = list(m.trigger ?? m.triggers).map((t, i) => parseTrigger(t, i, ctx));
+  const triggers = list(m.triggers ?? m.trigger).map((t, i) => parseTrigger(t, i, ctx));
   if (triggers.length === 0) throw new Error('La automatización necesita al menos un disparador ("trigger")');
   return {
     id: m.id === undefined || m.id === null ? fallbackId : str(m.id, 'id'),
@@ -435,8 +456,8 @@ function objectToAutomation(m: YamlMap, ctx: Ctx | undefined, fallbackId: string
     enabled: m.initial_state !== false,
     mode: validMode,
     triggers,
-    conditions: list(m.condition ?? m.conditions).map((c, i) => parseCondition(c, i, ctx)),
-    actions: list(m.action ?? m.actions).map((a, i) => parseAction(a, i, ctx)),
+    conditions: list(m.conditions ?? m.condition).map((c, i) => parseCondition(c, i, ctx)),
+    actions: list(m.actions ?? m.action).map((a, i) => parseAction(a, i, ctx)),
   };
 }
 
@@ -531,8 +552,10 @@ function parseFase3Action(m: YamlMap, where: string, ctx: Ctx | undefined): Acti
     for (const [k, v] of Object.entries(asMap(m.variables, `${where} (variables)`))) variables[k] = stateValue(v, `${where} (variables.${k})`);
     return { type: 'variables', variables };
   }
+  // notify.persistent_notification se queda como servicio (Fase 2); el resto de notify.* y
+  // persistent_notification.create son la acción `notify` (Fase 3). El motor trata igual ambas.
   const service = m.service ?? m.action;
-  if (typeof service === 'string' && (service.startsWith('notify.') || service === 'persistent_notification.create')) {
+  if (typeof service === 'string' && service !== NOTIFY_PERSISTENT && (service.startsWith('notify.') || service === 'persistent_notification.create')) {
     const data = m.data === undefined || m.data === null ? {} : asMap(m.data, `${where} (data)`);
     const a: Action = { type: 'notify', message: textOf(data.message, where) ?? '' };
     const title = textOf(data.title, where);

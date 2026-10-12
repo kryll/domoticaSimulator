@@ -1,7 +1,6 @@
 // YAML de Home Assistant para los disparadores, condiciones y acciones de la Fase 3
-// (zone, device, not, choose, if, wait_for_trigger, repeat, notify, variables).
-// TODO(integración Fase 2): cuando yaml.ts pase a la sintaxis nueva (`triggers:`/`actions:`,
-// `trigger:` en lugar de `platform:`, `action:` en lugar de `service:`), cambiar aquí las mismas claves.
+// (zone, device, not, choose, if, wait_for_trigger, repeat, notify, variables), con la sintaxis
+// actual de HA como yaml.ts: `trigger:` en lugar de `platform:` y `action:` en lugar de `service:`.
 import type {
   Action,
   Condition,
@@ -63,11 +62,11 @@ type Fase3Condition = NotCondition | ZoneCondition;
 
 export function fase3TriggerToYaml(t: Fase3Trigger, ctx: YamlContext): YamlMap {
   if (t.type === 'zone') {
-    return { platform: 'zone', entity_id: personRef(t.personId, ctx), zone: zoneRef(t.zoneId, ctx), event: t.event };
+    return { trigger: 'zone', entity_id: personRef(t.personId, ctx), zone: zoneRef(t.zoneId, ctx), event: t.event };
   }
   // Disparador de dispositivo de un mando. En HA real lleva device_id; aquí se identifica por
   // la entidad de acción. Para exportar a HA real usar deviceActionAsStateTrigger.
-  return { platform: 'device', domain: 'sensor', entity_id: t.entityId, type: 'action', subtype: t.action };
+  return { trigger: 'device', domain: 'sensor', entity_id: t.entityId, type: 'action', subtype: t.action };
 }
 
 /** Equivalente compatible con HA real (sin device_id): disparador de estado de la entidad de acción. */
@@ -115,7 +114,7 @@ export function fase3ActionToYaml(a: Fase3Action, ctx: YamlContext): YamlMap {
       const data: YamlMap = {};
       if (a.title !== undefined && a.title !== '') data.title = a.title;
       data.message = a.message;
-      return { service: a.service ?? 'notify.notify', data };
+      return { action: a.service ?? 'notify.notify', data };
     }
     case 'variables':
       return { variables: { ...a.variables } };

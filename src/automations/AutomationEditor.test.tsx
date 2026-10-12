@@ -3,7 +3,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AutomationEditor } from './AutomationEditor';
 import { useProjectStore } from '../store/projectStore';
+import { useUiStore } from '../store/uiStore';
 import { makeDevice, makeProject } from '../test/fixtures';
+import { pickEntity } from '../test/pickEntity';
 import type { Action, Automation } from '../types';
 import { ActionListEditor } from './ActionEditor';
 
@@ -36,6 +38,7 @@ function Harness() {
 describe('AutomationEditor', () => {
   beforeEach(() => {
     latest = base;
+    useUiStore.getState().reset();
     useProjectStore.getState().loadProject(
       makeProject({
         devices: [makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz salón'), makeDevice('aqara-motion-p1', 'd2', 0, 0, 'Sensor')],
@@ -47,14 +50,14 @@ describe('AutomationEditor', () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole('button', { name: '+ Cambio de estado' }));
     expect(latest.triggers).toHaveLength(1);
-    await userEvent.selectOptions(screen.getByLabelText('Entidad'), 'binary_sensor.sensor_motion');
+    await pickEntity('Entidad', 'binary_sensor.sensor_motion');
     expect(latest.triggers[0]).toMatchObject({ type: 'state', entityId: 'binary_sensor.sensor_motion', to: 'on' });
   });
 
   it('añade una acción de servicio y propone el servicio del dominio', async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole('button', { name: '+ Llamar a servicio' }));
-    await userEvent.selectOptions(screen.getByLabelText('Entidad'), 'light.luz_salon');
+    await pickEntity('Entidad', 'light.luz_salon');
     expect(latest.actions[0]).toMatchObject({ type: 'service', entityId: 'light.luz_salon', service: 'light.turn_on' });
   });
 
@@ -86,10 +89,14 @@ describe('AutomationEditor', () => {
 });
 
 describe('ActionListEditor', () => {
-  it('al reordenar, el campo Datos sigue a su acción', async () => {
+  beforeEach(() => {
+    useProjectStore.getState().loadProject(makeProject({ devices: [makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz salón')] }));
+  });
+
+  it('al reordenar, los datos tipados siguen a su acción', async () => {
     let actions: Action[] = [
-      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness: 10 } },
-      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness: 200 } },
+      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness_pct: 10 } },
+      { type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness_pct: 80 } },
     ];
     function ListHarness() {
       const [list, setList] = useState(actions);
@@ -104,15 +111,82 @@ describe('ActionListEditor', () => {
       );
     }
     render(<ListHarness />);
-    const fields = () => screen.getAllByLabelText('Datos (clave=valor)').map((el) => (el as HTMLInputElement).value);
-    expect(fields()).toEqual(['brightness=10', 'brightness=200']);
+    const sliders = () => screen.getAllByLabelText('Brillo').map((el) => (el as HTMLInputElement).value);
+    expect(sliders()).toEqual(['10', '80']);
     await userEvent.click(screen.getByRole('button', { name: 'Bajar elemento 1 de Acciones' }));
-    expect(fields()).toEqual(['brightness=200', 'brightness=10']);
-    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness : null))).toEqual([200, 10]);
+    expect(sliders()).toEqual(['80', '10']);
+    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness_pct : null))).toEqual([80, 10]);
     // editar el primero modifica solo esa acción
-    fireEvent.change(screen.getAllByLabelText('Datos (clave=valor)')[0] as HTMLElement, { target: { value: 'brightness=50' } });
-    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness : null))).toEqual([50, 10]);
+    fireEvent.change(screen.getAllByLabelText('Brillo')[0] as HTMLElement, { target: { value: '50' } });
+    expect(actions.map((a) => (a.type === 'service' ? a.data?.brightness_pct : null))).toEqual([50, 10]);
     await userEvent.click(screen.getByRole('button', { name: 'Eliminar elemento 1 de Acciones' }));
-    expect(fields()).toEqual(['brightness=10']);
+    expect(sliders()).toEqual(['10']);
+  });
+
+  it('filtra los servicios por el dominio de la entidad y ofrece el modo avanzado', async () => {
+    let actions: Action[] = [{ type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon' }];
+    render(<ActionListEditor actions={actions} onChange={(next) => (actions = next)} />);
+    const select = screen.getByLabelText('Servicio') as HTMLSelectElement;
+    const options = [...select.options].map((o) => o.value).filter(Boolean);
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.every((o) => o.startsWith('light.'))).toBe(true);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Incluir Brillo' }));
+    expect(actions[0]).toMatchObject({ data: { brightness_pct: 100 } });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Avanzado (texto libre)' }));
+    expect(screen.getByLabelText('Datos (clave=valor)')).toBeInTheDocument();
+  });
+});
+
+describe('ServiceDataFields', () => {
+  it('marcar «Variar brillo» desmarca «Brillo» (grupo exclusivo)', async () => {
+    useProjectStore.getState().loadProject(makeProject({ devices: [makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz salón')] }));
+    let actions: Action[] = [{ type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness_pct: 40 } }];
+    function H() {
+      const [list, setList] = useState(actions);
+      return <ActionListEditor actions={list} onChange={(n) => { actions = n; setList(n); }} />;
+    }
+    render(<H />);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Incluir Variar brillo' }));
+    expect(screen.getByRole('checkbox', { name: 'Incluir Brillo' })).not.toBeChecked();
+    expect(actions[0]).toMatchObject({ data: { brightness_step_pct: 0 } });
+    expect(actions[0]?.type === 'service' ? actions[0].data : null).not.toHaveProperty('brightness_pct');
+  });
+
+  it('un campo obligatorio va incluido sin casilla y, si falta, muestra un error', async () => {
+    useProjectStore.getState().loadProject(makeProject({ devices: [makeDevice('netatmo-thermostat', 't1', 0, 0, 'Termostato')] }));
+    let actions: Action[] = [{ type: 'service', service: 'climate.set_hvac_mode', entityId: 'climate.termostato' }];
+    function H() {
+      const [list, setList] = useState(actions);
+      return <ActionListEditor actions={list} onChange={(n) => { actions = n; setList(n); }} />;
+    }
+    render(<H />);
+    expect(screen.queryByRole('checkbox', { name: 'Incluir Modo' })).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('Obligatorio');
+    await userEvent.click(screen.getByRole('button', { name: 'Rellenar Modo' }));
+    expect(actions[0]).toMatchObject({ data: { hvac_mode: expect.any(String) } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    // al elegir otro servicio con obligatorios, se rellenan solos
+    await userEvent.selectOptions(screen.getByLabelText('Servicio'), 'climate.set_temperature');
+    await userEvent.selectOptions(screen.getByLabelText('Servicio'), 'climate.set_hvac_mode');
+    expect(actions[0]).toMatchObject({ service: 'climate.set_hvac_mode', data: { hvac_mode: expect.any(String) } });
+  });
+});
+
+describe('acción de notificación', () => {
+  it('se crea sin entidad y exige el mensaje', async () => {
+    useProjectStore.getState().loadProject(makeProject());
+    let actions: Action[] = [];
+    function H() {
+      const [list, setList] = useState(actions);
+      return <ActionListEditor actions={list} onChange={(n) => { actions = n; setList(n); }} />;
+    }
+    render(<H />);
+    await userEvent.click(screen.getByRole('button', { name: '+ Notificación persistente' }));
+    expect(actions[0]).toMatchObject({ type: 'service', service: 'notify.persistent_notification', entityId: '' });
+    expect(screen.queryByRole('combobox', { name: 'Entidad' })).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('Obligatorio');
+    await userEvent.type(screen.getByLabelText(/^Mensaje/), 'Hola');
+    expect(actions[0]).toMatchObject({ data: { message: 'Hola' } });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

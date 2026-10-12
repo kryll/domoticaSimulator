@@ -4,6 +4,7 @@ import { isCloud } from '../devices/catalog';
 import { effectiveIotClass } from '../devices/roles';
 import { entitiesForDevice } from '../devices/entities';
 import { automationEntityIds } from '../devices/areas';
+import { billOfMaterials } from '../export/bom';
 
 export type ProjectSnapshot = Omit<Project, 'variants'>;
 
@@ -76,10 +77,7 @@ export interface VariantSummary {
   /** Dispositivos alimentados por pilas. */
   batteries: number;
   automations: number;
-  /**
-   * Coste total. TODO(integración Fase 2): lo calcula el presupuesto (bom) de la Fase 2; aquí
-   * solo se rellena si se pasa `costOf` a compareVariants.
-   */
+  /** Coste total según el presupuesto (billOfMaterials); solo si se pasa `costOf` (ver budgetCost). */
   cost?: number;
 }
 
@@ -122,7 +120,15 @@ export function summarizeProject(project: ProjectSnapshot, defs: DeviceDefinitio
   return summary;
 }
 
-/** Compara dos variantes (o proyectos). `costOf`: proveedor de coste (presupuesto de la Fase 2). */
+/**
+ * Proveedor de coste para compareVariants: el total del presupuesto (billOfMaterials, con los
+ * precios propios de los ajustes de cada variante).
+ */
+export function budgetCost(defs: DeviceDefinition[]): (p: ProjectSnapshot) => number {
+  return (p) => billOfMaterials(p, defs).total;
+}
+
+/** Compara dos variantes (o proyectos). `costOf`: proveedor de coste (budgetCost para el presupuesto). */
 export function compareVariants(
   a: ProjectSnapshot,
   b: ProjectSnapshot,

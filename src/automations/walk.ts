@@ -27,6 +27,7 @@ export function mapConditionEntities(c: Condition, map: EntityMapper): Condition
     case 'not':
       return { ...c, conditions: c.conditions.map((x) => mapConditionEntities(x, map)) };
     case 'time':
+    case 'sun':
     case 'zone':
       return c;
   }
@@ -83,6 +84,7 @@ export function conditionEntityIds(c: Condition): string[] {
     case 'not':
       return c.conditions.flatMap(conditionEntityIds);
     case 'time':
+    case 'sun':
     case 'zone':
       return [];
   }

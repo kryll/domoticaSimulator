@@ -1,9 +1,10 @@
 import { create } from 'zustand';
-import type { EntityState, EntityStateValue, Id, Project, ServiceData, SimulationState } from '../types';
+import type { EntityState, EntityStateValue, Failures, Id, Project, ServiceData, SimulationState } from '../types';
+import { NO_FAILURES, hasFailures, reconcileAvailability, setFailures } from '../simulation/availability';
 import { entitiesForDevice, initialEntityStates } from '../devices/entities';
 import { catalog, getDefinition } from '../devices/catalog';
 import { applyQuickAction, primaryAction, setLevelAction, stepAction, type QuickAction } from '../devices/presentation';
-import { simNowFromLocalDate } from '../simulation/clock';
+import { simNowForProject } from '../simulation/clock';
 import { jamLock, motionPulse, openDoor, pressButton, setDeviceOffline, setSensorValue } from '../simulation/events';
 import {
   activateScene,
@@ -11,8 +12,10 @@ import {
   createSimulationState,
   renameEntities,
   runAutomation,
+  jumpTo,
   runScript,
   setEntityState,
+  testTrigger,
   tick,
 } from '../simulation/engine';
 import { useProjectStore } from './projectStore';
@@ -52,6 +55,12 @@ export interface SimulationStoreState {
   setLevel: (deviceId: Id, pct: number) => boolean;
   /** Ejecuta una automatización a mano (opcionalmente sin comprobar condiciones). */
   runAutomation: (automationId: Id, skipConditions?: boolean) => void;
+  /** Activa o desactiva fallos simulados (Internet, corte de luz, HA reiniciando, equipos caídos). */
+  setFailures: (patch: Partial<Failures>) => void;
+  /** Prueba un disparador: ejecuta la automatización evaluando sus condiciones (deja traza). */
+  testTrigger: (automationId: Id, triggerIndex: number) => void;
+  /** Avanza el reloj hasta `targetMs` (hora simulada) procesando lo que ocurra entre medias. */
+  jumpTo: (targetMs: number) => void;
   /** Simula que un dispositivo pierde (o recupera) la conexión. */
   setDeviceOffline: (deviceId: Id, offline: boolean) => void;
   /** Movimiento detectado con autoapagado según el modelo. */
@@ -80,13 +89,14 @@ function project(): Project {
 }
 
 export const useSimulationStore = create<SimulationStoreState>()((set, get) => ({
-  sim: createSimulationState(project(), catalog, simNowFromLocalDate(new Date())),
+  sim: createSimulationState(project(), catalog, simNowForProject(project(), new Date())),
   running: false,
   speed: 1,
 
   reset: (p) => {
     stopLoop();
-    const sim = createSimulationState(p ?? project(), catalog, simNowFromLocalDate(new Date()));
+    const target = p ?? project();
+    const sim = createSimulationState(target, catalog, simNowForProject(target, new Date()));
     set({ sim: { ...sim, speed: get().speed, running: false }, running: false });
   },
   start: () => {
@@ -108,7 +118,7 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
   setSpeed: (speed) => set((s) => ({ speed, sim: { ...s.sim, speed } })),
   advance: (realMs) => {
     // tick multiplica por sim.speed, que se mantiene sincronizado con `speed`.
-    set((s) => ({ sim: tick(s.sim, project(), realMs) }));
+    set((s) => ({ sim: tick(s.sim, project(), realMs, { defs: catalog }) }));
   },
   setEntity: (entityId, next) => set((s) => ({ sim: setEntityState(s.sim, project(), entityId, next) })),
   pressButton: (entityId, action) => set((s) => ({ sim: pressButton(s.sim, project(), entityId, action) })),
@@ -122,7 +132,18 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     applyDeviceAction(deviceId, (device, def, sim) => setLevelAction(device, def, sim, Math.max(0, Math.min(100, pct)))),
   runAutomation: (automationId, skipConditions = false) =>
     set((s) => ({ sim: runAutomation(s.sim, project(), automationId, { skipConditions }) })),
-  setDeviceOffline: (deviceId, offline) => set((s) => ({ sim: setDeviceOffline(s.sim, project(), deviceId, offline) })),
+  setFailures: (patch) => set((s) => ({ sim: setFailures(s.sim, project(), catalog, patch) })),
+  testTrigger: (automationId, triggerIndex) => set((s) => ({ sim: testTrigger(s.sim, project(), automationId, triggerIndex) })),
+  jumpTo: (targetMs) => {
+    lastTick = performance.now();
+    set((s) => ({ sim: jumpTo(s.sim, project(), catalog, targetMs) }));
+  },
+  setDeviceOffline: (deviceId, offline) =>
+    set((s) => {
+      const p = project();
+      // Después de cambiar el dispositivo, recalcula lo que depende de él (hijos de un coordinador...).
+      return { sim: reconcileAvailability(setDeviceOffline(s.sim, p, deviceId, offline), p, catalog) };
+    }),
   motionPulse: (entityId, seconds) => set((s) => ({ sim: motionPulse(s.sim, project(), entityId, seconds) })),
   setBinary: (entityId, on) => set((s) => ({ sim: openDoor(s.sim, project(), entityId, on) })),
   setSensorValue: (entityId, value) => set((s) => ({ sim: setSensorValue(s.sim, project(), entityId, value) })),
@@ -160,10 +181,30 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
       }
     }
     if (Object.keys(current).some((id) => !(id in entities))) changed = true;
-    if (!changed) return;
-    set({ sim: { ...base, entities } });
+    let next = changed ? { ...base, entities } : base;
+    // Olvida desconexiones de dispositivos borrados: si vuelven (rehacer) nacen con estado inicial.
+    const ids = new Set(p.devices.map((d) => d.id));
+    const staleOffline = Object.keys(next.offline ?? {}).filter((id) => !ids.has(id));
+    const staleFailure = (next.failureOffline ?? []).filter((id) => !ids.has(id));
+    if (staleOffline.length > 0 || staleFailure.length > 0) {
+      const offline = Object.fromEntries(Object.entries(next.offline ?? {}).filter(([id]) => ids.has(id)));
+      next = { ...next, offline, failureOffline: (next.failureOffline ?? []).filter((id) => ids.has(id)) };
+    }
+    // Con fallos, desconexiones o baterías, la disponibilidad depende del proyecto: un dispositivo
+    // nuevo durante un fallo, deshacer, cambiar el SAI o la integración, borrar el coordinador...
+    if (needsReconcile(next)) next = reconcileAvailability(next, p, catalog);
+    if (next !== get().sim) set({ sim: next });
   },
 }));
+
+function needsReconcile(sim: SimulationState): boolean {
+  return (
+    hasFailures(sim.failures ?? NO_FAILURES) ||
+    Object.keys(sim.offline ?? {}).length > 0 ||
+    (sim.failureOffline?.length ?? 0) > 0 ||
+    Object.keys(sim.batteries ?? {}).length > 0
+  );
+}
 
 /** "turn_on" -> "light.turn_on" (el motor recibe siempre dominio.servicio). */
 export function normalizeService(entityId: string, service: string): string {

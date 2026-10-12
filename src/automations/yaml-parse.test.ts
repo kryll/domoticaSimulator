@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { automationsToYaml, automationToYaml } from '../export/yaml';
-import { sameState } from '../simulation/engine';
+import { automationsToYaml, automationToYaml, scriptsToYaml } from '../export/yaml';
+import { notifyAction } from '../simulation/notify';
+import { scriptKeys } from '../simulation/scriptKeys';
+import { findScript, sameState } from '../simulation/engine';
 import type { Automation, Scene, Script } from '../types';
 import { parseAutomationsYaml, parseAutomationYaml, parseScalar, parseYaml } from './yaml-parse';
 
@@ -19,6 +21,7 @@ const full: Automation = {
   ],
   conditions: [
     { type: 'state', entityId: 'light.salon', state: 'off' },
+    { type: 'sun', after: 'sunset', afterOffsetMinutes: -30, before: 'sunrise' },
     { type: 'and', conditions: [{ type: 'time', after: '20:00' }, { type: 'or', conditions: [{ type: 'numeric_state', entityId: 'sensor.t', below: 3 }] }] },
   ],
   actions: [
@@ -221,5 +224,110 @@ describe('for: y datos de luz (fase 1)', () => {
 
   it('parseScalar admite mapas en línea simples', () => {
     expect(parseScalar('{minutes: 5, seconds: "10"}')).toEqual({ minutes: 5, seconds: '10' });
+  });
+});
+
+describe('sintaxis de HA (C13)', () => {
+  it('exporta la sintaxis actual: triggers/trigger, conditions/condition, actions/action', () => {
+    const yaml = automationToYaml(full, { scenes, scripts });
+    expect(yaml).toContain('triggers:\n  - trigger: state\n');
+    expect(yaml).toContain('conditions:\n  - condition: state\n');
+    expect(yaml).toContain('actions:\n  - action: light.turn_on\n    target:\n      entity_id: light.salon\n    data:\n');
+    expect(yaml).toContain('  - condition: sun\n    after: sunset\n    after_offset: "-00:30:00"\n    before: sunrise\n');
+    expect(yaml).not.toMatch(/platform:|service:|^trigger:|^condition:|^action:/m);
+  });
+
+  it('el parser acepta la sintaxis antigua y la nueva con el mismo resultado', () => {
+    const old = `
+alias: Antigua
+trigger:
+  - platform: state
+    entity_id: binary_sensor.puerta_door
+    to: "on"
+  - platform: sun
+    event: sunset
+    offset: "-00:15:00"
+condition:
+  - condition: sun
+    before: sunrise
+    before_offset: "01:00:00"
+action:
+  - service: light.turn_on
+    target:
+      entity_id: light.salon
+    data:
+      brightness_pct: 50
+`;
+    const modern = `
+alias: Antigua
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.puerta_door
+    to: "on"
+  - trigger: sun
+    event: sunset
+    offset: "-00:15:00"
+conditions:
+  - condition: sun
+    before: sunrise
+    before_offset: "01:00:00"
+actions:
+  - action: light.turn_on
+    target:
+      entity_id: light.salon
+    data:
+      brightness_pct: 50
+`;
+    const a = parseAutomationYaml(old);
+    const b = parseAutomationYaml(modern);
+    expect({ ...a, id: 'x' }).toEqual({ ...b, id: 'x' });
+    expect(b.triggers[1]).toEqual({ type: 'sun', event: 'sunset', offsetMinutes: -15 });
+    expect(b.conditions[0]).toEqual({ type: 'sun', before: 'sunrise', beforeOffsetMinutes: 60 });
+    expect(b.actions[0]).toEqual({ type: 'service', service: 'light.turn_on', entityId: 'light.salon', data: { brightness_pct: 50 } });
+  });
+
+  it('una condición de sol sin after ni before es un error', () => {
+    expect(() => parseAutomationYaml('triggers:\n  - trigger: time\n    at: "07:00"\nconditions:\n  - condition: sun\n')).toThrow(/after.*before/);
+  });
+});
+
+describe('revisión de la fase 2 (YAML)', () => {
+  it('conserva estados numéricos en to/from/state', () => {
+    const a: Automation = {
+      ...full,
+      triggers: [{ type: 'state', entityId: 'sensor.t', from: 20, to: 21.5 }],
+      conditions: [{ type: 'state', entityId: 'sensor.t', state: 21.5 }],
+      actions: [],
+    };
+    const yaml = automationToYaml(a);
+    expect(yaml).toContain('from: 20\n    to: 21.5');
+    const back = parseAutomationYaml(yaml);
+    expect(back.triggers[0]).toEqual({ type: 'state', entityId: 'sensor.t', from: 20, to: 21.5 });
+    expect(back.conditions[0]).toEqual({ type: 'state', entityId: 'sensor.t', state: 21.5 });
+  });
+
+  it('notify.persistent_notification sin target, ida y vuelta', () => {
+    const a: Automation = { ...full, conditions: [], actions: [notifyAction('Fuga en el baño', 'Aviso')] };
+    const yaml = automationToYaml(a);
+    expect(yaml).toContain('  - action: notify.persistent_notification\n    data:\n      message: Fuga en el baño\n      title: Aviso\n');
+    expect(yaml).not.toContain('entity_id: ""');
+    expect(parseAutomationYaml(yaml).actions).toEqual(a.actions);
+  });
+
+  it('scripts con el mismo nombre: claves iguales en scripts.yaml, acciones y findScript', () => {
+    const dup: Script[] = [
+      { id: 'x1', name: 'Salir', sequence: [] },
+      { id: 'x2', name: 'Salir', sequence: [] },
+    ];
+    expect(scriptKeys(dup)).toEqual({ x1: 'salir', x2: 'salir_2' });
+    const text = scriptsToYaml({ scripts: dup } as never);
+    expect(text).toContain('salir:\n');
+    expect(text).toContain('salir_2:\n');
+    const a: Automation = { ...full, conditions: [], actions: [{ type: 'script', scriptId: 'x2' }] };
+    const yaml = automationToYaml(a, { scenes, scripts: dup });
+    expect(yaml).toContain('entity_id: script.salir_2');
+    expect(parseAutomationYaml(yaml, { scenes, scripts: dup }).actions).toEqual([{ type: 'script', scriptId: 'x2' }]);
+    expect(findScript({ scripts: dup }, 'script.salir_2')?.id).toBe('x2');
+    expect(findScript({ scripts: dup }, 'script.salir')?.id).toBe('x1');
   });
 });

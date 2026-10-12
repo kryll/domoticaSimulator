@@ -93,7 +93,7 @@ describe('projectToPackages', () => {
     };
     const out = new Map(projectToPackages(p, catalog).map((f) => [f.path, f.content]));
     const salon = out.get('packages/salon.yaml') ?? '';
-    expect(salon).toContain('platform: state');
+    expect(salon).toContain('trigger: state');
     expect(salon).toContain('to: hold');
     expect(salon).toContain('platform: group');
     expect(out.get('packages/general.yaml')).toContain('person:');

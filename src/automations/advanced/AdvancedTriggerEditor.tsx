@@ -4,6 +4,7 @@ import { useProjectStore } from '../../store/projectStore';
 import { projectEntities } from '../../canvas/analysis';
 import { BUTTON_ACTION_LABELS, isRemoteEntity } from '../../simulation/controls/labels';
 import { SelectField } from '../../ui/Field';
+import { EntityPicker } from '../EntityPicker';
 import { ADVANCED_TRIGGER_LABELS } from '../../ui/advancedAutomationOptions';
 import { PersonSelect, ZoneSelect } from '../../people/pickers';
 
@@ -62,18 +63,14 @@ export function DeviceActionTriggerEditor({
     <div>
       <Header text={ADVANCED_TRIGGER_LABELS.device_action} />
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <SelectField
+        <EntityPicker
           label="Mando"
           value={value.entityId}
-          placeholder="— Elige un mando —"
-          options={[
-            ...remotes.map((r) => ({ value: r.entityId, label: r.label })),
-            ...(value.entityId && !current ? [{ value: value.entityId, label: `${value.entityId} (no existe)` }] : []),
-          ]}
-          onChange={(e) => {
-            const next = remotes.find((r) => r.entityId === e.target.value);
+          allowedIds={remotes.map((r) => r.entityId)}
+          onChange={(entityId) => {
+            const next = remotes.find((r) => r.entityId === entityId);
             const action = next && !next.actions.includes(value.action) ? (next.actions[0] ?? 'single') : value.action;
-            onChange({ ...value, entityId: e.target.value, action });
+            onChange({ ...value, entityId, action });
           }}
           hint={remotes.length === 0 ? 'Añade un mando o botón inalámbrico al plano.' : undefined}
         />

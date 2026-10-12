@@ -71,7 +71,7 @@ function mapSceneEntities(entities: Record<string, EntityState>, map: Mapper): R
 
 /**
  * Reescribe los entity_id de triggers, condiciones (anidadas incluidas), acciones de
- * automatizaciones y scripts, y las claves de las escenas. Función pura: no muta el proyecto.
+ * automatizaciones y scripts (también las anidadas de choose/if/repeat/wait_for_trigger, con walk.ts), y las claves de las escenas. Función pura: no muta el proyecto.
  */
 export function renameEntityRefs(project: Project, mapping: Record<string, string>): Project {
   if (Object.keys(mapping).length === 0) return project;
@@ -108,11 +108,14 @@ export interface EntityReference {
 
 const conditionRefs = conditionEntityIds;
 
+/** entity_id de una acción y de sus acciones anidadas (choose/if/repeat/wait_for_trigger, vía walk.ts). */
 function actionRefs(a: Action): string[] {
   return flattenActions([a]).flatMap((x) => {
     const own = [...actionConditions(x).flatMap(conditionEntityIds)];
     if (x.type === 'wait_for_trigger') own.push(...x.triggers.flatMap(triggerEntityIds));
     if (x.type !== 'service') return own;
+    // notify.* no tiene entidad de destino.
+    if (x.service.startsWith('notify.') && x.entityId === '') return own;
     // "script.<slug>" llama al script directamente y no necesita entity_id.
     if (x.service.startsWith('script.') && x.service !== 'script.turn_on') return [...own, x.service];
     return [...own, x.entityId];

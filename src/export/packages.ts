@@ -1,6 +1,6 @@
 // Exportación a una instalación real de Home Assistant (B16): un paquete YAML por área con sus
 // automatizaciones, escenas, scripts y grupos, areas.yaml y una guía de emparejamiento.
-import type { Automation, Device, DeviceDefinition, Id, Integration, Project, Trigger } from '../types';
+import { defaultSettings, type Automation, type Device, type DeviceDefinition, type Id, type Integration, type Project, type Trigger, type ZoneKind } from '../types';
 import { entitiesForDevice, slugify } from '../devices/entities';
 import { INTEGRATION_LABELS, ROLE_LABELS } from '../devices/labels';
 import { isCloud } from '../devices/catalog';
@@ -105,10 +105,39 @@ export function projectToPackages(project: Project, defs: DeviceDefinition[]): E
   }
   const people = project.people ?? [];
   const extra = people.length > 0 ? [section('person', toYaml(people.map((p) => ({ name: p.name, id: slugify(p.name) }))))] : [];
+  const zones = zonesSection(project);
+  if (zones) extra.push(zones);
   const general = packageContent('Elementos sin área', buckets.get(GENERAL_PACKAGE) ?? emptyBucket(), project, extra);
   if (general) files.push({ path: `packages/${GENERAL_PACKAGE}.yaml`, content: general });
   files.sort((a, b) => a.path.localeCompare(b.path));
   return [{ path: 'areas.yaml', content: areasYaml(project, defs) }, { path: 'GUIA_EMPAREJAMIENTO.md', content: pairingGuide(project, defs) }, ...files];
+}
+
+const ZONE_ICONS: Record<ZoneKind, string> = { home: 'mdi:home', work: 'mdi:briefcase', other: 'mdi:map-marker' };
+
+/**
+ * Zonas del proyecto para HA real. zone.home es la ubicación de Home Assistant (no se declara en
+ * YAML): se indica en un comentario con la latitud y longitud de los ajustes del proyecto. El resto
+ * de zonas se declaran con esas mismas coordenadas como punto de partida (el proyecto no guarda
+ * dónde está cada zona) para ajustarlas después.
+ */
+export function zonesSection(project: Pick<Project, 'zones' | 'settings'>): string | undefined {
+  const zones = project.zones ?? [];
+  const settings = { ...defaultSettings(), ...project.settings };
+  const others = zones.filter((z) => z.kind !== 'home');
+  if (zones.length === 0) return undefined;
+  const coords = `latitud ${settings.latitude}, longitud ${settings.longitude}`;
+  const lines = [`# zone.home: ubicación de Home Assistant (Ajustes → Sistema → General): ${coords}.`];
+  if (others.length === 0) return `${lines.join('\n')}\n`;
+  lines.push('# Coordenadas de partida: las de la casa. Cámbialas por la ubicación real de cada zona.');
+  const items = others.map((z) => ({
+    name: z.name,
+    latitude: settings.latitude,
+    longitude: settings.longitude,
+    radius: 100,
+    icon: ZONE_ICONS[z.kind],
+  }));
+  return `${lines.join('\n')}\n${section('zone', toYaml(items))}`;
 }
 
 /** areas.yaml: referencia de áreas con su planta, dispositivos y entidades (se crean en Ajustes → Áreas). */

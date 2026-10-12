@@ -7,8 +7,10 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { SelectField, TextField } from '../ui/Field';
 import { cx } from '../ui/cx';
+import { formatMoney } from '../ui/money';
 import {
   applyVariant,
+  budgetCost,
   compareVariants,
   createVariant,
   deleteVariant,
@@ -45,6 +47,11 @@ function Diff({ n, lowerIsBetter }: { n: number; lowerIsBetter: boolean }) {
   return <span className={good ? 'font-semibold text-emerald-700' : 'font-semibold text-red-700'}>{n > 0 ? `+${n}` : n}</span>;
 }
 
+function CostDiff({ n }: { n: number }) {
+  if (Math.abs(n) < 0.005) return <span className="text-slate-400">=</span>;
+  return <span className={n < 0 ? 'font-semibold text-emerald-700' : 'font-semibold text-red-700'}>{`${n > 0 ? '+' : '−'}${formatMoney(Math.abs(n))}`}</span>;
+}
+
 function CompareDialog({ initialA, initialB, onClose }: { initialA: string; initialB: string; onClose: () => void }) {
   const project = useProjectStore((s) => s.project);
   const variants = project.variants ?? EMPTY;
@@ -56,7 +63,7 @@ function CompareDialog({ initialA, initialB, onClose }: { initialA: string; init
     const snap = (id: string): ProjectSnapshot | undefined => (id === CURRENT ? snapshotOf(project) : variants.find((v) => v.id === id)?.snapshot);
     const sa = snap(a);
     const sb = snap(b);
-    return sa && sb ? compareVariants(sa, sb, catalog) : null;
+    return sa && sb ? compareVariants(sa, sb, catalog, budgetCost(catalog)) : null;
   }, [a, b, project, variants]);
 
   return (
@@ -105,6 +112,18 @@ function CompareDialog({ initialA, initialB, onClose }: { initialA: string; init
                     </tr>
                   );
                 })}
+                {comparison.a.cost !== undefined && comparison.b.cost !== undefined && (
+                  <tr className={cx('border-b border-slate-100', comparison.a.cost !== comparison.b.cost && 'bg-amber-50/60')}>
+                    <th scope="row" className="py-1 pr-2 text-left font-normal text-slate-700">
+                      Coste (presupuesto)
+                    </th>
+                    <td className="px-2 py-1 text-right tabular-nums">{formatMoney(comparison.a.cost)}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{formatMoney(comparison.b.cost)}</td>
+                    <td className="py-1 pl-2 text-right tabular-nums">
+                      <CostDiff n={comparison.diff.cost ?? 0} />
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
             <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">

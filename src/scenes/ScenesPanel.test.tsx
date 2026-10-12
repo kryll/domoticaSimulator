@@ -4,6 +4,7 @@ import { ScenesPanel } from './ScenesPanel';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { makeDevice, makeProject } from '../test/fixtures';
+import { pickEntity } from '../test/pickEntity';
 
 describe('ScenesPanel', () => {
   beforeEach(() => {
@@ -39,7 +40,7 @@ describe('ScenesPanel', () => {
     // la simulación no cambia: solo el objetivo de la escena
     expect(useSimulationStore.getState().sim.entities['light.luz_salon']?.state).toBe('off');
 
-    await userEvent.selectOptions(screen.getByLabelText('Añadir entidad'), 'cover.persiana_cover');
+    await pickEntity('Añadir entidad', 'cover.persiana_cover');
     await userEvent.click(screen.getByRole('button', { name: 'Añadir' }));
     expect(scene()?.entities['cover.persiana_cover']?.state).toBe('closed');
     fireEvent.change(within(list).getByRole('slider', { name: 'Posición' }), { target: { value: '60' } });

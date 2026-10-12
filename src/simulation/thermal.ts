@@ -12,7 +12,7 @@ import type {
 } from '../types';
 import { entitiesForDevice } from '../devices/entities';
 import { hvacAction } from '../devices/climate';
-import { DAY_MS, DEFAULT_SUN, HOUR_MS, minutesOfDay, sunTimes } from './clock';
+import { DAY_MS, HOUR_MS, minutesOfDay, projectSunLocation, sunTimesAt } from './clock';
 import { updateClimateCurrentTemperature } from './services';
 import { setEntityState } from './engine';
 
@@ -37,10 +37,17 @@ export const LIGHT_LUX = 300;
 
 const CONTACT_CLASSES = new Set(['door', 'window', 'opening', 'garage_door']);
 
-/** Proveedor de amanecer/atardecer del día. TODO(integración Fase 2): usar sunTimes reales por ubicación. */
+/** Proveedor de amanecer/atardecer del día. */
 export type SunProvider = (dayMs: number) => { sunrise: number; sunset: number };
 
-const defaultSun: SunProvider = (day) => sunTimes(day, DEFAULT_SUN);
+/** Sol real (algoritmo de la NOAA) en la ubicación de los ajustes del proyecto. */
+export function projectSunProvider(project: Pick<Project, 'settings'>): SunProvider {
+  const where = projectSunLocation(project);
+  return (day) => sunTimesAt(day, where);
+}
+
+/** Sin proyecto: sol real en la ubicación por defecto (Madrid). */
+const defaultSun: SunProvider = projectSunProvider({});
 
 /** Ajustes efectivos del entorno (los del proyecto sobre los valores por defecto). */
 export function environmentSettings(project: Pick<Project, 'environment'>): Required<EnvironmentSettings> {
@@ -184,7 +191,7 @@ export function applyEnvironment(
   project: Project,
   defs: DeviceDefinition[],
   dtMs: number,
-  sun: SunProvider = defaultSun,
+  sun: SunProvider = projectSunProvider(project),
 ): SimulationState {
   if (!project.environment?.enabled || !(dtMs > 0)) return sim;
   const env = environmentSettings(project);

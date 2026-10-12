@@ -1,7 +1,9 @@
-// Serializador YAML propio (sin dependencias) y exportación al formato de Home Assistant.
+// Serializador YAML propio (sin dependencias) y exportación al formato de Home Assistant
+// (sintaxis actual: triggers:/- trigger:, conditions:/- condition:, actions:/- action:).
 import type { Action, Automation, Condition, EntityStateValue, Project, Scene, Script, Trigger } from '../types';
 import { slugify } from '../devices/entities';
 import { sceneEntityState } from '../simulation/scenes';
+import { scriptEntityId, scriptKeys } from '../simulation/scriptKeys';
 import { fase3ActionToYaml, fase3ConditionToYaml, fase3TriggerToYaml, type PeopleContext } from './yamlLogic';
 
 export type YamlScalar = string | number | boolean | null;
@@ -106,14 +108,22 @@ function sceneEntity(id: string, ctx: YamlContext): string {
 }
 
 function scriptEntity(id: string, ctx: YamlContext): string {
-  const script = ctx.scripts?.find((s) => s.id === id);
-  return `script.${script ? slugify(script.name) : id}`;
+  return scriptEntityId(ctx.scripts ?? [], id);
 }
 
 /** Estado de HA como texto: los booleanos se escriben 'on'/'off'. */
 export function stateToYaml(v: EntityStateValue): string {
   if (typeof v === 'boolean') return v ? 'on' : 'off';
   return String(v);
+}
+
+/**
+ * Estado para `to:`/`from:`/`state:`: los booleanos como 'on'/'off' y los números se conservan
+ * como números (HA los convierte a texto al comparar, así que `to: 21.5` equivale a "21.5", pero
+ * así la ida y vuelta devuelve el mismo tipo).
+ */
+export function stateValueToYaml(v: EntityStateValue): string | number {
+  return typeof v === 'number' ? v : stateToYaml(v);
 }
 
 function formatOffset(minutes: number): string {
@@ -146,22 +156,22 @@ function dataToYaml(data: Record<string, EntityStateValue>): YamlMap {
 export function triggerToYaml(t: Trigger, ctx: YamlContext = {}): YamlMap {
   switch (t.type) {
     case 'state': {
-      const m: YamlMap = { platform: 'state', entity_id: t.entityId };
-      if (t.from !== undefined) m.from = stateToYaml(t.from);
-      if (t.to !== undefined) m.to = stateToYaml(t.to);
+      const m: YamlMap = { trigger: 'state', entity_id: t.entityId };
+      if (t.from !== undefined) m.from = stateValueToYaml(t.from);
+      if (t.to !== undefined) m.to = stateValueToYaml(t.to);
       if (t.for !== undefined && t.for > 0) m.for = formatHms(t.for);
       return m;
     }
     case 'numeric_state': {
-      const m: YamlMap = { platform: 'numeric_state', entity_id: t.entityId };
+      const m: YamlMap = { trigger: 'numeric_state', entity_id: t.entityId };
       if (t.above !== undefined) m.above = t.above;
       if (t.below !== undefined) m.below = t.below;
       return m;
     }
     case 'time':
-      return { platform: 'time', at: t.at };
+      return { trigger: 'time', at: t.at };
     case 'sun': {
-      const m: YamlMap = { platform: 'sun', event: t.event };
+      const m: YamlMap = { trigger: 'sun', event: t.event };
       if (t.offsetMinutes) m.offset = formatOffset(t.offsetMinutes);
       return m;
     }
@@ -174,7 +184,7 @@ export function triggerToYaml(t: Trigger, ctx: YamlContext = {}): YamlMap {
 export function conditionToYaml(c: Condition, ctx: YamlContext = {}): YamlMap {
   switch (c.type) {
     case 'state': {
-      const m: YamlMap = { condition: 'state', entity_id: c.entityId, state: stateToYaml(c.state) };
+      const m: YamlMap = { condition: 'state', entity_id: c.entityId, state: stateValueToYaml(c.state) };
       if (c.for !== undefined && c.for > 0) m.for = formatHms(c.for);
       return m;
     }
@@ -190,6 +200,14 @@ export function conditionToYaml(c: Condition, ctx: YamlContext = {}): YamlMap {
       if (c.before !== undefined) m.before = c.before;
       return m;
     }
+    case 'sun': {
+      const m: YamlMap = { condition: 'sun' };
+      if (c.after !== undefined) m.after = c.after;
+      if (c.afterOffsetMinutes) m.after_offset = formatOffset(c.afterOffsetMinutes);
+      if (c.before !== undefined) m.before = c.before;
+      if (c.beforeOffsetMinutes) m.before_offset = formatOffset(c.beforeOffsetMinutes);
+      return m;
+    }
     case 'and':
     case 'or':
       return { condition: c.type, conditions: c.conditions.map((x) => conditionToYaml(x, ctx)) };
@@ -202,14 +220,15 @@ export function conditionToYaml(c: Condition, ctx: YamlContext = {}): YamlMap {
 export function actionToYaml(a: Action, ctx: YamlContext = {}): YamlMap {
   switch (a.type) {
     case 'service': {
-      const m: YamlMap = { service: a.service, target: { entity_id: a.entityId } };
+      // notify.* no tiene entidad de destino.
+      const m: YamlMap = a.service.startsWith('notify.') && a.entityId === '' ? { action: a.service } : { action: a.service, target: { entity_id: a.entityId } };
       if (a.data && Object.keys(a.data).length > 0) m.data = dataToYaml(a.data);
       return m;
     }
     case 'scene':
-      return { service: 'scene.turn_on', target: { entity_id: sceneEntity(a.sceneId, ctx) } };
+      return { action: 'scene.turn_on', target: { entity_id: sceneEntity(a.sceneId, ctx) } };
     case 'script':
-      return { service: 'script.turn_on', target: { entity_id: scriptEntity(a.scriptId, ctx) } };
+      return { action: 'script.turn_on', target: { entity_id: scriptEntity(a.scriptId, ctx) } };
     case 'delay':
       return { delay: { seconds: a.seconds } };
     default:
@@ -220,9 +239,9 @@ export function actionToYaml(a: Action, ctx: YamlContext = {}): YamlMap {
 export function automationToObject(a: Automation, ctx: YamlContext = {}): YamlMap {
   const m: YamlMap = { id: a.id, alias: a.name, mode: a.mode };
   if (!a.enabled) m.initial_state = false;
-  m.trigger = a.triggers.map((t) => triggerToYaml(t, ctx));
-  m.condition = a.conditions.map((c) => conditionToYaml(c, ctx));
-  m.action = a.actions.map((x) => actionToYaml(x, ctx));
+  m.triggers = a.triggers.map((t) => triggerToYaml(t, ctx));
+  m.conditions = a.conditions.map((c) => conditionToYaml(c, ctx));
+  m.actions = a.actions.map((x) => actionToYaml(x, ctx));
   return m;
 }
 
@@ -256,11 +275,9 @@ export function scenesToYaml(project: Project): string {
 /** scripts.yaml: mapa clave (slug del nombre, único) -> script. */
 export function scriptsToYaml(project: Project): string {
   const root: YamlMap = {};
+  const keys = scriptKeys(project.scripts);
   for (const s of project.scripts) {
-    const base = slugify(s.name);
-    let key = base;
-    for (let n = 2; key in root; n++) key = `${base}_${n}`;
-    root[key] = { alias: s.name, sequence: s.sequence.map((a) => actionToYaml(a, project)) };
+    root[keys[s.id] ?? s.id] = { alias: s.name, sequence: s.sequence.map((a) => actionToYaml(a, project)) };
   }
   return toYaml(root);
 }

@@ -88,20 +88,20 @@ describe('exportación a Home Assistant', () => {
       "id: a1
       alias: Luz al entrar
       mode: restart
-      trigger:
-        - platform: state
+      triggers:
+        - trigger: state
           entity_id: binary_sensor.puerta_door
           from: "off"
           to: "on"
-        - platform: numeric_state
+        - trigger: numeric_state
           entity_id: sensor.salon_illuminance
           below: 50
-        - platform: time
+        - trigger: time
           at: "07:30"
-        - platform: sun
+        - trigger: sun
           event: sunset
           offset: "-00:30:00"
-      condition:
+      conditions:
         - condition: time
           after: "20:00"
           before: "07:00"
@@ -113,8 +113,8 @@ describe('exportación a Home Assistant', () => {
             - condition: numeric_state
               entity_id: sensor.t
               above: 1.5
-      action:
-        - service: light.turn_on
+      actions:
+        - action: light.turn_on
           target:
             entity_id: light.salon
           data:
@@ -122,10 +122,10 @@ describe('exportación a Home Assistant', () => {
             color_name: warm white
         - delay:
             seconds: 90
-        - service: scene.turn_on
+        - action: scene.turn_on
           target:
             entity_id: scene.s1
-        - service: script.turn_on
+        - action: script.turn_on
           target:
             entity_id: script.sc1
       "
@@ -136,7 +136,7 @@ describe('exportación a Home Assistant', () => {
     const yaml = automationsToYaml(withRefs);
     expect(yaml).toContain('entity_id: scene.noche_tranquila');
     expect(yaml).toContain('entity_id: script.salir_de_casa');
-    expect(yaml).toContain('- id: a2\n  alias: Apagada\n  mode: restart\n  initial_state: false\n  trigger:\n    - platform: time\n      at: "23:00"\n  condition: []\n  action: []\n');
+    expect(yaml).toContain('- id: a2\n  alias: Apagada\n  mode: restart\n  initial_state: false\n  triggers:\n    - trigger: time\n      at: "23:00"\n  conditions: []\n  actions: []\n');
     expect(automationsToYaml(project([]))).toBe('[]\n');
   });
 
@@ -159,7 +159,7 @@ describe('exportación a Home Assistant', () => {
       "salir_de_casa:
         alias: Salir de casa
         sequence:
-          - service: lock.lock
+          - action: lock.lock
             target:
               entity_id: lock.puerta
       salir_de_casa_2:

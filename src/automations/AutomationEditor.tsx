@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useId } from 'react';
 import type { Automation, Condition, Trigger } from '../types';
 import { Tabs } from '../ui/Tabs';
+import { tabPanelId } from '../ui/ids';
 import { SelectField, TextField } from '../ui/Field';
 import { ListEditor } from './ListEditor';
 import { TriggerEditor } from './TriggerEditor';
@@ -8,8 +9,8 @@ import { ConditionEditor } from './ConditionEditor';
 import { ActionListEditor } from './ActionEditor';
 import { AutomationYamlEditor } from './AutomationYamlEditor';
 import { conditionFactories, triggerFactories } from '../ui/automationOptions';
-
-type View = 'visual' | 'yaml';
+import { useUiStore, type AutomationView } from '../store/uiStore';
+import { TracesView } from './TracesView';
 
 export interface AutomationEditorProps {
   automation: Automation;
@@ -18,22 +19,29 @@ export interface AutomationEditorProps {
 
 /** Editor visual + YAML de una automatización. */
 export function AutomationEditor({ automation, onChange }: AutomationEditorProps) {
-  const [view, setView] = useState<View>('visual');
+  const prefix = `auto-${useId().replace(/:/g, '')}`;
+  const view = useUiStore((s) => s.automationView);
+  const setView = useUiStore((s) => s.setAutomationView);
   const set = <K extends keyof Automation>(key: K, value: Automation[K]) => onChange({ ...automation, [key]: value });
 
   return (
     <div className="flex flex-col gap-3">
-      <Tabs<View>
+      <Tabs<AutomationView>
         label="Modo de edición"
         tabs={[
           { key: 'visual', label: 'Visual' },
           { key: 'yaml', label: 'YAML' },
+          { key: 'traces', label: 'Trazas' },
         ]}
         active={view}
         onChange={setView}
         className="border-b border-slate-200"
+        idPrefix={prefix}
       />
-      {view === 'visual' ? (
+      <div role="tabpanel" id={tabPanelId(prefix, view)} aria-labelledby={`${prefix}-tab-${view}`}>
+      {view === 'traces' ? (
+        <TracesView automation={automation} />
+      ) : view === 'visual' ? (
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto,auto] sm:items-end">
             <TextField label="Nombre de la automatización" value={automation.name} onChange={(e) => set('name', e.target.value)} />
@@ -79,6 +87,7 @@ export function AutomationEditor({ automation, onChange }: AutomationEditorProps
       ) : (
         <AutomationYamlEditor automation={automation} onChange={onChange} />
       )}
+      </div>
     </div>
   );
 }

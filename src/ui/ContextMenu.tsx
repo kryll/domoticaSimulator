@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import { cx } from './cx';
 
 export type MenuEntry =
-  | { kind: 'item'; id: string; label: string; onSelect: () => void; danger?: boolean; hint?: string; disabled?: boolean }
+  | { kind: 'item'; id: string; label: string; onSelect: () => void; danger?: boolean; hint?: string; disabled?: boolean; /** Texto explicativo bajo la etiqueta (p. ej. por qué está desactivado). */ note?: string }
   | { kind: 'separator' }
   | { kind: 'header'; label: string };
 
@@ -94,7 +94,10 @@ export function ContextMenu({ x, y, label, entries, onClose }: ContextMenuProps)
               entry.disabled ? 'cursor-not-allowed text-slate-400' : entry.danger ? 'text-red-700 hover:bg-red-50 focus:bg-red-50' : 'text-slate-700 hover:bg-sky-50 focus:bg-sky-50',
             )}
           >
-            <span>{entry.label}</span>
+            <span className="flex flex-col">
+              <span>{entry.label}</span>
+              {entry.note && <span className="text-[11px] text-slate-500">{entry.note}</span>}
+            </span>
             {entry.hint && <kbd className="font-mono text-[10px] text-slate-400">{entry.hint}</kbd>}
           </button>
         );

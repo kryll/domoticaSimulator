@@ -10,6 +10,7 @@ import type {
   Floor,
   Point,
   Project,
+  ProjectSettings,
   Room,
   Scene,
   Script,
@@ -140,6 +141,15 @@ function device(v: unknown, path: string): Device {
   };
   const roomId = optStr(o, 'roomId', path);
   if (roomId !== undefined) d.roomId = roomId;
+  if (o.ups !== undefined) {
+    if (typeof o.ups !== 'boolean') fail(`${path}.ups`, 'debe ser verdadero o falso');
+    d.ups = o.ups;
+  }
+  const load = optNum(o, 'loadWatts', path);
+  if (load !== undefined) {
+    if (load < 0) fail(`${path}.loadWatts`, 'no puede ser negativo');
+    d.loadWatts = load;
+  }
   if (o.showAs !== undefined) d.showAs = oneOf(o, 'showAs', ['light', 'switch'] as const, path);
   return d;
 }
@@ -183,7 +193,7 @@ function trigger(v: unknown, path: string): Trigger {
 
 function condition(v: unknown, path: string): Condition {
   const o = obj(v, path);
-  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'and', 'or', 'not', 'zone'] as const, path);
+  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'and', 'or', 'not', 'zone'] as const, path);
   switch (type) {
     case 'state': {
       const c: Condition = { type, entityId: str(o, 'entityId', path), state: stateValue(o.state, `${path}.state`) };
@@ -205,6 +215,17 @@ function condition(v: unknown, path: string): Condition {
       const before = optStr(o, 'before', path);
       if (after !== undefined) c.after = after;
       if (before !== undefined) c.before = before;
+      return c;
+    }
+    case 'sun': {
+      const c: Condition = { type };
+      const events = ['sunrise', 'sunset'] as const;
+      if (o.after !== undefined) c.after = oneOf(o, 'after', events, path);
+      if (o.before !== undefined) c.before = oneOf(o, 'before', events, path);
+      const afterOffset = optNum(o, 'afterOffsetMinutes', path);
+      const beforeOffset = optNum(o, 'beforeOffsetMinutes', path);
+      if (afterOffset !== undefined) c.afterOffsetMinutes = afterOffset;
+      if (beforeOffset !== undefined) c.beforeOffsetMinutes = beforeOffset;
       return c;
     }
     case 'and':
@@ -319,6 +340,37 @@ function scene(v: unknown, path: string): Scene {
 function script(v: unknown, path: string): Script {
   const o = obj(v, path);
   return { id: str(o, 'id', path), name: str(o, 'name', path), sequence: actions(o.sequence, `${path}.sequence`) };
+}
+
+function settings(v: unknown, path: string): ProjectSettings {
+  const o = obj(v, path);
+  const s: ProjectSettings = {
+    latitude: numAt(o, 'latitude', path),
+    longitude: numAt(o, 'longitude', path),
+    electricityPriceEurKwh: numAt(o, 'electricityPriceEurKwh', path),
+  };
+  if (s.latitude < -90 || s.latitude > 90) fail(`${path}.latitude`, 'debe estar entre -90 y 90');
+  if (s.longitude < -180 || s.longitude > 180) fail(`${path}.longitude`, 'debe estar entre -180 y 180');
+  if (s.electricityPriceEurKwh < 0) fail(`${path}.electricityPriceEurKwh`, 'no puede ser negativo');
+  const tz = optStr(o, 'timeZone', path);
+  if (tz !== undefined) s.timeZone = tz;
+  if (o.currency !== undefined) s.currency = oneOf(o, 'currency', ['EUR'] as const, path);
+  if (o.prices !== undefined) {
+    const prices: Record<string, number> = {};
+    const po = obj(o.prices, `${path}.prices`);
+    for (const key of Object.keys(po)) {
+      const n = numAt(po, key, `${path}.prices`);
+      if (n < 0) fail(`${path}.prices.${key}`, 'no puede ser negativo');
+      prices[key] = n;
+    }
+    s.prices = prices;
+  }
+  const acc = optNum(o, 'batteryAcceleration', path);
+  if (acc !== undefined) {
+    if (acc < 0) fail(`${path}.batteryAcceleration`, 'no puede ser negativo');
+    s.batteryAcceleration = acc;
+  }
+  return s;
 }
 
 function list<T>(o: Obj, key: string, parse: (v: unknown, path: string) => T): T[] {
@@ -483,6 +535,8 @@ export function parseProject(raw: unknown): Project {
     scenes: list(o, 'scenes', scene),
     scripts: list(o, 'scripts', script),
   };
+  // Los proyectos anteriores a la fase 2 no tienen ajustes: se importan sin ellos.
+  if (o.settings !== undefined) project.settings = settings(o.settings, 'settings');
   if (project.floors.length === 0) fail('floors', 'debe tener al menos una planta');
   checkUniqueIds('floors', project.floors);
   checkUniqueIds('rooms', project.rooms);
