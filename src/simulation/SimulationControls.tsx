@@ -3,7 +3,6 @@ import { useUiStore } from '../store/uiStore';
 import { SimClock } from './SimClock';
 import { userWaits } from './engine';
 import { Button } from '../ui/Button';
-import { SimulationSettingsButton } from '../environment/SimulationSettingsButton';
 
 /** Controles de la simulación: reproducir/pausar, reiniciar, velocidad y reloj. */
 export function SimulationControls() {
@@ -56,7 +55,6 @@ export function SimulationControls() {
       >
         ⟲
       </Button>
-      <SimulationSettingsButton />
       <label className="sr-only" htmlFor="sim-speed">
         Velocidad
       </label>

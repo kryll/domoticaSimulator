@@ -5,7 +5,7 @@ import type { Id } from '../types';
 export type CanvasMode = 'select' | 'room' | 'connect' | 'interact' | 'wall';
 export type BottomTab = 'validation' | 'impact' | 'automations' | 'scenes' | 'budget' | 'energy' | 'logbook' | ExtraBottomTab;
 /** Pestañas de la Fase 3 (ver ui/extraTabs.ts). */
-export type ExtraBottomTab = 'home' | 'dashboard' | 'tests';
+export type ExtraBottomTab = 'home' | 'tests';
 
 /** Pestañas del diálogo de ajustes: proyecto (Fase 2) y simulación (Fase 3). */
 export type SettingsTab = 'project' | 'simulation';

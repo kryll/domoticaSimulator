@@ -83,7 +83,7 @@ export function NotificationTray() {
           id={panelId}
           role="dialog"
           aria-label="Notificaciones del móvil"
-          className="absolute right-0 z-50 mt-2 w-80 rounded-[2rem] border-4 border-slate-800 bg-slate-800 p-1 shadow-2xl"
+          className="absolute right-0 z-[60] mt-2 w-80 rounded-[2rem] border-4 border-slate-800 bg-slate-800 p-1 shadow-2xl"
         >
           <div className="flex max-h-[28rem] flex-col overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-sky-900 to-slate-900">
             <div className="flex items-center justify-between px-4 pb-1 pt-2 text-[11px] font-semibold text-white/80">

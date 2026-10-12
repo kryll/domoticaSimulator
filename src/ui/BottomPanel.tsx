@@ -5,10 +5,11 @@ import { BOTTOM_MIN, useUiStore, type BottomTab } from '../store/uiStore';
 import { analyzeProject } from '../canvas/analysis';
 import { ValidationPanel } from '../simulation/ValidationPanel';
 import { LogbookPanel } from '../simulation/LogbookPanel';
-import { Tabs } from './Tabs';
+import { OverflowTabs } from './OverflowTabs';
 import { Button } from './Button';
 import { tabPanelId } from './ids';
-import { EXTRA_TABS } from './extraTabs';
+import { EXTRA_TABS, TAB_GROUPS, groupOfTab, type TabGroup } from './extraTabs';
+import { cx } from './cx';
 import { ExtraTabPanel } from './ExtraTabPanel';
 import { hasFailures } from './failures';
 
@@ -100,10 +101,11 @@ export function BottomPanel() {
   const issues = analyzeProject(project).issues;
   const problems = issues.filter((i) => i.severity !== 'info').length;
 
-  const tabs: Array<{ key: BottomTab; label: ReactNode }> = [
-    { key: 'validation', label: <>Validación<Count n={problems} tone="red" /></> },
+  const allTabs: Array<{ key: BottomTab; label: ReactNode; text: string }> = [
+    { key: 'validation', text: 'Validación', label: <>Validación<Count n={problems} tone="red" /></> },
     {
       key: 'impact',
+      text: 'Impacto',
       label: (
         <>
           Impacto
@@ -113,13 +115,19 @@ export function BottomPanel() {
         </>
       ),
     },
-    { key: 'automations', label: <>Automatizaciones<Count n={project.automations.length} tone="slate" /></> },
-    { key: 'scenes', label: <>Escenas y scripts<Count n={project.scenes.length + project.scripts.length} tone="slate" /></> },
-    { key: 'budget', label: 'Presupuesto' },
-    { key: 'energy', label: 'Energía' },
-    { key: 'logbook', label: <>Registro<Count n={logCount} tone="slate" /></> },
-    ...EXTRA_TABS,
+    { key: 'automations', text: 'Automatizaciones', label: <>Automatizaciones<Count n={project.automations.length} tone="slate" /></> },
+    { key: 'scenes', text: 'Escenas y scripts', label: <>Escenas y scripts<Count n={project.scenes.length + project.scripts.length} tone="slate" /></> },
+    { key: 'budget', text: 'Presupuesto', label: 'Presupuesto' },
+    { key: 'energy', text: 'Energía', label: 'Energía' },
+    { key: 'logbook', text: 'Registro', label: <>Registro<Count n={logCount} tone="slate" /></> },
+    ...EXTRA_TABS.map((t) => ({ ...t, text: t.label })),
   ];
+  const group = groupOfTab(tab);
+  const tabs = TAB_GROUPS.find((g) => g.key === group)?.tabs.map((k) => allTabs.find((t) => t.key === k)).filter((t): t is (typeof allTabs)[number] => t !== undefined) ?? [];
+  const groupAlert: Record<TabGroup, boolean> = { design: problems > 0 || failing, logic: false, use: false };
+  // Última pestaña abierta de cada grupo, para volver a ella al cambiar de grupo.
+  const lastTab = useRef<Partial<Record<TabGroup, BottomTab>>>({});
+  lastTab.current[group] = tab;
 
   return (
     <section
@@ -133,7 +141,29 @@ export function BottomPanel() {
     >
       {open && !maximized && <ResizeHandle />}
       <div className="flex items-center justify-between gap-2 px-2 pt-1">
-        <Tabs<BottomTab> label="Herramientas" tabs={tabs} active={tab} onChange={setTab} idPrefix={PREFIX} className="min-w-0 overflow-x-auto whitespace-nowrap" />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div role="group" aria-label="Grupo de herramientas" className="flex shrink-0 rounded-md bg-slate-100 p-0.5">
+            {TAB_GROUPS.map((g) => (
+              <button
+                key={g.key}
+                type="button"
+                aria-pressed={g.key === group}
+                aria-label={`${g.label}: grupo de pestañas${groupAlert[g.key] && g.key !== group ? ' (hay avisos)' : ''}`}
+                onClick={() => setTab(lastTab.current[g.key] ?? g.tabs[0] ?? 'validation')}
+                className={cx(
+                  'relative rounded px-2.5 py-1 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500',
+                  g.key === group ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+                )}
+              >
+                {g.label}
+                {groupAlert[g.key] && g.key !== group && (
+                  <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-600" aria-hidden="true" />
+                )}
+              </button>
+            ))}
+          </div>
+          <OverflowTabs<BottomTab> label="Herramientas" tabs={tabs} active={tab} onChange={setTab} idPrefix={PREFIX} />
+        </div>
         <div className="flex items-center gap-1">
           <Button
             size="sm"

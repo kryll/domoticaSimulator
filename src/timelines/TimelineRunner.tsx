@@ -4,27 +4,28 @@ import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
 import { catalog } from '../devices/catalog';
-import { recordTimeline, runTimeline, type TimelineRun } from '../simulation/timeline';
+import { recordTimeline, runTimeline, timelineStart, type TimelineRun } from '../simulation/timeline';
 import { formatSimTime, startOfDay } from '../simulation/clock';
 import { Button } from '../ui/Button';
 import { cx } from '../ui/cx';
 
 /** Resultado de la última ejecución por prueba (se pierde al cambiar de proyecto). */
-const lastRuns = new Map<string, { run: TimelineRun; steps: TimelineStep[] }>();
+const lastRuns = new Map<string, { run: TimelineRun; steps: TimelineStep[]; startAt: number | undefined }>();
 
 /** «Grabar desde el registro», «Ejecutar» y la lista de resultados ✓/✗ (B14). */
-export function TimelineRunner({ timeline, onRecorded }: { timeline: Timeline; onRecorded: (steps: TimelineStep[]) => void }) {
+export function TimelineRunner({ timeline, onRecorded }: { timeline: Timeline; onRecorded: (steps: TimelineStep[], startAt: number) => void }) {
   const [, force] = useState(0);
   const cached = lastRuns.get(timeline.id);
-  // El resultado solo vale si los pasos no han cambiado desde la ejecución.
-  const run = cached && cached.steps === timeline.steps ? cached.run : null;
+  // El resultado solo vale si los pasos y el inicio no han cambiado desde la ejecución.
+  const run = cached && cached.steps === timeline.steps && cached.startAt === timeline.startAt ? cached.run : null;
 
   const execute = () => {
     const project = useProjectStore.getState().project;
-    const start = startOfDay(useSimulationStore.getState().sim.now);
+    // Desde el inicio guardado en la prueba o, si no tiene, desde las 00:00 del día simulado.
+    const start = timelineStart(timeline, startOfDay(useSimulationStore.getState().sim.now));
     try {
       const result = runTimeline(project, catalog, timeline, start);
-      lastRuns.set(timeline.id, { run: result, steps: timeline.steps });
+      lastRuns.set(timeline.id, { run: result, steps: timeline.steps, startAt: timeline.startAt });
       force((n) => n + 1);
     } catch (err) {
       useUiStore.getState().notify(`No se pudo ejecutar la prueba: ${err instanceof Error ? err.message : String(err)}`, 'error');
@@ -32,13 +33,15 @@ export function TimelineRunner({ timeline, onRecorded }: { timeline: Timeline; o
   };
 
   const record = () => {
-    const steps = recordTimeline(useSimulationStore.getState().sim.log);
+    const { log, now } = useSimulationStore.getState().sim;
+    const steps = recordTimeline(log);
     if (steps.length === 0) {
       useUiStore.getState().notify('El registro no tiene eventos que grabar: usa los dispositivos con la simulación y vuelve a intentarlo', 'info');
       return;
     }
     if (timeline.steps.length > 0 && !window.confirm(`¿Sustituir los ${timeline.steps.length} pasos de «${timeline.name}» por los ${steps.length} grabados?`)) return;
-    onRecorded(steps);
+    // La prueba grabada empieza el día de la primera entrada del registro.
+    onRecorded(steps, startOfDay(log[0]?.timestamp ?? now));
     useUiStore.getState().notify(`Grabados ${steps.length} pasos desde el registro`, 'success');
   };
 

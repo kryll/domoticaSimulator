@@ -96,10 +96,38 @@ describe('projectToPackages', () => {
     expect(salon).toContain('trigger: state');
     expect(salon).toContain('to: hold');
     expect(salon).toContain('platform: group');
-    expect(out.get('packages/general.yaml')).toContain('person:');
+    const general = out.get('packages/general.yaml') ?? '';
+    expect(general).toContain('# Personas: créalas en Ajustes → Personas');
+    expect(general).not.toMatch(/^person:/m);
   });
 
   it('packagesZip contiene todos los ficheros', () => {
     expect(readStoredZip(packagesZip(demo, catalog)).map((f) => f.path)).toEqual(files.map((f) => f.path));
+  });
+});
+
+describe('guía y paquete general (revisión)', () => {
+  const demo = createDemoProject();
+  const out = new Map(projectToPackages(demo, catalog).map((f) => [f.path, f.content]));
+  const guide = out.get('GUIA_EMPAREJAMIENTO.md') ?? '';
+  const general = out.get('packages/general.yaml') ?? '';
+
+  it('no repite la marca y usa pasos por papel en servidor y red', () => {
+    expect(guide).not.toContain('Home Assistant Home Assistant');
+    const red = guide.slice(guide.indexOf('## 2. Red'), guide.indexOf('## 3.'));
+    expect(red).toContain('Reserva una IP fija');
+    expect(red).not.toMatch(/Tapo/);
+    const servidor = guide.slice(guide.indexOf('## 1.'), guide.indexOf('## 2.'));
+    expect(servidor).toContain('homeassistant.local:8123');
+  });
+
+  it('personas comentadas, zonas pasivas y sección en la guía', () => {
+    expect(general).toMatch(/^# Personas: créalas en Ajustes → Personas/m);
+    expect(general).toContain('person.ana');
+    expect(general).toContain('passive: true');
+    expect(general).toContain('TODO');
+    expect(guide).toContain('## 6. Personas y zonas');
+    const root = parseYaml(general);
+    expect(isYamlMap(root) && root.person === undefined).toBe(true);
   });
 });

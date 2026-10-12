@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { HistorySample } from '../types';
 import { useSimulationStore } from '../store/simulationStore';
-import { historySeries, isNumericSeries } from '../simulation/history';
+import { historySeries } from '../simulation/history';
 import { formatSimTime } from '../simulation/clock';
-import { activeSegments, numericPath } from './sparkline';
+import { activeSegments, gapSegments, isNumericWithGaps, numericPath } from './sparkline';
 
 const WINDOWS = [
   { label: '1 h', ms: 3_600_000 },
@@ -24,6 +24,7 @@ function fmt(n: number): string {
  */
 export function HistorySparkline({ entityId, unit, binary }: { entityId: string; unit?: string; binary?: boolean }) {
   const [win, setWin] = useState(0);
+  const gapId = `gap-${useId().replace(/:/g, '')}`;
   const samples = useSimulationStore((s) => s.sim.history?.[entityId] ?? EMPTY);
   const minute = useSimulationStore((s) => Math.floor(s.sim.now / 60_000));
   const span = WINDOWS[win]?.ms ?? 3_600_000;
@@ -35,13 +36,15 @@ export function HistorySparkline({ entityId, unit, binary }: { entityId: string;
     [samples, entityId, from, to],
   );
   if (samples.length === 0) return null;
-  const numeric = !binary && isNumericSeries(series);
+  const numeric = !binary && isNumericWithGaps(series);
+  const gaps = gapSegments(series, from, to, W);
   const path = numeric ? numericPath(series, from, to, { width: W, height: H, pad: 3 }) : null;
   const segs = numeric ? [] : activeSegments(series, from, to, W);
   const last = series[series.length - 1];
   const label = numeric && path
     ? `Historial de ${span / 3_600_000} h: mínimo ${fmt(path.min)}${unit ? ` ${unit}` : ''}, máximo ${fmt(path.max)}${unit ? ` ${unit}` : ''}`
     : `Historial de ${span / 3_600_000} h: ${segs.length} periodos activos`;
+  const fullLabel = gaps.length > 0 ? `${label}, ${gaps.length} ${gaps.length === 1 ? 'tramo' : 'tramos'} sin datos` : label;
 
   return (
     <figure className="mt-1" aria-label={`Historial de ${entityId}`}>
@@ -65,7 +68,17 @@ export function HistorySparkline({ entityId, unit, binary }: { entityId: string;
           ))}
         </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-11 w-full rounded bg-slate-50" role="img" aria-label={label} preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-11 w-full rounded bg-slate-50" role="img" aria-label={fullLabel} preserveAspectRatio="none">
+        <defs>
+          <pattern id={gapId} width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="2" height="4" fill="#cbd5e1" />
+          </pattern>
+        </defs>
+        {gaps.map((g, i) => (
+          <rect key={`gap-${i}`} x={g.x} y={0} width={g.w} height={H} fill={`url(#${gapId})`} data-testid="sparkline-gap">
+            <title>No disponible</title>
+          </rect>
+        ))}
         {numeric && path ? (
           <path d={path.d} fill="none" stroke="#0284c7" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
         ) : (

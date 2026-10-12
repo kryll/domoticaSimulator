@@ -11,6 +11,9 @@ import { ProjectsDialog } from './ProjectsDialog';
 import { downloadText, readFileAsText, safeFilename } from './download';
 import { useExtrasStore } from '../store/extrasStore';
 import { TopBarExtras } from './TopBarExtras';
+import { useMediaQuery } from './useMediaQuery';
+import { useSimulationStore } from '../store/simulationStore';
+import { hasFailures } from './failures';
 // Estático: yaml.ts ya va en el bundle principal (lo usa el motor a través de yamlLogic.ts).
 import { automationsToYaml, scenesToYaml, scriptsToYaml } from '../export/yaml';
 
@@ -54,7 +57,7 @@ function SaveStatus() {
   );
 }
 
-function Menu({ label, children }: { label: string; children: ReactNode }) {
+function Menu({ label, children, align = 'right', ariaLabel }: { label: ReactNode; children: ReactNode; align?: 'left' | 'right'; ariaLabel?: string }) {
   const ref = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -65,11 +68,14 @@ function Menu({ label, children }: { label: string; children: ReactNode }) {
   }, []);
   return (
     <details ref={ref} className="relative">
-      <summary className="flex cursor-pointer list-none items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+      <summary
+        aria-label={ariaLabel}
+        className="flex cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+      >
         {label} ▾
       </summary>
       <div
-        className="absolute right-0 z-40 mt-1 flex w-56 flex-col rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+        className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} z-40 mt-1 flex max-h-[80vh] w-64 flex-col overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg`}
         onClick={() => {
           if (ref.current) ref.current.open = false;
         }}
@@ -78,6 +84,10 @@ function Menu({ label, children }: { label: string; children: ReactNode }) {
       </div>
     </details>
   );
+}
+
+function MenuHeader({ children }: { children: ReactNode }) {
+  return <div className="px-3 pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</div>;
 }
 
 function MenuItem({ onClick, children }: { onClick: () => void; children: ReactNode }) {
@@ -105,6 +115,10 @@ export function TopBar() {
   const base = () => safeFilename(useProjectStore.getState().project.name);
   const project = () => useProjectStore.getState().project;
 
+  // Por debajo de 1440 px, Archivo, Exportar y Escenarios se agrupan en «☰ Proyecto».
+  const wide = useMediaQuery('(min-width: 1440px)');
+  const failing = useSimulationStore((st) => hasFailures(st.sim.failures));
+
   const safely = (fn: () => void | Promise<void>, ok?: string) => {
     Promise.resolve()
       .then(fn)
@@ -112,63 +126,98 @@ export function TopBar() {
       .catch((err: unknown) => notify(errorText(err), 'error'));
   };
 
+  const fileItems = (
+    <>
+      <MenuItem
+        onClick={() => {
+          if (window.confirm('¿Crear un proyecto nuevo? El actual queda guardado en el navegador.'))
+            openProject(createEmptyProject('Nuevo proyecto'));
+        }}
+      >
+        Nuevo proyecto
+      </MenuItem>
+      <MenuItem onClick={() => useExtrasStore.getState().openDialog('houseTemplates')}>Nuevo desde plantilla de casa…</MenuItem>
+      <MenuItem onClick={() => setOpenDialog(true)}>Abrir…</MenuItem>
+      <MenuItem onClick={() => safely(() => openAsNewProject(createDemoProject()).then(() => undefined))}>Cargar proyecto de demo</MenuItem>
+      <MenuItem onClick={() => fileRef.current?.click()}>Importar JSON…</MenuItem>
+      <MenuItem onClick={() => useExtrasStore.getState().openDialog('share')}>Compartir enlace…</MenuItem>
+    </>
+  );
+  const exportItems = (
+    <>
+      <MenuItem onClick={() => safely(() => downloadText(exportProjectJson(project()), `${base()}.json`, 'application/json'))}>
+        Proyecto (JSON)
+      </MenuItem>
+      <MenuItem onClick={() => safely(() => downloadText(automationsToYaml(project()), 'automations.yaml', 'text/yaml'))}>
+        automations.yaml
+      </MenuItem>
+      <MenuItem onClick={() => safely(() => downloadText(scenesToYaml(project()), 'scenes.yaml', 'text/yaml'))}>
+        scenes.yaml
+      </MenuItem>
+      <MenuItem onClick={() => safely(() => downloadText(scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
+        scripts.yaml
+      </MenuItem>
+      <MenuItem onClick={() => safely(async () => downloadText((await import('../export/csv')).devicesToCsv(project(), catalog), `${base()}-dispositivos.csv`, 'text/csv'))}>
+        Inventario (CSV)
+      </MenuItem>
+      <MenuItem
+        onClick={() =>
+          safely(async () => {
+            const bom = await import('../export/bom');
+            downloadText(bom.bomToCsv(bom.billOfMaterials(project(), catalog)), `${base()}-presupuesto.csv`, 'text/csv');
+          })
+        }
+      >
+        Presupuesto (CSV)
+      </MenuItem>
+      <MenuItem onClick={() => safely(async () => (await import('../export/png')).exportCanvasPng(`${base()}-plano.png`), 'Imagen exportada')}>
+        Imagen del plano (PNG)
+      </MenuItem>
+      <MenuItem onClick={() => useExtrasStore.getState().openDialog('packages')}>Configuración HA (packages .zip)…</MenuItem>
+    </>
+  );
+
   return (
-    <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5">
-      <h1 className="mr-1 flex items-center gap-1.5 text-base font-bold text-slate-800">
+    <header className="flex flex-nowrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5">
+      <h1 className="mr-1 flex shrink-0 items-center gap-1.5 whitespace-nowrap text-base font-bold text-slate-800">
         <span aria-hidden="true">🏠</span>HA Simulator
       </h1>
       <ProjectName />
       <SaveStatus />
 
-      <nav className="flex items-center gap-1" aria-label="Archivo">
-        <Menu label="Archivo">
-          <MenuItem
-            onClick={() => {
-              if (window.confirm('¿Crear un proyecto nuevo? El actual queda guardado en el navegador.'))
-                openProject(createEmptyProject('Nuevo proyecto'));
-            }}
-          >
-            Nuevo proyecto
-          </MenuItem>
-          <MenuItem onClick={() => useExtrasStore.getState().openDialog('houseTemplates')}>Nuevo desde plantilla de casa…</MenuItem>
-          <MenuItem onClick={() => setOpenDialog(true)}>Abrir…</MenuItem>
-          <MenuItem onClick={() => safely(() => openAsNewProject(createDemoProject()).then(() => undefined))}>Cargar proyecto de demo</MenuItem>
-          <MenuItem onClick={() => fileRef.current?.click()}>Importar JSON…</MenuItem>
-        </Menu>
-        <Menu label="Exportar">
-          <MenuItem onClick={() => safely(() => downloadText(exportProjectJson(project()), `${base()}.json`, 'application/json'))}>
-            Proyecto (JSON)
-          </MenuItem>
-          <MenuItem onClick={() => safely(() => downloadText(automationsToYaml(project()), 'automations.yaml', 'text/yaml'))}>
-            automations.yaml
-          </MenuItem>
-          <MenuItem onClick={() => safely(() => downloadText(scenesToYaml(project()), 'scenes.yaml', 'text/yaml'))}>
-            scenes.yaml
-          </MenuItem>
-          <MenuItem onClick={() => safely(() => downloadText(scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
-            scripts.yaml
-          </MenuItem>
-          <MenuItem onClick={() => safely(async () => downloadText((await import('../export/csv')).devicesToCsv(project(), catalog), `${base()}-dispositivos.csv`, 'text/csv'))}>
-            Inventario (CSV)
-          </MenuItem>
-          <MenuItem
-            onClick={() =>
-              safely(async () => {
-                const bom = await import('../export/bom');
-                downloadText(bom.bomToCsv(bom.billOfMaterials(project(), catalog)), `${base()}-presupuesto.csv`, 'text/csv');
-              })
-            }
-          >
-            Presupuesto (CSV)
-          </MenuItem>
-          <MenuItem onClick={() => safely(async () => (await import('../export/png')).exportCanvasPng(`${base()}-plano.png`), 'Imagen exportada')}>
-            Imagen del plano (PNG)
-          </MenuItem>
-          <MenuItem onClick={() => useExtrasStore.getState().openDialog('packages')}>Configuración HA (packages .zip)…</MenuItem>
-        </Menu>
-        <ScenariosMenu />
-        <Button size="sm" variant="ghost" onClick={() => useUiStore.getState().setSettingsOpen(true)} aria-label="Ajustes del proyecto" title="Ajustes del proyecto">
-          ⚙ <span className="hidden xl:inline">Ajustes</span>
+      <nav className="flex items-center gap-1" aria-label="Menús del proyecto">
+        {wide ? (
+          <>
+            <Menu label="Archivo">{fileItems}</Menu>
+            <Menu label="Exportar">{exportItems}</Menu>
+            <ScenariosMenu />
+          </>
+        ) : (
+          <div className="relative">
+            <Menu
+              align="left"
+              ariaLabel={failing ? 'Proyecto (fallos activos)' : 'Proyecto'}
+              label={
+                <>
+                  <span aria-hidden="true">☰</span> Proyecto
+                  {failing && <span className="h-2 w-2 rounded-full bg-red-600" aria-hidden="true" />}
+                </>
+              }
+            >
+              <MenuHeader>Archivo</MenuHeader>
+              {fileItems}
+              <MenuHeader>Exportar</MenuHeader>
+              {exportItems}
+              <MenuHeader>Escenarios</MenuHeader>
+              <MenuItem onClick={() => useExtrasStore.getState().setScenariosOpen(true)}>
+                Escenarios de fallo…{failing ? ' (activos)' : ''}
+              </MenuItem>
+            </Menu>
+            <ScenariosMenu showTrigger={false} />
+          </div>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => useUiStore.getState().setSettingsOpen(true)} title="Ajustes del proyecto y de la simulación">
+          <span aria-hidden="true">⚙</span> Ajustes
         </Button>
         <input
           ref={fileRef}

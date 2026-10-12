@@ -113,7 +113,11 @@ function floor(v: unknown, path: string): Floor {
   const f: Floor = { id: str(o, 'id', path), name: str(o, 'name', path), level: numAt(o, 'level', path), pixelsPerMeter: numAt(o, 'pixelsPerMeter', path) };
   if (f.pixelsPerMeter <= 0) fail(`${path}.pixelsPerMeter`, 'debe ser mayor que 0');
   const bg = optStr(o, 'backgroundImage', path);
-  if (bg !== undefined) f.backgroundImage = bg;
+  if (bg !== undefined) {
+    // Solo imágenes incrustadas: una URL externa filtraría la visita o cargaría contenido ajeno.
+    if (!/^data:image\/[a-z0-9.+-]+[;,]/i.test(bg)) fail(`${path}.backgroundImage`, 'debe ser una imagen incrustada (data:image/…)');
+    f.backgroundImage = bg;
+  }
   if (o.walls !== undefined) f.walls = arr(o.walls, `${path}.walls`).map((w, i) => wall(w, `${path}.walls[${i}]`));
   return f;
 }
@@ -427,9 +431,13 @@ function environment(v: unknown, path: string): EnvironmentSettings {
   const tau = optNum(o, 'tauHours', path);
   const windowFactor = optNum(o, 'windowFactor', path);
   const rate = optNum(o, 'hvacRatePerHour', path);
-  if (tau !== undefined) e.tauHours = tau;
-  if (windowFactor !== undefined) e.windowFactor = windowFactor;
-  if (rate !== undefined) e.hvacRatePerHour = rate;
+  const range = (v: number, key: string, min: number, max: number): number => {
+    if (v < min || v > max) fail(`${path}.${key}`, `debe estar entre ${min} y ${max}`);
+    return v;
+  };
+  if (tau !== undefined) e.tauHours = range(tau, 'tauHours', 0.5, 1000);
+  if (windowFactor !== undefined) e.windowFactor = range(windowFactor, 'windowFactor', 1, 20);
+  if (rate !== undefined) e.hvacRatePerHour = range(rate, 'hvacRatePerHour', 0, 10);
   return e;
 }
 
@@ -461,7 +469,10 @@ function timelineStep(v: unknown, path: string): TimelineStep {
 
 function timeline(v: unknown, path: string): Timeline {
   const o = obj(v, path);
-  return { id: str(o, 'id', path), name: str(o, 'name', path), steps: arr(o.steps, `${path}.steps`).map((s, i) => timelineStep(s, `${path}.steps[${i}]`)) };
+  const t: Timeline = { id: str(o, 'id', path), name: str(o, 'name', path), steps: arr(o.steps, `${path}.steps`).map((s, i) => timelineStep(s, `${path}.steps[${i}]`)) };
+  const startAt = optNum(o, 'startAt', path);
+  if (startAt !== undefined) t.startAt = startAt;
+  return t;
 }
 
 function group(v: unknown, path: string): EntityGroup {

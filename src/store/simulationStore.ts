@@ -19,7 +19,8 @@ import {
   tick,
 } from '../simulation/engine';
 import { useProjectStore } from './projectStore';
-import { groupEntities, peopleEntities } from '../simulation/logic';
+import { groupEntities } from '../simulation/logic';
+import { syncPeopleEntities } from '../simulation/people';
 
 export const SPEEDS = [1, 10, 60, 600] as const;
 export type Speed = (typeof SPEEDS)[number];
@@ -157,8 +158,8 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     // Además de los dispositivos: personas, zonas y grupos (Fase 3), que el motor crea al empezar.
     const deviceStates = initialEntityStates(p, catalog);
     const groups = groupEntities(p, { ...deviceStates, ...current });
-    const initial = { ...deviceStates, ...peopleEntities(p), ...groups };
-    const entities: SimulationState['entities'] = {};
+    const initial = { ...deviceStates, ...groups };
+    let entities: SimulationState['entities'] = {};
     let changed = base !== get().sim;
     for (const [id, init] of Object.entries(initial)) {
       const group = groups[id];
@@ -179,6 +180,24 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
         entities[id] = init;
         changed = true;
       }
+    }
+    // Personas y zonas: siempre al día con el proyecto (zone.* cuenta bien al añadir, renombrar o
+    // borrar personas; cada persona conserva su zona aunque cambie su entity_id).
+    const isPeople = (id: string) => id.startsWith('person.') || id.startsWith('zone.');
+    for (const [id, st] of Object.entries(current)) if (isPeople(id)) entities[id] = st;
+    const synced = syncPeopleEntities({ ...base, entities }, p).entities;
+    const before = Object.keys(current).filter(isPeople);
+    const after = Object.keys(synced).filter(isPeople);
+    const samePeople =
+      before.length === after.length &&
+      after.every((id) => {
+        const a = current[id];
+        const b = synced[id];
+        return a !== undefined && b !== undefined && a.state === b.state && JSON.stringify(a.attributes) === JSON.stringify(b.attributes);
+      });
+    if (!samePeople) {
+      entities = synced;
+      changed = true;
     }
     if (Object.keys(current).some((id) => !(id in entities))) changed = true;
     let next = changed ? { ...base, entities } : base;

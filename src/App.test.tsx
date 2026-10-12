@@ -17,14 +17,25 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'HA Simulator' })).toBeInTheDocument();
   });
 
-  it('muestra las zonas principales', () => {
+  it('muestra las zonas principales y las pestañas agrupadas', async () => {
     render(<App autoLoad={false} />);
     expect(screen.getByRole('complementary', { name: 'Catálogo de dispositivos' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Propiedades' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Validación/ })).toBeInTheDocument();
+    // Pestañas agrupadas: Diseño, Lógica y Uso.
+    await userEvent.click(screen.getByRole('button', { name: /^Lógica: grupo de pestañas/ }));
     expect(screen.getByRole('tab', { name: /Automatizaciones/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Escenas y scripts/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Pruebas/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Uso: grupo de pestañas/ }));
     expect(screen.getByRole('tab', { name: /Registro/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Hogar/ })).toBeInTheDocument();
+    // Al volver a un grupo se recuerda su última pestaña abierta.
+    await userEvent.click(screen.getByRole('tab', { name: /Hogar/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Diseño: grupo de pestañas/ }));
+    expect(screen.getByRole('tab', { name: /Validación/ })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(screen.getByRole('button', { name: /^Uso: grupo de pestañas/ }));
+    expect(screen.getByRole('tab', { name: /Hogar/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('añade un dispositivo desde el catálogo y muestra sus propiedades', async () => {

@@ -2,7 +2,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProjectSettingsDialog } from '../settings/ProjectSettingsDialog';
-import { SimulationSettingsButton } from '../environment/SimulationSettingsButton';
 import { VariantsSection } from '../variants/VariantsSection';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
@@ -14,10 +13,7 @@ import { makeProject } from '../test/fixtures';
 function Settings() {
   const open = useUiStore((s) => s.settingsOpen);
   return (
-    <>
-      <SimulationSettingsButton />
-      {open && <ProjectSettingsDialog />}
-    </>
+    <>{open && <ProjectSettingsDialog />}</>
   );
 }
 
@@ -29,9 +25,9 @@ describe('ajustes unificados: proyecto (F2) y simulación (F3)', () => {
     useUiStore.getState().reset();
   });
 
-  it('⚙ abre «Ajustes del proyecto» en la pestaña Simulación y guarda clima y latencia', async () => {
+  it('la pestaña Simulación de «Ajustes del proyecto» guarda clima y latencia', async () => {
+    useUiStore.getState().setSettingsOpen(true, 'simulation');
     render(<Settings />);
-    await userEvent.click(screen.getByRole('button', { name: 'Ajustes de simulación' }));
     const dialog = screen.getByRole('dialog', { name: 'Ajustes del proyecto' });
     expect(within(dialog).getByRole('tab', { name: 'Simulación' })).toHaveAttribute('aria-selected', 'true');
     await userEvent.click(within(dialog).getByLabelText('Modelo térmico por sala'));

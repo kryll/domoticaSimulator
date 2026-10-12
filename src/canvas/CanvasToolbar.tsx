@@ -1,49 +1,89 @@
 import { Button } from '../ui/Button';
-import { useUiStore, type CanvasMode } from '../store/uiStore';
+import { Dropdown } from '../ui/Dropdown';
+import { useUiStore } from '../store/uiStore';
+import { useExtrasStore } from '../store/extrasStore';
+import { useProjectStore } from '../store/projectStore';
 import { autoConnect } from './actions';
-import { CanvasLayerToggles } from './extras/CanvasLayerToggles';
+import { toggleRouterSuggestion } from './extras/routerSuggestion';
 
-const MODES: Array<{ mode: CanvasMode; label: string; hint: string; key: string }> = [
-  { mode: 'select', label: 'Edición', hint: 'Seleccionar y mover elementos (V). Alt+clic o ⏻ = acción principal', key: 'V' },
-  { mode: 'interact', label: 'Uso', hint: 'Usar los dispositivos: clic = acción principal, rueda = ajustar (U)', key: 'U' },
-  { mode: 'room', label: 'Dibujar sala', hint: 'Dibujar una sala rectangular (R)', key: 'R' },
-  { mode: 'connect', label: 'Conectar', hint: 'Arrastra de un dispositivo a otro para conectarlos (C)', key: 'C' },
-  { mode: 'wall', label: 'Dibujar pared', hint: 'Dibujar paredes sobre el plano (atenúan la señal)', key: '' },
-];
+/** Altura reservada por la barra del lienzo (px): el encuadre deja este margen arriba. */
+export const CANVAS_TOOLBAR_PX = 52;
 
+/**
+ * Barra del lienzo en una sola fila: modos (Edición, Uso, Dibujar ▾, Conectar), Capas ▾,
+ * Herramientas ▾ y ayuda.
+ */
 export function CanvasToolbar() {
   const mode = useUiStore((s) => s.canvasMode);
   const setMode = useUiStore((s) => s.setCanvasMode);
   const showCoverage = useUiStore((s) => s.showCoverage);
   const toggleCoverage = useUiStore((s) => s.toggleCoverage);
   const openHelp = useUiStore((s) => s.setShortcutsOpen);
+  const showClimate = useExtrasStore((s) => s.showClimate);
+  const showSignal = useExtrasStore((s) => s.showSignal);
+  const suggestion = useExtrasStore((s) => s.routerSuggestion);
+  const activeFloorId = useUiStore((s) => s.activeFloorId);
+  const firstFloor = useProjectStore((s) => s.project.floors[0]?.id);
+  const floorId = activeFloorId ?? firstFloor;
+  const drawing = mode === 'room' || mode === 'wall';
+  const layers = [showCoverage, showClimate, showSignal].filter(Boolean).length;
+
+  const modeButton = (m: 'select' | 'interact' | 'connect', label: string, hint: string, key: string) => (
+    <Button
+      size="sm"
+      variant={mode === m ? 'primary' : 'ghost'}
+      aria-pressed={mode === m}
+      aria-keyshortcuts={key}
+      title={hint}
+      onClick={() => setMode(m)}
+    >
+      {label}
+    </Button>
+  );
 
   return (
     <div className="flex flex-col items-start gap-1" data-export-ignore="">
-      <div className="flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white/95 p-1 shadow-sm">
-        <div role="group" aria-label="Modo del lienzo" className="flex gap-1">
-          {MODES.map((m) => (
-            <Button
-              key={m.mode}
-              size="sm"
-              variant={mode === m.mode ? 'primary' : 'ghost'}
-              aria-pressed={mode === m.mode}
-              aria-keyshortcuts={m.key || undefined}
-              title={m.hint}
-              onClick={() => setMode(m.mode)}
-            >
-              {m.label}
-            </Button>
-          ))}
+      <div className="flex flex-nowrap items-center gap-1 rounded-md border border-slate-200 bg-white/95 p-1 shadow-sm">
+        <div role="group" aria-label="Modo del lienzo" className="flex items-center gap-1">
+          {modeButton('select', 'Edición', 'Seleccionar y mover elementos (V). Alt+clic o ⏻ = acción principal', 'V')}
+          {modeButton('interact', 'Uso', 'Usar los dispositivos: clic = acción principal, rueda = ajustar (U)', 'U')}
+          <Dropdown
+            label={mode === 'wall' ? 'Dibujar pared' : mode === 'room' ? 'Dibujar sala' : 'Dibujar'}
+            ariaLabel="Dibujar"
+            active={drawing}
+            title="Dibujar salas (R) o paredes"
+            entries={[
+              { kind: 'item', id: 'room', role: 'menuitemradio', checked: mode === 'room', label: 'Dibujar sala', hint: 'R', onSelect: () => setMode('room') },
+              { kind: 'item', id: 'wall', role: 'menuitemradio', checked: mode === 'wall', label: 'Dibujar pared', onSelect: () => setMode('wall') },
+            ]}
+          />
+          {modeButton('connect', 'Conectar', 'Arrastra de un dispositivo a otro para conectarlos (C)', 'C')}
         </div>
         <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden="true" />
-        <Button size="sm" variant="ghost" onClick={() => autoConnect()} title="Crear las conexiones sugeridas">
-          Autoconectar
-        </Button>
-        <Button size="sm" variant={showCoverage ? 'primary' : 'ghost'} aria-pressed={showCoverage} onClick={toggleCoverage}>
-          Cobertura
-        </Button>
-        <CanvasLayerToggles />
+        <Dropdown
+          label={layers > 0 ? `Capas (${layers})` : 'Capas'}
+          ariaLabel="Capas"
+          active={layers > 0}
+          entries={[
+            { kind: 'item', id: 'coverage', label: 'Cobertura', checked: showCoverage, keepOpen: true, onSelect: toggleCoverage },
+            { kind: 'item', id: 'climate', label: 'Clima', title: 'Temperatura de cada sala', checked: showClimate, keepOpen: true, onSelect: () => useExtrasStore.getState().toggleClimate() },
+            { kind: 'item', id: 'signal', label: 'Señal', title: 'Mapa de calor de la señal (RSSI)', checked: showSignal, keepOpen: true, onSelect: () => useExtrasStore.getState().toggleSignal() },
+          ]}
+        />
+        <Dropdown
+          label="Herramientas"
+          entries={[
+            { kind: 'item', id: 'autoconnect', label: 'Autoconectar', title: 'Crear las conexiones sugeridas', onSelect: () => autoConnect() },
+            {
+              kind: 'item',
+              id: 'router',
+              label: 'Sugerir router',
+              title: 'Propone dónde poner un router Zigbee, Thread o Z-Wave',
+              checked: suggestion !== null && suggestion.floorId === floorId,
+              onSelect: () => toggleRouterSuggestion(floorId),
+            },
+          ]}
+        />
         <Button
           size="sm"
           variant="ghost"

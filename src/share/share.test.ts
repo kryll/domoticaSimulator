@@ -51,3 +51,43 @@ describe('compartir por URL', () => {
     await expect(decodeProjectFromHash('v0.' + bytesToBase64Url(new TextEncoder().encode('{')))).rejects.toThrow(/JSON no válido/);
   });
 });
+
+describe('límites al compartir', () => {
+  it('rechaza hashes demasiado largos', async () => {
+    const { MAX_SHARE_HASH } = await import('./share');
+    await expect(decodeProjectFromHash('v0.' + 'A'.repeat(MAX_SHARE_HASH))).rejects.toThrow(/demasiado largo/);
+  });
+
+  it.runIf(hasCompressionStreams())('corta una bomba de descompresión a 10 MB', async () => {
+    const zeros = new Uint8Array(12 * 1024 * 1024);
+    const stream = new CompressionStream('deflate');
+    const writer = stream.writable.getWriter();
+    void writer.write(zeros).then(() => writer.close());
+    const reader = stream.readable.getReader();
+    const parts: Uint8Array[] = [];
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value);
+    }
+    const total = parts.reduce((n, p) => n + p.length, 0);
+    const bomb = new Uint8Array(total);
+    let off = 0;
+    for (const p of parts) {
+      bomb.set(p, off);
+      off += p.length;
+    }
+    expect(bomb.length).toBeLessThan(100_000);
+    await expect(decodeProjectFromHash('v1.' + bytesToBase64Url(bomb))).rejects.toThrow(/demasiado grande/);
+  });
+
+  it('solo admite imágenes de fondo data:image/…', async () => {
+    const demo = createDemoProject();
+    const evil = { ...demo, floors: demo.floors.map((f) => ({ ...f, backgroundImage: 'https://ejemplo.test/espia.png' })) };
+    const code = await encodeProjectToHash(evil, { compress: false, omitImages: false });
+    await expect(decodeProjectFromHash(code)).rejects.toThrow(/data:image/);
+    const ok = { ...demo, floors: demo.floors.map((f) => ({ ...f, backgroundImage: 'data:image/png;base64,AAAA' })) };
+    const decoded = await decodeProjectFromHash(await encodeProjectToHash(ok, { compress: false, omitImages: false }));
+    expect(decoded.floors[0]?.backgroundImage).toBe('data:image/png;base64,AAAA');
+  });
+});

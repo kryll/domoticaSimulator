@@ -8,6 +8,7 @@ import { WallDrawOverlay } from './WallDrawOverlay';
 import { ClimateLayer, ClimateLegend } from './ClimateLayer';
 import { SignalLayer, SignalLegend } from './SignalLayer';
 import { RouterSuggestionsLayer } from './RouterSuggestionsLayer';
+import { CollapsibleLegend } from './CollapsibleLegend';
 
 const NO_WALLS: Wall[] = [];
 
@@ -29,9 +30,11 @@ export function CanvasExtras({ floor, rooms }: { floor: Floor | undefined; rooms
       {showClimate && <ClimateLayer rooms={rooms} />}
       {suggestion && suggestion.floorId === floor.id && <RouterSuggestionsLayer points={suggestion.points} />}
       {(showClimate || showSignal) && (
-        <FlowPanel position="bottom-right" className="!mb-2 flex flex-col items-end gap-1 md:!mb-[172px]">
-          {showClimate && <ClimateLegend />}
-          {showSignal && <SignalLegend project={project} floor={floor} />}
+        <FlowPanel position="bottom-right" className="!mb-2 md:!mb-[172px]">
+          <CollapsibleLegend>
+            {showClimate && <ClimateLegend />}
+            {showSignal && <SignalLegend project={project} floor={floor} />}
+          </CollapsibleLegend>
         </FlowPanel>
       )}
       {mode === 'wall' && <WallDrawOverlay floor={floor} />}

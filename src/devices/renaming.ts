@@ -1,5 +1,5 @@
 // Renombrado de dispositivos: mantiene coherentes las referencias a entity_id del proyecto.
-import type { Action, Automation, Device, DeviceDefinition, EntityState, Project, Script } from '../types';
+import type { Action, Automation, Device, DeviceDefinition, EntityState, Id, Project, Script } from '../types';
 import { entityIdsForDevice } from './entities';
 import {
   actionConditions,
@@ -8,9 +8,12 @@ import {
   mapActionEntities,
   mapConditionEntities,
   mapTriggerEntities,
+  remapServiceDomain,
   triggerEntityIds,
   type EntityMapper,
 } from '../automations/walk';
+import { entityDomain } from './entities';
+import { groupEntityId, personEntityId } from '../simulation/logic';
 
 /**
  * entity_id antiguo -> nuevo al renombrar un dispositivo. Solo incluye los que cambian.
@@ -44,6 +47,41 @@ export function entityIdMappingForShowAs(device: Device, def: DeviceDefinition, 
   return mapping;
 }
 
+/**
+ * Fase 3 (B19): cambia «Mostrar como» de un dispositivo y actualiza todas las referencias:
+ * entity_id y dominio de los servicios en automatizaciones y scripts (anidadas incluidas),
+ * escenas, grupos y líneas de tiempo. Función pura.
+ */
+export function applyShowAs(project: Project, deviceId: Id, showAs: Device['showAs'], defs: DeviceDefinition[]): Project {
+  const device = project.devices.find((d) => d.id === deviceId);
+  const def = device ? defs.find((d) => d.id === device.definitionId) : undefined;
+  if (!device || !def || device.showAs === showAs) return project;
+  const next: Device = { ...device };
+  if (showAs === undefined) delete next.showAs;
+  else next.showAs = showAs;
+  const mapping = entityIdMappingForShowAs(device, def, showAs);
+  const updated: Project = { ...project, devices: project.devices.map((d) => (d.id === deviceId ? next : d)) };
+  return renameEntityRefs(updated, mapping);
+}
+
+/** entity_id antiguo -> nuevo al renombrar un grupo (vacío si no cambia). */
+export function renameGroupMapping(project: Pick<Project, 'groups'>, groupId: Id, newName: string): Record<string, string> {
+  const g = project.groups?.find((x) => x.id === groupId);
+  if (!g) return {};
+  const from = groupEntityId(g);
+  const to = groupEntityId({ ...g, name: newName });
+  return from === to ? {} : { [from]: to };
+}
+
+/** entity_id antiguo -> nuevo al renombrar una persona (vacío si no cambia). */
+export function renamePersonMapping(project: Pick<Project, 'people'>, personId: Id, newName: string): Record<string, string> {
+  const p = project.people?.find((x) => x.id === personId);
+  if (!p) return {};
+  const from = personEntityId(p);
+  const to = personEntityId({ ...p, name: newName });
+  return from === to ? {} : { [from]: to };
+}
+
 type Mapper = EntityMapper;
 
 const mapTrigger = mapTriggerEntities;
@@ -63,9 +101,20 @@ function mapScript(s: Script, map: Mapper): Script {
   return { ...s, sequence: s.sequence.map((a) => mapAction(a, map)) };
 }
 
+/** Atributos de escena que conserva cada dominio al cambiar «Mostrar como» (un switch no tiene brillo). */
+function sceneStateForDomain(state: EntityState, from: string, to: string): EntityState {
+  if (from === to || to !== 'switch' || !state.attributes) return state;
+  const copy: EntityState = { ...state };
+  delete copy.attributes;
+  return copy;
+}
+
 function mapSceneEntities(entities: Record<string, EntityState>, map: Mapper): Record<string, EntityState> {
   const result: Record<string, EntityState> = {};
-  for (const [id, state] of Object.entries(entities)) result[map(id)] = state;
+  for (const [id, state] of Object.entries(entities)) {
+    const to = map(id);
+    result[to] = sceneStateForDomain(state, entityDomain(id), entityDomain(to));
+  }
   return result;
 }
 
@@ -92,7 +141,12 @@ function renameFase3Refs(project: Project, map: Mapper): Partial<Project> {
   if (project.timelines) {
     result.timelines = project.timelines.map((t) => ({
       ...t,
-      steps: t.steps.map((step) => (step.entityId === undefined ? step : { ...step, entityId: map(step.entityId) })),
+      steps: t.steps.map((step) => {
+        if (step.entityId === undefined) return step;
+        const entityId = map(step.entityId);
+        if (step.kind === 'event' && step.service !== undefined) return { ...step, entityId, service: remapServiceDomain(step.service, step.entityId, entityId) };
+        return { ...step, entityId };
+      }),
     }));
   }
   return result;

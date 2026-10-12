@@ -64,9 +64,9 @@ export function fase3TriggerToYaml(t: Fase3Trigger, ctx: YamlContext): YamlMap {
   if (t.type === 'zone') {
     return { trigger: 'zone', entity_id: personRef(t.personId, ctx), zone: zoneRef(t.zoneId, ctx), event: t.event };
   }
-  // Disparador de dispositivo de un mando. En HA real lleva device_id; aquí se identifica por
-  // la entidad de acción. Para exportar a HA real usar deviceActionAsStateTrigger.
-  return { trigger: 'device', domain: 'sensor', entity_id: t.entityId, type: 'action', subtype: t.action };
+  // Disparador de dispositivo de un mando. En HA real necesitaría device_id, que el simulador no
+  // conoce: se exporta siempre como disparador de estado de la entidad de acción (to: <acción>).
+  return triggerToYaml(deviceActionAsStateTrigger(t), ctx);
 }
 
 /** Equivalente compatible con HA real (sin device_id): disparador de estado de la entidad de acción. */

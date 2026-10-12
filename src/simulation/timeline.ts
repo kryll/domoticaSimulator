@@ -138,12 +138,27 @@ function observe(sim: SimulationState, step: TimelineAssertStep): EntityStateVal
   return st.attributes?.[step.attribute] ?? null;
 }
 
+/** Inicio por defecto si la prueba no tiene startAt ni se indica otro: 1/1/2026 00:00. */
+export const DEFAULT_TIMELINE_START = Date.UTC(2026, 0, 1);
+
+/** Hora de inicio de la prueba: su startAt guardado o, si no tiene, fallbackNow. */
+export function timelineStart(timeline: Pick<Timeline, 'startAt'>, fallbackNow: number): number {
+  return timeline.startAt ?? fallbackNow;
+}
+
+/** Prueba nueva a partir de un registro (recordTimeline) con su hora de inicio guardada. */
+export function recordedTimeline(log: LogEntry[], opts: { id: string; name: string; startAt: number }): Timeline {
+  return { id: opts.id, name: opts.name, startAt: opts.startAt, steps: recordTimeline(log) };
+}
+
 /**
- * Ejecuta la línea de tiempo sobre una simulación nueva que empieza en startMs. Avanza el reloj
+ * Ejecuta la línea de tiempo sobre una simulación nueva que empieza en timeline.startAt (o, si no
+ * lo tiene, en fallbackStartMs). Avanza el reloj
  * hasta cada paso (ejecutando automatizaciones y temporizadores), aplica los eventos y evalúa las
  * aserciones. Una hora mal formada o un evento incompleto cuentan como fallo del paso.
  */
-export function runTimeline(project: Project, defs: DeviceDefinition[], timeline: Timeline, startMs: number): TimelineRun {
+export function runTimeline(project: Project, defs: DeviceDefinition[], timeline: Timeline, fallbackStartMs?: number): TimelineRun {
+  const startMs = timelineStart(timeline, fallbackStartMs ?? DEFAULT_TIMELINE_START);
   let sim: SimulationState = { ...createSimulationState(project, defs, startMs), speed: 1 };
   const results: TimelineStepResult[] = [];
   let times: number[];

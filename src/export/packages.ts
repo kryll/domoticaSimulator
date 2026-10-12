@@ -1,13 +1,13 @@
 // Exportación a una instalación real de Home Assistant (B16): un paquete YAML por área con sus
 // automatizaciones, escenas, scripts y grupos, areas.yaml y una guía de emparejamiento.
-import { defaultSettings, type Automation, type Device, type DeviceDefinition, type Id, type Integration, type Project, type Trigger, type ZoneKind } from '../types';
+import { defaultSettings, type Automation, type Device, type DeviceDefinition, type Id, type Integration, type Project, type ZoneKind } from '../types';
 import { entitiesForDevice, slugify } from '../devices/entities';
 import { INTEGRATION_LABELS, ROLE_LABELS } from '../devices/labels';
 import { isCloud } from '../devices/catalog';
 import { effectiveIotClass } from '../devices/roles';
 import { areaId, automationRoom, entityRoomMap, groupRoom, sceneRoom, scriptRoom } from '../devices/areas';
+import { groupEntityId, groupHaName } from '../simulation/logic';
 import { automationToObject, scenesToYaml, scriptsToYaml, toYaml, type YamlMap, type YamlValue } from './yaml';
-import { deviceActionAsStateTrigger } from './yamlLogic';
 import { zipFiles, type ZipEntry } from './zip';
 
 export interface ExportFile {
@@ -17,15 +17,6 @@ export interface ExportFile {
 
 /** Nombre del paquete para lo que no pertenece a ninguna sala. */
 export const GENERAL_PACKAGE = 'general';
-
-/** Disparadores compatibles con HA real (device_action pasa a disparador de estado). */
-function realHaTrigger(t: Trigger): Trigger {
-  return t.type === 'device_action' ? deviceActionAsStateTrigger(t) : t;
-}
-
-function realHaAutomation(a: Automation): Automation {
-  return { ...a, triggers: a.triggers.map(realHaTrigger) };
-}
 
 function indent(text: string): string {
   return text
@@ -53,7 +44,7 @@ function emptyBucket(): Bucket {
 function packageContent(title: string, bucket: Bucket, project: Project, extra: string[] = []): string | undefined {
   const parts: string[] = [];
   if (bucket.automations.length > 0) {
-    parts.push(section('automation', toYaml(bucket.automations.map((a) => automationToObject(realHaAutomation(a), project)))));
+    parts.push(section('automation', toYaml(bucket.automations.map((a) => automationToObject(a, project)))));
   }
   if (bucket.scriptIds.size > 0) {
     parts.push(section('script', scriptsToYaml({ ...project, scripts: project.scripts.filter((s) => bucket.scriptIds.has(s.id)) })));
@@ -88,7 +79,8 @@ export function projectToPackages(project: Project, defs: DeviceDefinition[]): E
   for (const s of project.scripts) bucketFor(scriptRoom(s, map, project.rooms)).scriptIds.add(s.id);
   for (const g of project.groups ?? []) {
     const b = bucketFor(groupRoom(g, map, project.rooms));
-    const item: YamlMap = { platform: 'group', name: g.name, unique_id: `grupo_${slugify(g.name)}`, entities: g.entityIds };
+    // HA crea el entity_id a partir de name: groupHaName garantiza que coincide con groupEntityId.
+    const item: YamlMap = { platform: 'group', name: groupHaName(g), unique_id: groupEntityId(g).split('.')[1] ?? slugify(g.name), entities: g.entityIds };
     b.groupDomains.set(g.domain, [...(b.groupDomains.get(g.domain) ?? []), item]);
   }
   const files: ExportFile[] = [];
@@ -104,7 +96,7 @@ export function projectToPackages(project: Project, defs: DeviceDefinition[]): E
     if (content) files.push({ path: `packages/${name}.yaml`, content });
   }
   const people = project.people ?? [];
-  const extra = people.length > 0 ? [section('person', toYaml(people.map((p) => ({ name: p.name, id: slugify(p.name) }))))] : [];
+  const extra = people.length > 0 ? [personsComment(people.map((p) => p.name))] : [];
   const zones = zonesSection(project);
   if (zones) extra.push(zones);
   const general = packageContent('Elementos sin área', buckets.get(GENERAL_PACKAGE) ?? emptyBucket(), project, extra);
@@ -136,9 +128,44 @@ export function zonesSection(project: Pick<Project, 'zones' | 'settings'>): stri
     longitude: settings.longitude,
     radius: 100,
     icon: ZONE_ICONS[z.kind],
+    // passive: no cambia el estado de las personas hasta que se ajusten las coordenadas.
+    passive: true,
   }));
+  lines.push('# TODO: coordenadas reales de cada zona; después quita «passive: true».');
   return `${lines.join('\n')}\n${section('zone', toYaml(items))}`;
 }
+
+/**
+ * Personas como guía comentada: en HA se crean en Ajustes → Personas y se les asigna el
+ * device_tracker de la app móvil (un `person:` en YAML no permite editarlas desde la interfaz).
+ */
+export function personsComment(names: string[]): string {
+  const lines = [
+    '# Personas: créalas en Ajustes → Personas y asigna a cada una el device_tracker de su app móvil.',
+    '# Usa estos nombres para que person.<nombre> coincida con las automatizaciones:',
+    ...names.map((n) => `#   - ${n} → person.${slugify(n)}`),
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
+/** Marca y modelo sin repetir la marca («Home Assistant Green», no «Home Assistant Home Assistant Green»). */
+export function modelLabel(def: Pick<DeviceDefinition, 'brand' | 'model'>): string {
+  return def.model.toLowerCase().startsWith(def.brand.toLowerCase()) ? def.model : `${def.brand} ${def.model}`;
+}
+
+/** Pasos por papel de red para el servidor y la red (no dependen de la integración). */
+export const ROLE_STEPS: Partial<Record<DeviceDefinition['role'], string[]>> = {
+  ha_server: [
+    'Conecta el servidor por cable al router y enciéndelo.',
+    'Abre http://homeassistant.local:8123 y completa el asistente inicial (usuario, ubicación, unidades).',
+    'Instala la app móvil de Home Assistant en el teléfono de cada persona.',
+  ],
+  access_point: [
+    'Configura el router o punto de acceso con su app y crea la red Wi-Fi (los dispositivos domóticos suelen necesitar 2,4 GHz).',
+    'Reserva una IP fija para el servidor de Home Assistant y, si puedes, para los dispositivos Wi-Fi.',
+    'Comprueba que el servidor y los dispositivos están en la misma red local (sin aislamiento de clientes).',
+  ],
+};
 
 /** areas.yaml: referencia de áreas con su planta, dispositivos y entidades (se crean en Ajustes → Áreas). */
 export function areasYaml(project: Project, defs: DeviceDefinition[]): string {
@@ -259,7 +286,15 @@ export function pairingGuide(project: Project, defs: DeviceDefinition[]): string
     if (items.length === 0) return;
     lines.push(`## ${title}`, '');
     for (const { device, def } of items) {
-      lines.push(`- **${device.name}**${roomName(project, device)}: ${def.brand} ${def.model}, ${ROLE_LABELS[def.role].toLowerCase()} con ${INTEGRATION_LABELS[device.integration]}.`);
+      const via = i <= 1 ? '' : ` con ${INTEGRATION_LABELS[device.integration]}`;
+      lines.push(`- **${device.name}**${roomName(project, device)}: ${modelLabel(def)}, ${ROLE_LABELS[def.role].toLowerCase()}${via}.`);
+    }
+    if (i <= 1) {
+      const role = i === 0 ? 'ha_server' : 'access_point';
+      lines.push('', 'Pasos:', '');
+      (ROLE_STEPS[role] ?? []).forEach((step, n) => lines.push(`${n + 1}. ${step}`));
+      lines.push('');
+      return;
     }
     const integrations = [...new Set(items.map((p) => p.device.integration))];
     for (const integration of integrations) {
@@ -282,10 +317,24 @@ export function pairingGuide(project: Project, defs: DeviceDefinition[]): string
       const sorted = [...items].sort((a, b) => Number(a.def.power === 'battery') - Number(b.def.power === 'battery'));
       for (const { device, def } of sorted) {
         const ids = entitiesForDevice(device, def).map((e) => `\`${e.entityId}\``).join(', ');
-        lines.push(`- [ ] **${device.name}**${roomName(project, device)}: ${def.brand} ${def.model}${def.power === 'battery' ? ' (pilas)' : ''} → ${ids}`);
+        lines.push(`- [ ] **${device.name}**${roomName(project, device)}: ${modelLabel(def)}${def.power === 'battery' ? ' (pilas)' : ''} → ${ids}`);
       }
       lines.push('');
     }
+  }
+  const people = project.people ?? [];
+  const zones = (project.zones ?? []).filter((z) => z.kind !== 'home');
+  if (people.length > 0 || zones.length > 0) {
+    lines.push('## 6. Personas y zonas', '');
+    let n = 1;
+    if (people.length > 0) {
+      lines.push(`${n++}. Instala la app móvil de Home Assistant en el teléfono de cada persona e inicia sesión.`);
+      lines.push(`${n++}. En Ajustes → Personas crea a ${people.map((p) => `**${p.name}** (\`person.${slugify(p.name)}\`)`).join(', ')} y asigna a cada una el device_tracker de su app.`);
+    }
+    if (zones.length > 0) {
+      lines.push(`${n++}. Ajusta las coordenadas de las zonas de \`packages/general.yaml\` (${zones.map((z) => z.name).join(', ')}) y quita \`passive: true\`, o créalas en Ajustes → Áreas, etiquetas y zonas.`);
+    }
+    lines.push('');
   }
   return `${lines.join('\n').trimEnd()}\n`;
 }

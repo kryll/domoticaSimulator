@@ -16,7 +16,7 @@ function useSunToday(dayStart: number): { sunrise: number; sunset: number } {
   }, [dayStart, settings]);
 }
 
-function JumpPopover({ onClose, onEscape }: { onClose: () => void; onEscape: () => void }) {
+function JumpPopover({ onClose, onEscape, sun, today }: { onClose: () => void; onEscape: () => void; sun: { sunrise: number; sunset: number }; today: number }) {
   const [time, setTime] = useState('');
   const settings = useProjectStore((s) => s.project.settings);
   const ref = useRef<HTMLDivElement>(null);
@@ -57,6 +57,13 @@ function JumpPopover({ onClose, onEscape }: { onClose: () => void; onEscape: () 
       aria-labelledby={titleId}
       className="absolute right-0 top-full z-50 mt-1 flex w-64 flex-col gap-2 rounded-md border border-slate-200 bg-white p-3 text-slate-800 shadow-lg"
     >
+      <div className="flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
+        <span className="text-xs text-slate-600">{formatSimDate(today)}</span>
+        <span className="flex gap-2 text-[11px] text-slate-600" aria-label="Sol de hoy">
+          <span title="Amanecer">🌅 {formatSimTime(sun.sunrise)}</span>
+          <span title="Atardecer">🌇 {formatSimTime(sun.sunset)}</span>
+        </span>
+      </div>
       <h2 id={titleId} className="text-sm font-semibold">
         Ir a…
       </h2>
@@ -108,23 +115,23 @@ export function SimClock() {
     buttonRef.current?.focus();
   }, []);
   return (
-    <div className="relative ml-1 flex items-center gap-1">
-      <div
-        className="flex flex-col items-end rounded-md bg-slate-800 px-2 py-0.5 font-mono leading-tight text-white"
-        aria-label="Hora simulada"
-        aria-live="off"
+    <div className="relative ml-1">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`Hora simulada ${formatSimTime(now, { seconds: true })} del ${formatSimDate(now)}. Ir a…`}
+        title="Fecha, sol de hoy y saltar a una hora"
+        className="flex items-center gap-1 whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 font-mono text-sm leading-none text-white hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
       >
-        <span className="text-sm">{formatSimTime(now, { seconds: true })}</span>
-        <span className="text-[10px] text-slate-300">{formatSimDate(now)}</span>
-      </div>
-      <div className="hidden flex-col text-[10px] leading-tight text-slate-600 sm:flex" aria-label="Sol de hoy">
-        <span title="Amanecer">🌅 {formatSimTime(sun.sunrise)}</span>
-        <span title="Atardecer">🌇 {formatSimTime(sun.sunset)}</span>
-      </div>
-      <Button ref={buttonRef} size="sm" variant="ghost" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog" title="Saltar a una hora">
-        ⏩ Ir a…
-      </Button>
-      {open && <JumpPopover onClose={close} onEscape={escape} />}
+        {formatSimTime(now, { seconds: true })}
+        <span aria-hidden="true" className="text-[10px] text-slate-300">
+          ▾
+        </span>
+      </button>
+      {open && <JumpPopover onClose={close} onEscape={escape} sun={sun} today={now} />}
     </div>
   );
 }

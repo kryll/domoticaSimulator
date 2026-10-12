@@ -42,7 +42,12 @@ export function hasCompressionStreams(): boolean {
   return typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
 }
 
-async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
+/** Longitud máxima del código del hash (caracteres). */
+export const MAX_SHARE_HASH = 2 * 1024 * 1024;
+/** Tamaño máximo del JSON descomprimido (protege de bombas de descompresión). */
+export const MAX_SHARE_BYTES = 10 * 1024 * 1024;
+
+async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream, maxBytes = Infinity): Promise<Uint8Array> {
   const writer = stream.writable.getWriter();
   // Los errores de escritura se notifican también al leer: aquí solo se evita el rechazo sin manejar.
   const written = writer
@@ -57,6 +62,10 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
     if (done) break;
     chunks.push(value);
     total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error(`El enlace compartido es demasiado grande al descomprimirse (más de ${Math.round(maxBytes / 1024 / 1024)} MB)`);
+    }
   }
   await written;
   const out = new Uint8Array(total);
@@ -99,11 +108,12 @@ export async function decodeProjectFromHash(hash: string): Promise<Project> {
   let code = hash.trim().replace(/^#/, '');
   const param = new URLSearchParams(code).get(SHARE_HASH_KEY);
   if (code.includes('=') && param !== null) code = param;
+  if (code.length > MAX_SHARE_HASH) throw new Error(`El enlace compartido es demasiado largo (más de ${MAX_SHARE_HASH / 1024 / 1024} MB)`);
   let bytes: Uint8Array;
   if (code.startsWith(DEFLATE_PREFIX)) {
     if (!hasCompressionStreams()) throw new Error('Este navegador no puede descomprimir el enlace compartido');
     try {
-      bytes = await pipe(base64UrlToBytes(code.slice(DEFLATE_PREFIX.length)), new DecompressionStream('deflate'));
+      bytes = await pipe(base64UrlToBytes(code.slice(DEFLATE_PREFIX.length)), new DecompressionStream('deflate'), MAX_SHARE_BYTES);
     } catch (e) {
       if (e instanceof Error && e.message.startsWith('El enlace')) throw e;
       throw new Error('El enlace compartido está dañado (no se puede descomprimir)');

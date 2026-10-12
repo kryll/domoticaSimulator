@@ -47,7 +47,7 @@ describe('YAML de la Fase 3', () => {
   it('ida y vuelta de todos los tipos nuevos con contexto', () => {
     const text = automationToYaml(logic, ctx);
     expect(text).toContain('trigger: zone');
-    expect(text).toContain('trigger: device');
+    expect(text).toContain('entity_id: sensor.mando_action');
     expect(text).toContain('entity_id: person.ana_lopez');
     expect(text).toContain('zone: zone.home');
     expect(text).toContain('zone: zone.oficina');
@@ -65,7 +65,10 @@ describe('YAML de la Fase 3', () => {
     expect(text).not.toMatch(/\bservice:/);
     expect(text).toContain('wait_for_trigger:\n      - trigger: state');
     expect(text).toContain('sequence:\n          - action: light.turn_on');
-    expect(parseAutomationYaml(text, ctx)).toEqual(logic);
+    // device_action se exporta como disparador de estado (sin device_id) y vuelve como tal.
+    expect(text).not.toContain('trigger: device');
+    const expected = { ...logic, triggers: logic.triggers.map((t) => (t.type === 'device_action' ? deviceActionAsStateTrigger(t) : t)) };
+    expect(parseAutomationYaml(text, ctx)).toEqual(expected);
   });
 
   it('sin contexto usa los ids', () => {
@@ -126,6 +129,10 @@ describe('projectSchema con los campos de la Fase 3', () => {
   it('rechaza valores no válidos', () => {
     const base = project([]);
     expect(() => parseProject({ ...base, reliability: { latency: true, failureRate: 2 } })).toThrow(/entre 0 y 1/);
+    const env = { enabled: true, outdoorMean: 10, outdoorAmplitude: 5 };
+    expect(() => parseProject({ ...base, environment: { ...env, tauHours: 0.1 } })).toThrow(/tauHours debe estar entre 0.5/);
+    expect(() => parseProject({ ...base, environment: { ...env, windowFactor: 50 } })).toThrow(/windowFactor debe estar entre 1 y 20/);
+    expect(() => parseProject({ ...base, environment: { ...env, hvacRatePerHour: -1 } })).toThrow(/hvacRatePerHour debe estar entre 0 y 10/);
     expect(() => parseProject({ ...base, people: [{ id: 'a', name: 'A' }, { id: 'a', name: 'B' }] })).toThrow(/repetido/);
     expect(() => parseProject({ ...base, timelines: [{ id: 't', name: 'T', steps: [{ at: 'ayer', kind: 'event', event: 'state' }] }] })).toThrow(/HH:MM/);
   });

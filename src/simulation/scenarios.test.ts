@@ -29,7 +29,11 @@ describe('escenarios de fallo (B2) con la casa de ejemplo', () => {
     const r = scenarioImpact(demo, catalog, 'internet');
     expect(down(r)).toEqual(['demo-cafetera', 'demo-termostato']);
     expect(r.unavailableDevices[0]?.reason).toMatch(/nube sin Internet/);
-    expect(r.automations.every((a) => a.status === 'ok')).toBe(true);
+    // Solo se degrada la automatización de zona (ubicación por la app y notificaciones a la app).
+    expect(r.automations.filter((a) => a.status !== 'ok').map((a) => [a.automationId, a.status])).toEqual([['demo-auto-salir', 'degraded']]);
+    const salir = r.automations.find((a) => a.automationId === 'demo-auto-salir');
+    expect(salir?.reasons.join(' ')).toMatch(/app móvil por Internet/);
+    expect(salir?.reasons.join(' ')).toMatch(/notificaciones a la app móvil/);
     expect(r.scripts[0]).toMatchObject({ scriptId: 'demo-script-salir', status: 'degraded' });
     expect(r.scripts[0]?.reasons[0]).toMatch(/Termostato/);
   });

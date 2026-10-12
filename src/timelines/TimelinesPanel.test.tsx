@@ -45,3 +45,20 @@ describe('TimelinesPanel', () => {
     expect(steps[0]).toMatchObject({ kind: 'event', entityId: 'light.luz_salon' });
   });
 });
+
+describe('inicio de la prueba', () => {
+  it('se edita en el editor y la ejecución empieza en esa fecha', async () => {
+    const project = makeProject({
+      devices: [makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz salón')],
+      timelines: [{ id: 't1', name: 'Mañana', steps: [{ at: '08:00', kind: 'assert', entityId: 'light.luz_salon', expect: 'off' }] }],
+    });
+    useProjectStore.getState().loadProject(project);
+    act(() => useSimulationStore.getState().reset(project));
+    render(<TimelinesPanel />);
+    fireEvent.change(screen.getByLabelText('Inicio de la prueba'), { target: { value: '2027-03-05T00:00' } });
+    expect(useProjectStore.getState().project.timelines?.[0]?.startAt).toBe(Date.UTC(2027, 2, 5));
+    expect(screen.getByText(/Empieza el 05\/03\/2027 a las 00:00/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '▶ Ejecutar' }));
+    expect(await screen.findByText(/✓ Superada/)).toBeInTheDocument();
+  });
+});

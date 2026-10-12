@@ -1,4 +1,4 @@
-import { activeSegments, numericPath } from './sparkline';
+import { activeSegments, gapSegments, isNumericWithGaps, numericPath } from './sparkline';
 
 describe('sparkline', () => {
   const box = { width: 100, height: 20, pad: 0 };
@@ -38,5 +38,16 @@ describe('sparkline', () => {
       { x: 20, w: 40 },
       { x: 90, w: 10 },
     ]);
+  });
+
+  it('corta la línea y marca los huecos de no disponible', () => {
+    const samples = [
+      { t: 0, v: 10 },
+      { t: 40, v: 'unavailable' },
+      { t: 60, v: 20 },
+    ];
+    expect(isNumericWithGaps(samples)).toBe(true);
+    expect(numericPath(samples, 0, 100, box)?.d).toBe('M0.0,20.0H40.0M60.0,0.0H100.0');
+    expect(gapSegments(samples, 0, 100, 100)).toEqual([{ x: 40, w: 20 }]);
   });
 });

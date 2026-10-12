@@ -3,7 +3,8 @@
 import type { Action, Condition, DeviceDefinition, Failures, Id, Project, Trigger } from '../types';
 import { entitiesForDevice } from '../devices/entities';
 import { isThreadBorderRouter } from '../devices/roles';
-import { NO_FAILURES } from './connectivity';
+import { internetAvailable, NO_FAILURES } from './connectivity';
+import { isCloudNotifyService } from './notify';
 import { unavailabilityReasons } from './availability';
 import { findScene, findScript } from './engine';
 import { findGroupByEntity } from './logic';
@@ -153,6 +154,44 @@ function actionEntities(actions: Action[], project: Project, seen: Set<string> =
   return out;
 }
 
+/** Condiciones de zona (anidadas incluidas). */
+function zoneConditions(c: Condition): Condition[] {
+  if (c.type === 'and' || c.type === 'or' || c.type === 'not') return c.conditions.flatMap(zoneConditions);
+  return c.type === 'zone' ? [c] : [];
+}
+
+/** Notificaciones que salen por la nube (notify.* salvo la persistente y la acción notify). */
+function cloudNotifications(actions: Action[], project: Project, seen: Set<string> = new Set()): number {
+  let n = 0;
+  for (const a of flattenActions(actions)) {
+    if (a.type === 'notify' && isCloudNotifyService(a.service ?? 'notify.notify')) n++;
+    if (a.type === 'service' && isCloudNotifyService(a.service)) n++;
+    const scriptRef = a.type === 'script' ? a.scriptId : a.type === 'service' && a.service.startsWith('script.') ? (a.service === 'script.turn_on' ? a.entityId : a.service) : undefined;
+    const script = scriptRef === undefined ? undefined : findScript(project, scriptRef);
+    if (script && !seen.has(script.id)) {
+      seen.add(script.id);
+      n += cloudNotifications(script.sequence, project, seen);
+    }
+  }
+  return n;
+}
+
+const ZONE_OFFLINE = 'la ubicación de las personas llega desde la app móvil por Internet';
+const NOTIFY_OFFLINE = 'las notificaciones a la app móvil necesitan Internet';
+
+/** Motivos de degradación sin Internet: zonas (disparadores y condiciones) y notificaciones. */
+function offlineReasons(triggers: Trigger[], conditions: Condition[], actions: Action[], project: Project): string[] {
+  const out: string[] = [];
+  triggers.forEach((t, i) => {
+    if (t.type === 'zone') out.push(`Disparador ${i + 1}: ${ZONE_OFFLINE}`);
+  });
+  if (conditions.flatMap(zoneConditions).length > 0 || flattenActions(actions).some((a) => actionConditions(a).flatMap(zoneConditions).length > 0)) {
+    out.push(`Condición de zona: ${ZONE_OFFLINE}`);
+  }
+  if (cloudNotifications(actions, project) > 0) out.push(`Acción: ${NOTIFY_OFFLINE}`);
+  return out;
+}
+
 function describeDown(kind: string, entityId: string, down: DownEntity): string {
   return `${kind}: ${down.name} (${entityId}) no está disponible; ${down.reason}`;
 }
@@ -176,6 +215,7 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
   const reasons = unavailabilityReasons(project, defs, failures);
   const down = downEntities(project, defs, reasons);
   const unavailableDevices = [...reasons.entries()].map(([deviceId, reason]) => ({ deviceId, reason }));
+  const offline = !internetAvailable(project, defs, failures);
 
   const automations = project.automations.map((a) => {
     const result: string[] = [];
@@ -196,6 +236,7 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
       const d = down.get(id);
       if (d) extra.push(describeDown('Acción', id, d));
     }
+    if (offline) extra.push(...offlineReasons(a.triggers, a.conditions, a.actions, project));
     if (extra.length > 0 && status === 'ok') status = 'degraded';
     return { automationId: a.id, status, reasons: [...result, ...extra] };
   });
@@ -213,7 +254,9 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
     const fallen = ids.filter((id) => down.has(id));
     const reasonsList = fallen.map((id) => describeDown('Acción', id, down.get(id) ?? { name: id, reason: '' }));
     if (failures.haRestarting) return { scriptId: s.id, status: 'broken' as const, reasons: [HA_RESTART_REASON, ...reasonsList] };
-    return { scriptId: s.id, status: partialStatus(ids.length, fallen.length), reasons: reasonsList };
+    const notes = offline ? offlineReasons([], [], s.sequence, project) : [];
+    const status = partialStatus(ids.length, fallen.length);
+    return { scriptId: s.id, status: status === 'ok' && notes.length > 0 ? ('degraded' as const) : status, reasons: [...reasonsList, ...notes] };
   });
 
   const count = (items: ImpactItem[], st: ImpactStatus): number => items.filter((x) => x.status === st).length;

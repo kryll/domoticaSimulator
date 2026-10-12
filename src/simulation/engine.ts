@@ -70,6 +70,7 @@ import {
   DEFAULT_NOTIFICATION_TITLE,
   deliverNotification,
   formatNotification,
+  isCloudNotifyService,
   isNotifyService,
   notificationContent,
   type NotificationContent,
@@ -405,7 +406,11 @@ export const HA_RESTART_CANCEL_DETAIL = 'cancelada: Home Assistant se reinició'
  */
 export function cancelAllRuns(sim: SimulationState, detail = HA_RESTART_CANCEL_DETAIL): SimulationState {
   const before = userWaits(sim).length + (sim.queue?.length ?? 0);
-  const result = cancelWhere(sim, () => true, detail);
+  const cancelled = cancelWhere(sim, () => true, detail);
+  // Los disparadores con `for:` pendientes también se pierden al reiniciar.
+  const result = cancelled.pending.some((p) => p.timer?.kind === 'state_for')
+    ? { ...cancelled, pending: cancelled.pending.filter((p) => p.timer?.kind !== 'state_for') }
+    : cancelled;
   return before === 0 ? result : addLog(result, 'warning', `${before} espera${before === 1 ? '' : 's'} de automatizaciones o scripts cancelada${before === 1 ? '' : 's'}: Home Assistant se reinició`);
 }
 
@@ -749,7 +754,7 @@ function callServiceCore(
 ): Outcome {
   const blocked = haBlocked(sim, `Servicio ${fullService.includes('.') ? fullService : `${entityDomain(entityId)}.${fullService}`} no ejecutado`, { entityId });
   if (blocked) return outcome(blocked, false, 'Home Assistant se está reiniciando');
-  if (isNotifyService(fullService)) return notifyService(sim, fullService, data, ctx);
+  if (isNotifyService(fullService)) return notifyService(sim, project, fullService, data, ctx);
   const target = entityDomain(entityId);
   const [domain = '', service = ''] = fullService.includes('.') ? fullService.split('.') : [target, fullService];
   const name = `${domain}.${service}`;
@@ -773,7 +778,12 @@ function callServiceCore(
   if (current.state === 'unavailable') {
     return outcome(addLog(sim, 'warning', `Servicio ${name}: ${friendly(sim, entityId)} no está disponible`, logExtra), false, `${friendly(sim, entityId)} no está disponible`);
   }
-  if (project.reliability?.latency && !exec.immediate) return delayServiceCall(sim, project, entityId, name, data, ctx);
+  if (project.reliability?.latency && !exec.immediate) {
+    if (sim.running) return delayServiceCall(sim, project, entityId, name, data, ctx);
+    // En pausa el reloj no avanza: se aplica al momento y la latencia queda solo como información.
+    const info = latencyFor(project, catalog, entityId);
+    sim = addLog(sim, 'info', `Servicio ${name} → ${friendly(sim, entityId)}: latencia simulada de ${info.ms} ms${info.cloud ? ' (nube)' : ''}; con la simulación en pausa se aplica al momento`, logExtra);
+  }
   const caps = entityCapabilities(project, entityId);
   const res = applyService(target, service, current, data, { now: sim.now, capabilities: caps });
   if (!res) return outcome(addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra), false, 'servicio no soportado en la simulación');
@@ -803,11 +813,18 @@ function sendNotification(sim: SimulationState, content: NotificationContent, ex
 }
 
 /** notify.* (p. ej. notify.persistent_notification): datos message/title → sendNotification. */
-function notifyService(sim: SimulationState, service: string, data: ServiceData | undefined, ctx: RunCtx): Outcome {
+function notifyService(sim: SimulationState, project: Project, service: string, data: ServiceData | undefined, ctx: RunCtx): Outcome {
   const extra = ctx.automationId === undefined ? {} : { automationId: ctx.automationId };
   const content = notificationContent(data);
   if (!content) return outcome(addLog(sim, 'warning', `Servicio ${service}: falta el mensaje ("message")`, extra), false, 'falta el mensaje');
-  return sendNotification(sim, content, extra);
+  return notifyOffline(sim, project, service, extra) ?? sendNotification(sim, content, extra);
+}
+
+/** Las notificaciones a la app (notify.* salvo la persistente) necesitan Internet. */
+function notifyOffline(sim: SimulationState, project: Project, service: string, extra: LogExtra): Outcome | undefined {
+  const f = sim.failures;
+  if (!f || (!f.internet && !f.powerOutage) || !isCloudNotifyService(service) || internetAvailable(project, catalog, f)) return undefined;
+  return outcome(addLog(sim, 'error', `Notificación ${service} no enviada: necesita Internet`, extra), false, 'notificación en la nube sin Internet');
 }
 
 /** Fase 3 (B19): servicio sobre un grupo → mismo servicio en cada miembro. */
@@ -993,12 +1010,13 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
   const markWaiting = (s: SimulationState, step: Step): SimulationState =>
     traceId === undefined || step.trace === undefined ? s : setTraceAction(s, traceId, step.trace, { status: 'waiting', at: s.now });
   for (let steps = 0; queue.length > 0; steps++) {
-    if (steps >= MAX_ACTION_STEPS) {
-      return addLog(result, 'error', `Acciones detenidas: más de ${MAX_ACTION_STEPS} pasos sin espera (¿repeat infinito?)`, extra);
-    }
     const [step, ...rest] = queue;
     queue = rest;
     if (!step) continue;
+    if (steps >= MAX_ACTION_STEPS) {
+      const detail = `más de ${MAX_ACTION_STEPS} pasos sin espera (¿repeat infinito?)`;
+      return traceStep(outcome(addLog(result, 'error', `Acciones detenidas: ${detail}`, extra), false, detail), { ...step, nested: false });
+    }
     const action = step.action;
     const c: RunCtx = Object.keys(vars).length > 0 ? { ...withoutTrace(ctx), variables: vars } : withoutTrace(ctx);
     switch (action.type) {
@@ -1041,7 +1059,7 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
           title: renderTemplate(action.title ?? DEFAULT_NOTIFICATION_TITLE, vars, result),
           message: renderTemplate(action.message, vars, result),
         };
-        result = traceStep(sendNotification(result, content, extra), step);
+        result = traceStep(notifyOffline(result, project, action.service ?? 'notify.notify', extra) ?? sendNotification(result, content, extra), step);
         break;
       }
       case 'variables': {

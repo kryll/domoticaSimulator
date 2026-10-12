@@ -9,6 +9,9 @@ import { cx } from '../ui/cx';
 import { addTimeline, updateTimeline } from './timelineActions';
 import { TimelineStepEditor } from './TimelineStepEditor';
 import { TimelineRunner } from './TimelineRunner';
+import { useSimulationStore } from '../store/simulationStore';
+import { timelineStart } from '../simulation/timeline';
+import { formatSimDate, formatSimTime, startOfDay } from '../simulation/clock';
 
 const EMPTY: Timeline[] = [];
 
@@ -16,22 +19,48 @@ function lastTime(steps: TimelineStep[]): string {
   return steps[steps.length - 1]?.at ?? '08:00:00';
 }
 
+/** Hora simulada (ms, reloj de pared en UTC) ↔ valor de un input datetime-local. */
+function toLocalInput(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 16);
+}
+
+function fromLocalInput(text: string): number | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(text);
+  if (!m) return undefined;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+}
+
 function TimelineEditor({ timeline }: { timeline: Timeline }) {
   const at = lastTime(timeline.steps);
+  const fallback = useSimulationStore((s) => startOfDay(s.sim.now));
+  const start = timelineStart(timeline, fallback);
   return (
     <div className="flex flex-col gap-3">
-      <TextField
-        key={timeline.name}
-        label="Nombre de la prueba"
-        defaultValue={timeline.name}
-        onBlur={(e) => {
-          const v = e.target.value.trim();
-          if (v && v !== timeline.name) updateTimeline(timeline.id, { name: v });
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-        }}
-      />
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,auto]">
+        <TextField
+          key={timeline.name}
+          label="Nombre de la prueba"
+          defaultValue={timeline.name}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v && v !== timeline.name) updateTimeline(timeline.id, { name: v });
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+        />
+        <TextField
+          label="Inicio de la prueba"
+          type="datetime-local"
+          step={60}
+          value={toLocalInput(start)}
+          hint={timeline.startAt === undefined ? 'Sin fijar: el día simulado actual a las 00:00.' : `Empieza el ${formatSimDate(start)} a las ${formatSimTime(start)}.`}
+          onChange={(e) => {
+            const ms = fromLocalInput(e.target.value);
+            if (ms !== undefined) updateTimeline(timeline.id, { startAt: ms });
+          }}
+        />
+      </div>
       <ListEditor<TimelineStep>
         title="Pasos"
         items={timeline.steps}
@@ -85,7 +114,7 @@ export function TimelinesPanel() {
         {selected ? (
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <TimelineRunner timeline={selected} onRecorded={(steps) => updateTimeline(selected.id, { steps })} />
+              <TimelineRunner timeline={selected} onRecorded={(steps, startAt) => updateTimeline(selected.id, { steps, startAt })} />
               <Button
                 size="sm"
                 variant="danger"

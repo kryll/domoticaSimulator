@@ -19,6 +19,25 @@ const TABS: Array<{ key: SettingsTab; label: string }> = [
 
 const fmt = (n: number): string => String(n).replace('.', ',');
 
+/** Número (admite coma decimal) dentro de [min, max], o undefined. */
+function inRange(text: string, min: number, max: number): number | undefined {
+  const n = parseNumberInput(text.replace(',', '.'));
+  return n !== undefined && n >= min && n <= max ? n : undefined;
+}
+
+function NumberInput({ label, value, onChange, invalid, hint }: { label: string; value: string; onChange: (v: string) => void; invalid: boolean; hint: string }) {
+  return (
+    <TextField
+      label={label}
+      inputMode="decimal"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-invalid={invalid}
+      hint={invalid ? <span className="text-red-700">{hint}</span> : hint}
+    />
+  );
+}
+
 function parseCoord(text: string, limit: number): number | undefined {
   const n = Number(text.trim().replace(',', '.'));
   return text.trim() !== '' && Number.isFinite(n) && Math.abs(n) <= limit ? n : undefined;
@@ -43,6 +62,12 @@ export function ProjectSettingsDialog() {
   const [outdoorMean, setOutdoorMean] = useState(fmt(env.outdoorMean));
   const [amplitude, setAmplitude] = useState(fmt(env.outdoorAmplitude));
   const [latency, setLatency] = useState(storedReliability?.latency ?? false);
+  const [failureRate, setFailureRate] = useState(fmt(storedReliability?.failureRate ?? 0));
+  const [seed, setSeed] = useState(storedReliability?.seed === undefined ? '' : String(storedReliability.seed));
+  const [tau, setTau] = useState(fmt(env.tauHours));
+  const [windowFactor, setWindowFactor] = useState(fmt(env.windowFactor));
+  const [hvacRate, setHvacRate] = useState(fmt(env.hvacRatePerHour));
+  const [advOpen, setAdvOpen] = useState(false);
   const [lat, setLat] = useState(String(current.latitude));
   const [lon, setLon] = useState(String(current.longitude));
   const [tz, setTz] = useState(current.timeZone ?? 'Europe/Madrid');
@@ -53,18 +78,52 @@ export function ProjectSettingsDialog() {
   const kwh = parseMoneyInput(price);
   const mean = parseNumberInput(outdoorMean.replace(',', '.'));
   const amp = parseNumberInput(amplitude.replace(',', '.'));
-  const validSim = mean !== undefined && amp !== undefined && amp >= 0;
-  const valid = latitude !== undefined && longitude !== undefined && kwh !== undefined && validSim;
+  const failure = inRange(failureRate, 0, 1);
+  const seedNum = seed.trim() === '' ? null : inRange(seed, 0, Number.MAX_SAFE_INTEGER);
+  const seedOk = seedNum === null || (seedNum !== undefined && Number.isInteger(seedNum));
+  const tauNum = inRange(tau, 0.5, 1000);
+  const windowNum = inRange(windowFactor, 1, 20);
+  const hvacNum = inRange(hvacRate, 0, 10);
+  const validSim =
+    mean !== undefined && amp !== undefined && amp >= 0 && failure !== undefined && seedOk && tauNum !== undefined && windowNum !== undefined && hvacNum !== undefined;
+  const validProject = latitude !== undefined && longitude !== undefined && kwh !== undefined;
+  const valid = validProject && validSim;
+  const advancedInvalid = failure === undefined || !seedOk || tauNum === undefined || windowNum === undefined || hvacNum === undefined;
+  const tabErrors: Record<SettingsTab, boolean> = { project: !validProject, simulation: !validSim };
   const preset = SPANISH_CITIES.find((c) => c.latitude === latitude && c.longitude === longitude)?.name ?? '';
 
   const save = () => {
-    if (!valid) return;
+    if (!valid) {
+      // Lleva a la primera pestaña con errores y al primer campo inválido.
+      const target: SettingsTab = !validProject ? 'project' : 'simulation';
+      setTab(target);
+      if (target === 'simulation' && advancedInvalid) setAdvOpen(true);
+      setTimeout(() => document.querySelector<HTMLElement>(`#${tabPanelId(TABS_PREFIX, target)} [aria-invalid="true"]`)?.focus(), 0);
+      useUiStore.getState().notify('Revisa los campos marcados antes de guardar', 'error');
+      return;
+    }
     useProjectStore.getState().update((p) => {
       let next = { ...p, settings: { ...projectSettings(p), latitude, longitude, timeZone: tz, electricityPriceEurKwh: kwh } };
-      if (latency !== (p.reliability?.latency ?? false)) next = { ...next, reliability: { ...p.reliability, latency } };
+      const reliability = { ...p.reliability, latency, ...(failure ? { failureRate: failure } : {}) };
+      if (!failure) delete reliability.failureRate;
+      if (typeof seedNum === 'number') reliability.seed = seedNum;
+      else delete reliability.seed;
+      const prevRel = p.reliability ?? { latency: false };
+      if (JSON.stringify(reliability) !== JSON.stringify(prevRel)) next = { ...next, reliability };
       // El entorno solo se guarda si se activa o ya existía (los proyectos sin él siguen igual).
       return thermal || p.environment
-        ? { ...next, environment: { ...environmentSettings(p), enabled: thermal, outdoorMean: mean, outdoorAmplitude: amp } }
+        ? {
+            ...next,
+            environment: {
+              ...environmentSettings(p),
+              enabled: thermal,
+              outdoorMean: mean,
+              outdoorAmplitude: amp,
+              tauHours: tauNum,
+              windowFactor: windowNum,
+              hvacRatePerHour: hvacNum,
+            },
+          }
         : next;
     });
     useUiStore.getState().notify('Ajustes del proyecto guardados', 'success');
@@ -79,13 +138,24 @@ export function ProjectSettingsDialog() {
       footer={
         <>
           <Button onClick={close}>Cancelar</Button>
-          <Button variant="primary" onClick={save} disabled={!valid}>
+          <Button variant="primary" onClick={save}>
             Guardar
           </Button>
         </>
       }
     >
-      <Tabs<SettingsTab> label="Secciones de los ajustes" tabs={TABS} active={tab} onChange={setTab} idPrefix={TABS_PREFIX} className="mb-3 border-b border-slate-200" />
+      <Tabs<SettingsTab>
+        label="Secciones de los ajustes"
+        tabs={TABS.map((t) => ({
+          key: t.key,
+          label: (
+            <>
+              {t.label}
+              {tabErrors[t.key] && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-red-600 align-middle" role="img" aria-label="(con errores)" />}
+            </>
+          ),
+        }))}
+        active={tab} onChange={setTab} idPrefix={TABS_PREFIX} className="mb-3 border-b border-slate-200" />
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -181,6 +251,31 @@ export function ProjectSettingsDialog() {
               Latencia según protocolo e integración
             </label>
           </fieldset>
+          <div className="rounded-md border border-slate-200 p-2">
+            <button
+              type="button"
+              aria-expanded={advOpen}
+              aria-controls={`${TABS_PREFIX}-avanzado`}
+              onClick={() => setAdvOpen((o) => !o)}
+              className="flex w-full items-center gap-1 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <span aria-hidden="true">{advOpen ? '▾' : '▸'}</span> Avanzado
+              {advancedInvalid && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-red-600" role="img" aria-label="(con errores)" />}
+            </button>
+            <div id={`${TABS_PREFIX}-avanzado`} hidden={!advOpen} className="mt-2 grid grid-cols-2 gap-2">
+              <NumberInput label="Probabilidad de fallo en la nube (0 a 1)" value={failureRate} onChange={setFailureRate} invalid={failure === undefined} hint="Entre 0 y 1" />
+              <NumberInput
+                label="Semilla aleatoria"
+                value={seed}
+                onChange={setSeed}
+                invalid={!seedOk}
+                hint={seedOk ? 'Vacío = la de por defecto. Misma semilla, mismos fallos.' : 'Número entero igual o mayor que 0'}
+              />
+              <NumberInput label="Inercia térmica (horas)" value={tau} onChange={setTau} invalid={tauNum === undefined} hint="Entre 0,5 y 1000" />
+              <NumberInput label="Pérdidas con ventana abierta (×)" value={windowFactor} onChange={setWindowFactor} invalid={windowNum === undefined} hint="Entre 1 y 20" />
+              <NumberInput label="Potencia de climatización (°C/h)" value={hvacRate} onChange={setHvacRate} invalid={hvacNum === undefined} hint="Entre 0 y 10" />
+            </div>
+          </div>
         </div>
       </form>
     </Modal>

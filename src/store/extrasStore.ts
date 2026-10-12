@@ -3,6 +3,8 @@
 import { create } from 'zustand';
 import type { Id, Point, Protocol, WallMaterial } from '../types';
 
+export type CenterView = 'plan' | 'dashboard';
+
 export type ExtraDialog = 'houseTemplates' | 'packages' | 'share';
 
 export interface RouterSuggestion {
@@ -21,6 +23,10 @@ export interface FloorMenuState {
 
 export interface ExtrasState {
   dialog: ExtraDialog | null;
+  /** Menú «Escenarios de fallo» abierto (desde su botón o desde «☰ Proyecto»). */
+  scenariosOpen: boolean;
+  /** Vista del área central: plano o dashboard. */
+  centerView: CenterView;
   /** Capa «Clima»: temperatura por sala. */
   showClimate: boolean;
   /** Capa «Señal»: mapa de calor RSSI. */
@@ -35,6 +41,8 @@ export interface ExtrasState {
   floorMenu: FloorMenuState | null;
 
   openDialog: (dialog: ExtraDialog | null) => void;
+  setScenariosOpen: (open: boolean) => void;
+  setCenterView: (view: CenterView) => void;
   toggleClimate: () => void;
   toggleSignal: () => void;
   setSignalProtocol: (p: SignalProtocol) => void;
@@ -47,6 +55,8 @@ export interface ExtrasState {
 
 const initial = {
   dialog: null,
+  scenariosOpen: false,
+  centerView: 'plan' as CenterView,
   showClimate: false,
   showSignal: false,
   signalProtocol: 'zigbee' as SignalProtocol,
@@ -59,6 +69,8 @@ const initial = {
 export const useExtrasStore = create<ExtrasState>()((set) => ({
   ...initial,
   openDialog: (dialog) => set({ dialog }),
+  setScenariosOpen: (scenariosOpen) => set({ scenariosOpen }),
+  setCenterView: (centerView) => set({ centerView }),
   toggleClimate: () => set((s) => ({ showClimate: !s.showClimate })),
   toggleSignal: () => set((s) => ({ showSignal: !s.showSignal })),
   setSignalProtocol: (signalProtocol) => set({ signalProtocol }),

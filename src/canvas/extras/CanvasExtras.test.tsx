@@ -31,7 +31,8 @@ describe('capas y menús de la Fase 3 en el lienzo', () => {
 
   it('dibuja las paredes de la planta y entra en el modo «Dibujar pared»', async () => {
     expect(screen.getByTestId('walls-layer')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Dibujar pared' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Dibujar' }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Dibujar pared' }));
     expect(useUiStore.getState().canvasMode).toBe('wall');
     expect(screen.getByLabelText('Zona de dibujo de paredes')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Quitar última' }));
@@ -44,7 +45,9 @@ describe('capas y menús de la Fase 3 en el lienzo', () => {
     act(() => {
       useSimulationStore.setState((s) => ({ sim: { ...s.sim, environment: { outdoorTemperature: 9.5, rooms: { r1: { temperature: 22.34, illuminance: 100 } } } } }));
     });
-    await userEvent.click(screen.getByRole('button', { name: 'Clima' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Capas' }));
+    await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Clima' }));
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Clima' })).toHaveAttribute('aria-checked', 'true');
     const layer = await screen.findByTestId('climate-layer');
     expect(layer).toHaveTextContent('22,3 °C');
     expect(screen.getByText(/Exterior:/)).toHaveTextContent('9,5 °C');
@@ -66,13 +69,49 @@ describe('capas y menús de la Fase 3 en el lienzo', () => {
     expect(within(props).getByText('light.rele')).toBeInTheDocument();
   });
 
-  it('las pestañas Hogar, Dashboard y Pruebas cargan sus vistas', { timeout: 20000 }, async () => {
+  it('Hogar y Pruebas en sus grupos y el Dashboard como vista del área central', { timeout: 20000 }, async () => {
+    await userEvent.click(screen.getByRole('button', { name: /^Uso: grupo de pestañas/ }));
     await userEvent.click(screen.getByRole('tab', { name: 'Hogar' }));
     expect(await screen.findByRole('heading', { name: 'Personas' }, { timeout: 5000 })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Variantes' }, { timeout: 5000 })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('tab', { name: 'Dashboard' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
     expect(await screen.findByRole('button', { name: 'Exportar YAML Lovelace' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Dashboard' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Plano' }));
+    expect(screen.queryByRole('region', { name: 'Dashboard' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /^Lógica: grupo de pestañas/ }));
     await userEvent.click(screen.getByRole('tab', { name: 'Pruebas' }));
     expect(await screen.findByRole('button', { name: '+ Nueva prueba' }, { timeout: 5000 })).toBeInTheDocument();
+  });
+});
+
+describe('«Mostrar como luz» con el proyecto de ejemplo', () => {
+  afterEach(() => stopSimulationLoop());
+
+  it('el enchufe pasa a ser luz y la automatización de fuga sigue funcionando', async () => {
+    const { createDemoProject } = await import('../../store/demoProject');
+    const project = createDemoProject();
+    useUiStore.getState().reset();
+    useExtrasStore.getState().reset();
+    useProjectStore.getState().loadProject(project);
+    useSimulationStore.getState().reset(project);
+    render(<App autoLoad={false} />);
+    // Espera al arranque de la app (fija la planta activa) antes de seleccionar.
+    await act(async () => {});
+    act(() => {
+      useUiStore.getState().setActiveFloor(project.devices.find((d) => d.id === 'demo-enchufe-bano')?.floorId ?? null);
+      useUiStore.getState().select({ kind: 'device', id: 'demo-enchufe-bano' });
+    });
+    const props = screen.getByRole('complementary', { name: 'Propiedades' });
+    await userEvent.click(within(props).getByRole('checkbox', { name: /Mostrar como luz/ }));
+    const auto = useProjectStore.getState().project.automations.find((a) => a.id === 'demo-auto-fuga');
+    expect(auto?.actions[0]).toMatchObject({ service: 'light.turn_off', entityId: 'light.enchufe_bano_switch' });
+    expect(within(props).getByText('light.enchufe_bano_switch')).toBeInTheDocument();
+
+    act(() => useSimulationStore.getState().callService('light.enchufe_bano_switch', 'light.turn_on'));
+    expect(useSimulationStore.getState().sim.entities['light.enchufe_bano_switch']?.state).toBe('on');
+    act(() => useSimulationStore.getState().setBinary('binary_sensor.fuga_bano_leak', true));
+    await waitFor(() => expect(useSimulationStore.getState().sim.entities['light.enchufe_bano_switch']?.state).toBe('off'));
+    expect(useSimulationStore.getState().sim.entities['switch.enchufe_bano_switch']).toBeUndefined();
   });
 });

@@ -5,6 +5,8 @@ import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
 import { projectEntities } from '../canvas/analysis';
 import { groupEntityId } from '../simulation/logic';
+import { renameEntityRefs, renameGroupMapping } from '../devices/renaming';
+import { updateWithRename } from '../store/entityRename';
 import { Button } from '../ui/Button';
 import { SelectField, TextField } from '../ui/Field';
 import { newId } from '../ui/ids';
@@ -37,9 +39,17 @@ function GroupForm({ initial, onDone }: { initial?: EntityGroup; onDone: () => v
     const clean = name.trim() || `Grupo de ${DOMAIN_LABELS[domain].toLowerCase()}`;
     const valid = members.filter((m) => m.startsWith(`${domain}.`));
     const group: EntityGroup = { id: initial?.id ?? newId('group'), name: clean, domain, entityIds: valid };
-    useProjectStore.getState().update((p) => {
+    // Si cambia el nombre (o el tipo), cambia light.grupo_<slug>: referencias y simulación al día.
+    const project = useProjectStore.getState().project;
+    const mapping: Record<string, string> = initial
+      ? initial.domain === domain
+        ? renameGroupMapping(project, initial.id, clean)
+        : { [groupEntityId(initial)]: groupEntityId(group) }
+      : {};
+    updateWithRename(mapping, (p) => {
       const list = p.groups ?? [];
-      return { ...p, groups: initial ? list.map((g) => (g.id === initial.id ? group : g)) : [...list, group] };
+      const next = { ...p, groups: initial ? list.map((g) => (g.id === initial.id ? group : g)) : [...list, group] };
+      return Object.keys(mapping).length > 0 ? renameEntityRefs(next, mapping) : next;
     });
     onDone();
   };

@@ -47,3 +47,29 @@ describe('GroupsSection', () => {
     expect(screen.getByRole('checkbox', { name: /Luz pasillo/ })).toBeChecked();
   });
 });
+
+describe('renombrar un grupo', () => {
+  it('actualiza las automatizaciones y conserva el estado en la simulación', async () => {
+    const project = makeProject({
+      devices: [makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz')],
+      groups: [{ id: 'g', name: 'Luces', domain: 'light', entityIds: ['light.luz'] }],
+      automations: [
+        { id: 'a1', name: 'x', enabled: true, mode: 'single', triggers: [], conditions: [], actions: [{ type: 'service', service: 'light.turn_on', entityId: 'light.grupo_luces' }] },
+      ],
+    });
+    useProjectStore.getState().loadProject(project);
+    act(() => useSimulationStore.getState().reset(project));
+    act(() => useSimulationStore.getState().callService('light.luz', 'light.turn_on'));
+    render(<GroupsSection />);
+    await userEvent.click(screen.getByRole('button', { name: 'Editar Luces' }));
+    const name = screen.getByLabelText('Nombre del grupo');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Salón');
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar grupo' }));
+    const p = useProjectStore.getState().project;
+    expect(p.automations[0]?.actions[0]).toMatchObject({ entityId: 'light.grupo_salon' });
+    expect(useSimulationStore.getState().sim.entities['light.grupo_salon']?.state).toBe('on');
+    act(() => useProjectStore.getState().undo());
+    expect(useProjectStore.getState().project.groups?.[0]?.name).toBe('Luces');
+  });
+});

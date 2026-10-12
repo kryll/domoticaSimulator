@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { useExtrasStore } from '../store/extrasStore';
+import { CenterViewSwitch } from '../ui/CenterArea';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { TextField } from '../ui/Field';
@@ -152,6 +153,7 @@ export function FloorBar() {
           Editar planta
         </Button>
       )}
+      <CenterViewSwitch />
       {editing && <FloorDialog floorId={editing} onClose={() => setEditing(null)} />}
     </div>
   );

@@ -25,7 +25,7 @@ describe('generateDashboard', () => {
     expect(salon).toContainEqual({ type: 'tile', entity: 'light.luz_salon' });
     expect(salon).toContainEqual({ type: 'tile', entity: 'light.grupo_salon' });
     const entrada = cards(0, 'Entrada');
-    expect(entrada).toContainEqual({ type: 'picture-glance', title: 'Cámara entrada Cámara', camera_image: 'camera.camara_entrada_camera', entities: ['binary_sensor.camara_entrada_motion'] });
+    expect(entrada).toContainEqual({ type: 'picture-glance', title: 'Cámara entrada', camera_image: 'camera.camara_entrada_camera', entities: ['binary_sensor.camara_entrada_motion'] });
     const pasillo = cards(0, 'Pasillo');
     expect(pasillo.find((c) => c.type === 'entities')).toMatchObject({ entities: expect.arrayContaining(['binary_sensor.movimiento_pasillo_motion']) });
   });

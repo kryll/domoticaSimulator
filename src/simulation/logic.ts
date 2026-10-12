@@ -23,7 +23,7 @@ export const NOT_HOME = 'not_home';
 /** Notificaciones máximas en la bandeja (se conservan las más recientes). */
 export const MAX_NOTIFICATIONS = 100;
 /** Pasos máximos de acciones sin espera en una misma ejecución (protege de repeat infinitos). */
-export const MAX_ACTION_STEPS = 1000;
+export const MAX_ACTION_STEPS = 10_000;
 /** dueAt de una espera sin tiempo límite. */
 export const WAIT_FOREVER = Number.MAX_SAFE_INTEGER;
 
@@ -124,8 +124,19 @@ export function fase3TriggerMatches(
 
 /** entity_id del grupo: <dominio>.grupo_<slug> (sin duplicar el prefijo «grupo»). */
 export function groupEntityId(group: Pick<EntityGroup, 'domain' | 'name'>): string {
-  const slug = slugify(group.name).replace(/^grupo_?/, '');
-  return `${group.domain}.grupo_${slug === '' ? 'sin_nombre' : slug}`;
+  return `${group.domain}.${slugify(groupHaName(group))}`;
+}
+
+/**
+ * Nombre con el que se exporta el grupo a HA: HA crea el entity_id a partir de `name`, así que
+ * slugify(groupHaName(g)) es siempre el objeto de groupEntityId(g). Se antepone «Grupo» salvo
+ * que el nombre ya empiece por esa palabra.
+ */
+export function groupHaName(group: Pick<EntityGroup, 'name'>): string {
+  const name = group.name.trim();
+  const slug = slugify(name);
+  if (name !== '' && (slug === 'grupo' || slug.startsWith('grupo_'))) return name;
+  return `Grupo ${name === '' ? 'sin nombre' : name}`;
 }
 
 export function findGroupByEntity(project: Pick<Project, 'groups'>, entityId: string): EntityGroup | undefined {
@@ -277,6 +288,10 @@ export function expandRepeat(a: Extract<Action, { type: 'repeat' }>, check: (con
     return n === 1 ? [...a.sequence] : [...a.sequence, { ...a, count: n - 1 }];
   }
   if (a.while !== undefined) return check(a.while) ? [...a.sequence, a] : [];
-  if (a.until !== undefined) return [...a.sequence, { type: 'if', conditions: a.until, then: [], else: [a] }];
+  // until (hacer… hasta): la primera vuelta siempre; después, mientras no se cumplan todas.
+  if (a.until !== undefined) {
+    const again: Action = { type: 'repeat', while: [{ type: 'not', conditions: [{ type: 'and', conditions: a.until }] }], sequence: a.sequence };
+    return [...a.sequence, again];
+  }
   return [];
 }

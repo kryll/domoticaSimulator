@@ -35,12 +35,61 @@ export function mapConditionEntities(c: Condition, map: EntityMapper): Condition
 
 const mapConds = (cs: Condition[], map: EntityMapper): Condition[] => cs.map((c) => mapConditionEntities(c, map));
 
-/** Reescribe los entity_id de una acción y de todas sus acciones anidadas. */
+const domainOf = (id: string): string => (id.includes('.') ? id.slice(0, id.indexOf('.')) : '');
+
+/** Dominios de servicio que no dependen del dominio de la entidad de destino. */
+const NEUTRAL_SERVICE_DOMAINS = new Set(['homeassistant', 'scene', 'script', 'notify', 'persistent_notification']);
+
+/**
+ * Servicio tras cambiar de dominio la entidad (switch.x → light.x por «Mostrar como luz»):
+ * «switch.turn_on» pasa a «light.turn_on». Los servicios neutros (homeassistant.*) no cambian.
+ */
+export function remapServiceDomain(service: string, oldEntityId: string, newEntityId: string): string {
+  const from = domainOf(oldEntityId);
+  const to = domainOf(newEntityId);
+  if (from === to || !service.includes('.')) return service;
+  const [domain = '', name = ''] = service.split('.');
+  if (domain !== from || NEUTRAL_SERVICE_DOMAINS.has(domain)) return service;
+  return `${to}.${name}`;
+}
+
+const TEMPLATE_BLOCK = /\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}/g;
+const QUOTED_ENTITY = /(['"])([a-z_]+\.[a-z0-9_]+)\1/g;
+
+/** Reescribe los entity_id entre comillas dentro de las plantillas {{ ... }} de un texto. */
+export function mapTemplateEntities(text: string, map: EntityMapper): string {
+  if (!text.includes('{')) return text;
+  return text.replace(TEMPLATE_BLOCK, (block) => block.replace(QUOTED_ENTITY, (whole, q: string, id: string) => {
+    const to = map(id);
+    return to === id ? whole : `${q}${to}${q}`;
+  }));
+}
+
+function mapDataTemplates<V>(data: Record<string, V>, map: EntityMapper): Record<string, V> {
+  let changed = false;
+  const out: Record<string, V> = {};
+  for (const [k, v] of Object.entries(data)) {
+    const next = typeof v === 'string' ? (mapTemplateEntities(v, map) as V) : v;
+    if (next !== v) changed = true;
+    out[k] = next;
+  }
+  return changed ? out : data;
+}
+
+/**
+ * Reescribe los entity_id de una acción y de todas sus acciones anidadas: destino de los
+ * servicios (y su dominio si la entidad cambia de dominio), condiciones, disparadores de espera y
+ * entidades citadas en plantillas {{ states('x') }}.
+ */
 export function mapActionEntities(a: Action, map: EntityMapper): Action {
   const seq = (xs: Action[]): Action[] => xs.map((x) => mapActionEntities(x, map));
   switch (a.type) {
-    case 'service':
-      return { ...a, entityId: map(a.entityId) };
+    case 'service': {
+      const entityId = map(a.entityId);
+      const next: Action = { ...a, entityId, service: remapServiceDomain(a.service, a.entityId, entityId) };
+      if (a.data) next.data = mapDataTemplates(a.data, map);
+      return next;
+    }
     case 'choose': {
       const next: Action = { ...a, choices: a.choices.map((o) => ({ conditions: mapConds(o.conditions, map), sequence: seq(o.sequence) })) };
       if (a.default) next.default = seq(a.default);
@@ -59,11 +108,16 @@ export function mapActionEntities(a: Action, map: EntityMapper): Action {
     }
     case 'wait_for_trigger':
       return { ...a, triggers: a.triggers.map((t) => mapTriggerEntities(t, map)) };
+    case 'notify': {
+      const next: Action = { ...a, message: mapTemplateEntities(a.message, map) };
+      if (a.title !== undefined) next.title = mapTemplateEntities(a.title, map);
+      return next;
+    }
+    case 'variables':
+      return { ...a, variables: mapDataTemplates(a.variables, map) };
     case 'scene':
     case 'script':
     case 'delay':
-    case 'notify':
-    case 'variables':
       return a;
   }
 }

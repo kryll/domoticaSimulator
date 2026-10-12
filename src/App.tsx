@@ -4,7 +4,7 @@ import { TopBar } from './ui/TopBar';
 import { BottomPanel } from './ui/BottomPanel';
 import { Toast } from './ui/Toast';
 import { CatalogPanel } from './catalog/CatalogPanel';
-import { Canvas } from './canvas/Canvas';
+import { CenterArea } from './ui/CenterArea';
 import { FloorBar } from './canvas/FloorBar';
 import { FailureBanner } from './simulation/FailureBanner';
 import { PropertiesPanel } from './canvas/PropertiesPanel';
@@ -102,9 +102,7 @@ export function App({ autoLoad = true }: AppProps) {
           <main className="relative flex min-w-0 flex-1 flex-col" aria-label="Plano">
             <FloorBar />
             <FailureBanner />
-            <div className="min-h-0 flex-1">
-              <Canvas />
-            </div>
+            <CenterArea />
             <BottomPanel />
           </main>
           <div className="hidden w-80 shrink-0 border-l border-slate-200 lg:block">

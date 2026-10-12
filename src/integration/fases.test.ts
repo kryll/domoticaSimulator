@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { catalog } from '../devices/catalog';
 import { dev, project } from '../devices/testUtils';
 import { createDemoProject } from '../store/demoProject';
-import type { Automation, Project, Room, SimulationState } from '../types';
+import type { Action, Automation, Project, Room, SimulationState } from '../types';
 import { HOUR_MS, MINUTE_MS, sunTimesAt } from '../simulation/clock';
 import { callService, createSimulationState, runActions, runAutomation, setEntityState, tick } from '../simulation/engine';
 import { lastTrace } from '../simulation/trace';
@@ -16,6 +16,7 @@ import { budgetCost, compareVariants, snapshotOf } from '../variants/variants';
 import { billOfMaterials } from '../export/bom';
 import { automationsToYaml } from '../export/yaml';
 import { projectToPackages } from '../export/packages';
+import { deviceActionAsStateTrigger } from '../export/yamlLogic';
 import { parseAutomationsYaml } from '../automations/yaml-parse';
 import { validateProject } from '../network/validator';
 
@@ -252,6 +253,11 @@ describe('variantes (F3) con el presupuesto (F2)', () => {
   });
 });
 
+/** Aplica f a las acciones de primer nivel de una automatización. */
+function mapActionTree(a: Automation, f: (x: Action) => Action): Automation {
+  return { ...a, actions: a.actions.map(f) };
+}
+
 describe('exportación con la sintaxis nueva de HA', () => {
   it('automations.yaml de ida y vuelta con lógica avanzada', () => {
     const p = demoWith(
@@ -273,11 +279,14 @@ describe('exportación con la sintaxis nueva de HA', () => {
     expect(text).toMatch(/^ {2}triggers:$/m);
     expect(text).toMatch(/^ {2}actions:$/m);
     expect(text).toContain('- trigger: zone');
-    expect(text).toContain('- trigger: device');
+    // device_action se exporta como disparador de estado (HA real exige device_id en trigger: device).
+    expect(text).not.toContain('trigger: device');
+    expect(text).toContain('to: hold');
     expect(text).toContain('- action: notify.notify');
     expect(text).toContain('- action: notify.persistent_notification');
     expect(text).toContain('- condition: sun');
-    expect(parseAutomationsYaml(text, p)).toEqual(p.automations);
+    const expected = p.automations.map((a) => mapActionTree(a, (x) => (x.type === 'wait_for_trigger' ? { ...x, triggers: x.triggers.map((t) => (t.type === 'device_action' ? deviceActionAsStateTrigger(t) : t)) } : x)));
+    expect(parseAutomationsYaml(text, p)).toEqual(expected);
   });
 
   it('packages: zonas con la ubicación de los ajustes', () => {

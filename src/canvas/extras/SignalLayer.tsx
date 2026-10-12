@@ -6,16 +6,33 @@ import { heatSourcesFor, rssiHeatmap, type Heatmap } from '../../network/walls';
 import { useExtrasStore, type SignalProtocol } from '../../store/extrasStore';
 import { heatGridFor, marginRgba, SIGNAL_LEGEND } from './signalGrid';
 
-/** Mapa de calor del protocolo elegido; solo se recalcula si cambian los dispositivos o las paredes. */
+/** Devuelve el array anterior si tiene los mismos elementos (por referencia). */
+function useStableList<T>(list: T[]): T[] {
+  const ref = useRef(list);
+  const prev = ref.current;
+  if (prev !== list && (prev.length !== list.length || prev.some((x, i) => x !== list[i]))) ref.current = list;
+  return ref.current;
+}
+
+/**
+ * Mapa de calor del protocolo elegido. Solo se recalcula si cambian los dispositivos o las salas
+ * de la planta, sus paredes o escala, o el protocolo (no con cualquier cambio del proyecto).
+ */
 function useHeatmap(project: Project, floor: Floor, protocol: SignalProtocol): { map: Heatmap | null; sources: number } {
+  const devices = useStableList(project.devices.filter((d) => d.floorId === floor.id));
+  const rooms = useStableList(project.rooms.filter((r) => r.floorId === floor.id));
+  const projectRef = useRef(project);
+  projectRef.current = project;
+  const { walls, pixelsPerMeter, id } = floor;
   return useMemo(() => {
-    const { devices, rooms } = project;
-    const sources = heatSourcesFor(project, catalog, floor.id, protocol);
-    const points = [...devices.filter((d) => d.floorId === floor.id).map((d) => d.position), ...rooms.filter((r) => r.floorId === floor.id).flatMap((r) => r.polygon)];
-    const grid = heatGridFor(floor, points);
+    // Solo lo que afecta a la señal: escala y paredes.
+    const local: Floor = { id, name: '', level: 0, pixelsPerMeter, ...(walls ? { walls } : {}) };
+    const sources = heatSourcesFor({ ...projectRef.current, devices }, catalog, id, protocol);
+    const points = [...devices.map((d) => d.position), ...rooms.flatMap((r) => r.polygon)];
+    const grid = heatGridFor(local, points);
     if (!grid || sources.length === 0) return { map: null, sources: sources.length };
-    return { map: rssiHeatmap(floor, sources, grid), sources: sources.length };
-  }, [project, floor, protocol]);
+    return { map: rssiHeatmap(local, sources, grid), sources: sources.length };
+  }, [devices, rooms, walls, pixelsPerMeter, id, protocol]);
 }
 
 /** Capa «Señal»: canvas por debajo de los nodos con el mapa de RSSI (B21). */

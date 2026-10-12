@@ -51,7 +51,15 @@ export function historySeries(sim: SimulationState, entityId: string, fromMs: nu
 
 /** ¿La serie es numérica (todas las muestras son números)? Útil para elegir el tipo de gráfica. */
 export function isNumericSeries(samples: HistorySample[]): boolean {
-  return samples.length > 0 && samples.every((s) => typeof s.v === 'number');
+  const values = samples.filter((s) => !isGap(s.v));
+  return values.length > 0 && values.every((s) => typeof s.v === 'number');
+}
+
+/** Estados que son huecos en una gráfica (sin dato): unavailable y unknown. */
+export const GAP_STATES: readonly string[] = ['unavailable', 'unknown'];
+
+export function isGap(v: string | number): boolean {
+  return typeof v === 'string' && GAP_STATES.includes(v);
 }
 
 /** Entidades con historial, ordenadas. */
@@ -61,20 +69,22 @@ export function historyEntities(sim: SimulationState): string[] {
 
 /** Mínimo, máximo y media ponderada en el tiempo de una serie numérica hasta toMs. */
 export function seriesStats(samples: HistorySample[], toMs: number): { min: number; max: number; mean: number } | undefined {
-  const nums = samples.filter((s): s is { t: number; v: number } => typeof s.v === 'number');
-  if (nums.length === 0) return undefined;
   let min = Infinity;
   let max = -Infinity;
   let area = 0;
   let span = 0;
-  nums.forEach((s, i) => {
+  let first: number | undefined;
+  samples.forEach((s, i) => {
+    // Los huecos (unavailable/unknown) y los textos no cuentan ni para el valor ni para la duración.
+    if (typeof s.v !== 'number') return;
+    first ??= s.v;
     min = Math.min(min, s.v);
     max = Math.max(max, s.v);
-    const end = nums[i + 1]?.t ?? toMs;
+    const end = samples[i + 1]?.t ?? toMs;
     const dt = Math.max(0, end - s.t);
     area += s.v * dt;
     span += dt;
   });
-  const first = nums[0];
-  return { min, max, mean: span > 0 ? area / span : (first?.v ?? 0) };
+  if (first === undefined) return undefined;
+  return { min, max, mean: span > 0 ? area / span : first };
 }

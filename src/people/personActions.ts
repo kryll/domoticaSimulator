@@ -4,6 +4,8 @@ import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { newId } from '../ui/ids';
 import { movePerson } from '../simulation/people';
+import { renameEntityRefs, renamePersonMapping } from '../devices/renaming';
+import { updateWithRename } from '../store/entityRename';
 
 /** Colores por defecto de las personas nuevas. */
 export const PERSON_COLORS = ['#0ea5e9', '#f97316', '#22c55e', '#a855f7', '#ef4444', '#eab308'];
@@ -15,8 +17,17 @@ export function addPerson(name: string): Person {
   return person;
 }
 
+/**
+ * Cambia una persona. Si cambia el nombre (y con él person.<slug>), las referencias del proyecto y
+ * la simulación pasan al nuevo entity_id en un solo paso de deshacer.
+ */
 export function updatePerson(id: Id, patch: Partial<Omit<Person, 'id'>>): void {
-  useProjectStore.getState().update((p) => ({ ...p, people: (p.people ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  const project = useProjectStore.getState().project;
+  const mapping = patch.name !== undefined ? renamePersonMapping(project, id, patch.name) : {};
+  updateWithRename(mapping, (p) => {
+    const next = { ...p, people: (p.people ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)) };
+    return Object.keys(mapping).length > 0 ? renameEntityRefs(next, mapping) : next;
+  });
 }
 
 export function removePerson(id: Id): void {

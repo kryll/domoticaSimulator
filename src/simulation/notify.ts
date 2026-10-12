@@ -20,6 +20,14 @@ export function isNotifyService(service: string): boolean {
   return service.startsWith('notify.');
 }
 
+/**
+ * ¿La notificación sale por la nube? Todos los notify.* (app móvil, notify.notify...) salvo la
+ * notificación persistente, que se queda en Home Assistant.
+ */
+export function isCloudNotifyService(service: string): boolean {
+  return isNotifyService(service) && service !== NOTIFY_PERSISTENT;
+}
+
 export interface NotificationContent {
   title?: string;
   message: string;

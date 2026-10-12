@@ -233,6 +233,32 @@ function unknownEntityRule(ctx: Ctx): ValidationIssue[] {
 }
 
 /** Fase 3: personas y zonas de los disparadores/condiciones de zona, y miembros de los grupos. */
+const NEUTRAL_SERVICE_DOMAINS = new Set(['homeassistant', 'scene', 'script', 'notify', 'persistent_notification']);
+
+/**
+ * Servicios cuyo dominio no es el de la entidad de destino (p. ej. switch.turn_off sobre una
+ * luz tras «Mostrar como luz»): HA los rechaza.
+ */
+function serviceDomainRule(ctx: Ctx): ValidationIssue[] {
+  const result: ValidationIssue[] = [];
+  const owners: { kind: string; id: string; name: string; actions: Action[] }[] = [
+    ...ctx.project.automations.map((a) => ({ kind: 'La automatización', id: a.id, name: a.name, actions: a.actions })),
+    ...ctx.project.scripts.map((s) => ({ kind: 'El script', id: s.id, name: s.name, actions: s.sequence })),
+  ];
+  for (const o of owners) {
+    for (const a of flattenActions(o.actions)) {
+      if (a.type !== 'service' || a.entityId === '' || !a.service.includes('.')) continue;
+      const domain = a.service.slice(0, a.service.indexOf('.'));
+      const target = a.entityId.includes('.') ? a.entityId.slice(0, a.entityId.indexOf('.')) : '';
+      if (NEUTRAL_SERVICE_DOMAINS.has(domain) || target === '' || domain === target) continue;
+      result.push(
+        issue('error', 'servicio-dominio-incompatible', `${o.kind} «${o.name}» llama a ${a.service} sobre ${a.entityId}: el servicio debe ser del dominio ${target}`, [], `${o.id}:${a.entityId}:${a.service}`),
+      );
+    }
+  }
+  return result;
+}
+
 function fase3RefsRule(ctx: Ctx): ValidationIssue[] {
   const result: ValidationIssue[] = [];
   const people = new Set((ctx.project.people ?? []).map((p) => p.id));
@@ -346,6 +372,7 @@ export function validateProject(project: Project, defs: DeviceDefinition[]): Val
     ...duplicateEntityRule(ctx),
     ...unknownEntityRule(ctx),
     ...fase3RefsRule(ctx),
+    ...serviceDomainRule(ctx),
     ...missingFieldRule(ctx),
     ...duplicateScriptNameRule(ctx),
     ...isolatedInfraRule(ctx),

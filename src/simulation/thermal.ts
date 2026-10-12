@@ -151,16 +151,56 @@ export function stepRoomTemperature(
   let t = temperature;
   let now = fromMs;
   let remaining = dtMs;
-  const tauMs = Math.max(0.01, env.tauHours) * HOUR_MS;
+  const p = clampEnvironment(env);
+  // Constante de pérdidas por ms (la ventana abierta la multiplica).
+  const k = (opts.windowOpen ? p.windowFactor : 1) / (p.tauHours * HOUR_MS);
   while (remaining > 0) {
     const step = Math.min(MAX_STEP_MS, remaining);
-    const out = outdoorTemperature(env, now);
-    const loss = ((out - t) / tauMs) * (opts.windowOpen ? env.windowFactor : 1);
-    t += loss * step + (opts.hvac(t) / HOUR_MS) * step;
+    // Solución exacta de dT/dt = k·(Text − T) + h con Text y h constantes en el paso: tiende a
+    // Teq sin pasarse nunca, sea cual sea el paso (incondicionalmente estable).
+    const out = outdoorTemperature(env, now + step / 2);
+    // Como mucho tres emisores a plena potencia por sala.
+    const maxH = 3 * p.hvacRatePerHour;
+    const h = Math.max(-maxH, Math.min(maxH, opts.hvac(t))) / HOUR_MS;
+    const eq = out + h / k;
+    t = eq + (t - eq) * Math.exp(-k * step);
     now += step;
     remaining -= step;
   }
   return t;
+}
+
+/** Cambio mínimo de iluminancia que se publica (como el umbral de informe de un sensor real). */
+export const ILLUMINANCE_THRESHOLD_LX = 10;
+export const ILLUMINANCE_THRESHOLD_RATIO = 0.05;
+
+/** ¿Merece publicarse el cambio? Siempre al llegar a 0 o salir de 0; si no, ≥ 10 lx y ≥ 5 %. */
+export function illuminanceChanged(previous: number | undefined, next: number): boolean {
+  if (previous === undefined) return true;
+  if (previous === next) return false;
+  if (previous === 0 || next === 0) return true;
+  const delta = Math.abs(next - previous);
+  return delta >= ILLUMINANCE_THRESHOLD_LX && delta >= previous * ILLUMINANCE_THRESHOLD_RATIO;
+}
+
+/** Límites físicos razonables de los ajustes (los mismos que valida projectSchema). */
+export const ENVIRONMENT_LIMITS = {
+  tauHours: { min: 0.5, max: 1000 },
+  windowFactor: { min: 1, max: 20 },
+  hvacRatePerHour: { min: 0, max: 10 },
+} as const;
+
+const clamp = (v: number, min: number, max: number): number => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : min);
+
+/** Ajustes acotados a ENVIRONMENT_LIMITS (protege de proyectos con valores extremos). */
+export function clampEnvironment(env: Required<EnvironmentSettings>): Required<EnvironmentSettings> {
+  const L = ENVIRONMENT_LIMITS;
+  return {
+    ...env,
+    tauHours: clamp(env.tauHours, L.tauHours.min, L.tauHours.max),
+    windowFactor: clamp(env.windowFactor, L.windowFactor.min, L.windowFactor.max),
+    hvacRatePerHour: clamp(env.hvacRatePerHour, L.hvacRatePerHour.min, L.hvacRatePerHour.max),
+  };
 }
 
 /** Iluminancia de una sala: luz diurna por la ventana (atenuada por las persianas) más las luces. */
@@ -194,7 +234,7 @@ export function applyEnvironment(
   sun: SunProvider = projectSunProvider(project),
 ): SimulationState {
   if (!project.environment?.enabled || !(dtMs > 0)) return sim;
-  const env = environmentSettings(project);
+  const env = clampEnvironment(environmentSettings(project));
   const ents = roomEntities(project, defs);
   const prevEnv = sim.environment ?? initialEnvironment(project, defs, { ...sim, now: sim.now - dtMs });
   const from = sim.now - Math.min(dtMs, 2 * DAY_MS);
@@ -231,7 +271,7 @@ export function applyEnvironment(
     }
     for (const id of ids.illuminance) {
       const current = result.entities[id];
-      if (!current || current.state === 'unavailable' || num(current.state) === state.illuminance) continue;
+      if (!current || current.state === 'unavailable' || !illuminanceChanged(num(current.state), state.illuminance)) continue;
       result = setEntityState(result, project, id, state.illuminance, { quiet: true });
     }
   }

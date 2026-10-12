@@ -676,6 +676,8 @@ export interface Timeline {
   id: Id;
   name: string;
   steps: TimelineStep[];
+  /** Fecha y hora simuladas de inicio (ms), guardadas al grabar o crear la prueba. */
+  startAt?: number;
 }
 
 /** Evento de usuario anotado en el registro (para recordTimeline). */

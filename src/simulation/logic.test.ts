@@ -316,28 +316,39 @@ describe('B19 grupos y mostrar como luz', () => {
   });
 });
 
+const running = (sim: SimulationState): SimulationState => ({ ...sim, running: true });
+
 describe('B22 latencia', () => {
   it('las llamadas a la nube llegan con retraso y los fallos son deterministas', () => {
     const cloud = dev('c', 'sonoff-s26r2', undefined, { name: 'Nube' });
     const p = project([cloud], { reliability: { latency: true, seed: 42 } });
-    let sim = callService(createSimulationState(p, catalog, T0), p, 'switch.nube', 'turn_on');
+    let sim = callService(running(createSimulationState(p, catalog, T0)), p, 'switch.nube', 'turn_on');
     expect(st(sim, 'switch.nube')).toBe('off');
     sim = tick(sim, p, 3.2 * SECOND_MS);
     expect(st(sim, 'switch.nube')).toBe('on');
     const failing = project([cloud], { reliability: { latency: true, seed: 1, failureRate: 1 } });
-    const failed = callService(createSimulationState(failing, catalog, T0), failing, 'switch.nube', 'turn_on');
+    const failed = callService(running(createSimulationState(failing, catalog, T0)), failing, 'switch.nube', 'turn_on');
     expect(failed.log.at(-1)?.level).toBe('error');
-    const a = callService(createSimulationState(p, catalog, T0), p, 'switch.nube', 'turn_on');
-    const b = callService(createSimulationState(p, catalog, T0), p, 'switch.nube', 'turn_on');
+    const a = callService(running(createSimulationState(p, catalog, T0)), p, 'switch.nube', 'turn_on');
+    const b = callService(running(createSimulationState(p, catalog, T0)), p, 'switch.nube', 'turn_on');
     expect(a.pending).toEqual(b.pending);
   });
 
   it('las locales tardan unos 100 ms', () => {
     const p = home({ reliability: { latency: true } });
-    let sim = callService(start(p), p, LIGHT, 'turn_on');
+    let sim = callService(running(start(p)), p, LIGHT, 'turn_on');
     expect(st(sim, LIGHT)).toBe('off');
     sim = tick(sim, p, 200);
     expect(st(sim, LIGHT)).toBe('on');
+  });
+
+  it('en pausa se aplica al momento y la latencia queda como información', () => {
+    const cloud = dev('c', 'sonoff-s26r2', undefined, { name: 'Nube' });
+    const p = project([cloud], { reliability: { latency: true, seed: 42, failureRate: 1 } });
+    const sim = callService(createSimulationState(p, catalog, T0), p, 'switch.nube', 'turn_on');
+    expect(st(sim, 'switch.nube')).toBe('on');
+    expect(sim.pending).toHaveLength(0);
+    expect(sim.log.some((l) => l.level === 'info' && /latencia simulada de \d+ ms \(nube\)/.test(l.message))).toBe(true);
   });
 });
 

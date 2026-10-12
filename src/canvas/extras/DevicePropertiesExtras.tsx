@@ -1,8 +1,7 @@
 import type { Device, EntityDefinition } from '../../types';
-import { useProjectStore } from '../../store/projectStore';
 import { HistorySparkline } from '../../history/HistorySparkline';
 import { definitionOf } from '../analysis';
-import { setShowAs } from './showAs';
+import { setDeviceShowAs } from './showAs';
 
 /** «Mostrar como luz» en los relés y enchufes (B19: Device.showAs). */
 export function DeviceDisplayOptions({ device }: { device: Device }) {
@@ -14,7 +13,7 @@ export function DeviceDisplayOptions({ device }: { device: Device }) {
       <input
         type="checkbox"
         checked={asLight}
-        onChange={(e) => useProjectStore.getState().update((p) => setShowAs(p, device.id, e.target.checked ? 'light' : undefined))}
+        onChange={(e) => setDeviceShowAs(device.id, e.target.checked ? 'light' : undefined)}
         className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
       />
       Mostrar como luz

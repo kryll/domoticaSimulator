@@ -42,6 +42,8 @@ interface EntityInfo {
   entityId: string;
   deviceId: Id;
   name: string;
+  /** Nombre del dispositivo (título de la tarjeta de cámara, sin repetir «Cámara»). */
+  deviceName: string;
 }
 
 function roomCards(entities: EntityInfo[], groups: string[]): DashboardCard[] {
@@ -52,7 +54,7 @@ function roomCards(entities: EntityInfo[], groups: string[]): DashboardCard[] {
     if (entityDomain(e.entityId) !== 'camera') continue;
     const siblings = entities.filter((x) => x.deviceId === e.deviceId && x.entityId !== e.entityId).map((x) => x.entityId);
     siblings.forEach((s) => usedByCamera.add(s));
-    cards.push({ type: 'picture-glance', title: e.name, camera_image: e.entityId, entities: siblings });
+    cards.push({ type: 'picture-glance', title: e.deviceName, camera_image: e.entityId, entities: siblings });
   }
   for (const id of groups) cards.push({ type: 'tile', entity: id });
   for (const e of entities) {
@@ -94,7 +96,7 @@ export function generateDashboard(project: Project, defs: DeviceDefinition[]): D
         .filter((d) => filter(d.roomId && project.rooms.some((r) => r.id === d.roomId) ? d.roomId : undefined))
         .flatMap((d) => {
           const def = defs.find((x) => x.id === d.definitionId);
-          return def ? entitiesForDevice(d, def).map((e) => ({ entityId: e.entityId, deviceId: d.id, name: e.friendlyName })) : [];
+          return def ? entitiesForDevice(d, def).map((e) => ({ entityId: e.entityId, deviceId: d.id, name: e.friendlyName, deviceName: d.name })) : [];
         });
     for (const room of project.rooms.filter((r) => r.floorId === floor.id)) {
       const groups = (project.groups ?? []).map(groupEntityId).filter((id) => roomOf[id] === room.id);

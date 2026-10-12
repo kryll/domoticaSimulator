@@ -37,7 +37,7 @@ import { RoomLabelNodeView, RoomNodeView } from './RoomNodeView';
 import { roomLabelPosition } from './roomLabel';
 import { PlanNodeView } from './PlanNodeView';
 import { ProtocolEdgeView } from './ProtocolEdgeView';
-import { CanvasToolbar } from './CanvasToolbar';
+import { CANVAS_TOOLBAR_PX, CanvasToolbar } from './CanvasToolbar';
 import { NightMode } from './NightMode';
 import { Legend } from './Legend';
 import { CoverageLayer } from './CoverageLayer';
@@ -46,6 +46,9 @@ import { PROTOCOL_COLORS } from './style';
 import { CanvasExtras } from './extras/CanvasExtras';
 import { FloorContextMenu } from './extras/FloorContextMenu';
 import { useExtrasStore } from '../store/extrasStore';
+
+/** Encuadre: deja libre arriba la altura de la barra del lienzo para que no tape nodos. */
+const FIT_VIEW_OPTIONS = { padding: { top: `${CANVAS_TOOLBAR_PX + 16}px`, x: '6%', bottom: '8%' } } as const;
 
 const nodeTypes: NodeTypes = { device: DeviceNodeView, room: RoomNodeView, plan: PlanNodeView, roomLabel: RoomLabelNodeView };
 const edgeTypes: EdgeTypes = { protocol: ProtocolEdgeView };
@@ -444,13 +447,14 @@ export function Canvas() {
         panOnDrag={mode !== 'room' && mode !== 'wall'}
         selectionOnDrag={false}
         fitView
+        fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={0.1}
         maxZoom={3}
       >
         <Background gap={20} size={1} color="#cbd5e1" />
         <NightMode containerId="ha-canvas" />
         {showCoverage && floor && <CoverageLayer devices={floorDevices} floor={floor} />}
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false} fitViewOptions={FIT_VIEW_OPTIONS} />
         <MiniMap pannable zoomable className="!hidden md:!block" />
         <FlowPanel position="top-left">
           <CanvasToolbar />
