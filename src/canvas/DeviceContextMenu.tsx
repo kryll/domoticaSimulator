@@ -14,6 +14,8 @@ import { createAutomationForDevice } from './actions';
 import { copySelection, deleteDevices, duplicateSelection, pasteFromClipboard } from './selectionActions';
 import { selectedDeviceIds } from '../store/uiStore';
 import { SCENE_DOMAINS } from '../scenes/sceneEntities';
+import { DESKTOP_QUERY } from '../ui/breakpoints';
+import { useLayoutStore } from '../store/layoutStore';
 
 /** Menú contextual del dispositivo (clic derecho o Mayús+F10 / tecla Menú). */
 export function DeviceContextMenu() {
@@ -43,6 +45,18 @@ function DeviceMenuBody({ deviceId, x, y }: { deviceId: string; x: number; y: nu
     if (down) entries.push({ kind: 'item', id: 'step-down', label: down.label, hint: '↓', onSelect: () => store.step(device.id, -1) });
   }
   entries.push({ kind: 'item', id: 'popover', label: 'Control completo…', hint: 'Doble clic', onSelect: () => ui.openPopover(device.id) });
+  // En pantallas estrechas las propiedades van en un cajón: se abren desde aquí.
+  if (typeof window.matchMedia === 'function' && !window.matchMedia(DESKTOP_QUERY).matches) {
+    entries.push({
+      kind: 'item',
+      id: 'properties',
+      label: 'Propiedades…',
+      onSelect: () => {
+        ui.select({ kind: 'device', id: device.id });
+        useLayoutStore.getState().setDrawer('properties');
+      },
+    });
+  }
   entries.push({ kind: 'separator' });
   entries.push({ kind: 'item', id: 'automation', label: 'Crear automatización con este dispositivo', onSelect: () => createAutomationForDevice(device.id) });
   entries.push({ kind: 'item', id: 'templates', label: 'Plantillas con este dispositivo…', onSelect: () => ui.openTemplates({ deviceId: device.id }) });

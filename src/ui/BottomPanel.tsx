@@ -13,6 +13,7 @@ import { cx } from './cx';
 import { ExtraTabPanel } from './ExtraTabPanel';
 import { hasFailures } from './failures';
 import { useAutomationsWorkspaceOpen, useViewStore } from '../store/viewStore';
+import { useIsTabletUp } from './breakpoints';
 
 const PREFIX = 'bottom';
 
@@ -104,7 +105,10 @@ export function BottomPanel() {
   const tab = useUiStore((s) => s.bottomTab);
   const open = useUiStore((s) => s.bottomOpen);
   const height = useUiStore((s) => s.bottomHeight);
-  const maximized = useUiStore((s) => s.bottomMaximized);
+  const maximizedPref = useUiStore((s) => s.bottomMaximized);
+  // En el móvil (< 768 px), abierto ocupa toda la pantalla.
+  const tabletUp = useIsTabletUp();
+  const maximized = maximizedPref || (!tabletUp && open);
   const setTab = useUiStore((s) => s.setBottomTab);
   const setOpen = useUiStore((s) => s.setBottomOpen);
   const setMaximized = useUiStore((s) => s.setBottomMaximized);
@@ -147,7 +151,7 @@ export function BottomPanel() {
     <section
       className={
         maximized
-          ? 'absolute inset-0 z-30 flex min-h-0 flex-col bg-white'
+          ? cx('flex min-h-0 flex-col bg-white', tabletUp ? 'absolute inset-0 z-30' : 'fixed inset-0 z-30')
           : 'flex min-h-0 shrink-0 flex-col border-t border-slate-200 bg-white'
       }
       style={open && !maximized ? { height } : undefined}
@@ -182,7 +186,7 @@ export function BottomPanel() {
           <OverflowTabs<BottomTab> label="Herramientas" tabs={tabs} active={tab} onChange={setTab} idPrefix={PREFIX} />
         </div>
         <div className="flex items-center gap-1">
-          <Button
+          {tabletUp && <Button
             size="sm"
             variant="ghost"
             onClick={() => setMaximized(!maximized)}
@@ -191,7 +195,7 @@ export function BottomPanel() {
             title={maximized ? 'Restaurar' : 'Pantalla completa'}
           >
             {maximized ? '🗗' : '⛶'}
-          </Button>
+          </Button>}
           <Button
             size="sm"
             variant="ghost"

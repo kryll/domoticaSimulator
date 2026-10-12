@@ -228,8 +228,15 @@ export function findTimer(sim: SimulationState, key: string): PendingAction | un
   return sim.pending.find((p) => p.key === key);
 }
 
-function cancelStateFor(sim: SimulationState, entityId: string): SimulationState {
-  const keep = sim.pending.filter((p) => !((p.timer?.kind === 'state_for' || p.timer?.kind === 'wait_for') && p.timer.entityId === entityId));
+function cancelStateFor(sim: SimulationState, entityId: string, project?: Project, next?: EntityStateValue): SimulationState {
+  const stillInRange = (p: PendingAction): boolean => {
+    // Tanda 3: numeric_state con `for` sigue contando mientras el valor no salga del rango.
+    if (p.timer?.kind !== 'state_for' || !project || next === undefined) return false;
+    const timer = p.timer;
+    const t = project.automations.find((a) => a.id === timer.automationId)?.triggers[timer.triggerIndex];
+    return t?.type === 'numeric_state' && inNumericRange(next, t.above, t.below);
+  };
+  const keep = sim.pending.filter((p) => !((p.timer?.kind === 'state_for' || p.timer?.kind === 'wait_for') && p.timer.entityId === entityId) || stillInRange(p));
   return keep.length === sim.pending.length ? sim : { ...sim, pending: keep };
 }
 
@@ -457,6 +464,8 @@ function runAutomationInternal(
   opts: RunOpts = {},
 ): SimulationState {
   if (!a.enabled && !opts.manual) return sim;
+  // E1: con las automatizaciones en el HA real, el motor no las dispara (sí las manuales).
+  if (sim.automationsExternal && !opts.manual) return sim;
   const extra = { automationId: a.id };
   const traced = (result: AutomationTrace['result'], conditions: TraceCondition[] = []): AutomationTrace =>
     newTrace(sim, project, a, trigger, conditions, result);
@@ -493,6 +502,7 @@ function runAutomationInternal(
 }
 
 function stateTriggerMatches(t: Trigger, entityId: string, prev: EntityStateValue, next: EntityStateValue, project: Project): boolean {
+  if (t.enabled === false) return false;
   if (t.type === 'state') {
     if (t.entityId !== entityId || sameState(prev, next)) return false;
     return (t.from === undefined || sameState(prev, t.from)) && (t.to === undefined || sameState(next, t.to));
@@ -517,7 +527,7 @@ function fireStateTriggers(
     let immediate: number | undefined;
     for (const [i, t] of a.triggers.entries()) {
       if (!stateTriggerMatches(t, entityId, prev, next, project)) continue;
-      if (t.type === 'state' && t.for !== undefined && t.for > 0) {
+      if ((t.type === 'state' || t.type === 'numeric_state') && t.for !== undefined && t.for > 0) {
         const timer: SimTimer = { kind: 'state_for', entityId, automationId: a.id, triggerIndex: i };
         result = scheduleTimer(result, `for:${a.id}:${i}`, result.now + t.for * SECOND_MS, timer);
       } else {
@@ -608,7 +618,7 @@ function applyChange(
     const change = { from: prev.state, to: merged.state };
     result = addLog(result, 'info', `${friendly(result, entityId)}: ${normalize(prev.state)} → ${normalize(merged.state)}`, { entityId, change });
   }
-  result = cancelStateFor(result, entityId);
+  result = cancelStateFor(result, entityId, project, merged.state);
   result = syncClimate(result, project, entityId, merged);
   result = syncPower(result, project, entityId, exec);
   result = syncGroups(result, project, entityId, exec);
@@ -760,9 +770,12 @@ interface Outcome {
   sim: SimulationState;
   ok: boolean;
   detail?: string;
+  /** Tanda 3: error que detiene la secuencia (salvo continue_on_error), como una excepción en HA. */
+  fatal?: boolean;
 }
 
 const outcome = (sim: SimulationState, ok: boolean, detail?: string): Outcome => (detail === undefined ? { sim, ok } : { sim, ok, detail });
+const fatalOutcome = (sim: SimulationState, detail: string): Outcome => ({ sim, ok: false, detail, fatal: true });
 
 function activateSceneInternal(sim: SimulationState, project: Project, sceneId: Id, exec: Exec): Outcome {
   const blocked = haBlocked(sim, `Escena ${findScene(project, sceneId)?.name ?? sceneId} no activada`);
@@ -830,7 +843,7 @@ function callServiceCore(
   exec: Exec,
 ): Outcome {
   const blocked = haBlocked(sim, `Servicio ${fullService.includes('.') ? fullService : `${entityDomain(entityId)}.${fullService}`} no ejecutado`, { entityId });
-  if (blocked) return outcome(blocked, false, 'Home Assistant se está reiniciando');
+  if (blocked) return fatalOutcome(blocked, 'Home Assistant se está reiniciando');
   if (isNotifyService(fullService)) return notifyService(sim, project, fullService, data, ctx);
   const target = entityDomain(entityId);
   const [domain = '', service = ''] = fullService.includes('.') ? fullService.split('.') : [target, fullService];
@@ -850,7 +863,7 @@ function callServiceCore(
   }
   if (cloudBlocked(sim, project, entityId)) {
     const msg = `Servicio ${name} no ejecutado: ${friendly(sim, entityId)} usa una integración en la nube y no hay Internet`;
-    return outcome(addLog(sim, 'error', msg, logExtra), false, 'integración en la nube sin Internet');
+    return fatalOutcome(addLog(sim, 'error', msg, logExtra), 'integración en la nube sin Internet');
   }
   if (current.state === 'unavailable') {
     return outcome(addLog(sim, 'warning', `Servicio ${name}: ${friendly(sim, entityId)} no está disponible`, logExtra), false, `${friendly(sim, entityId)} no está disponible`);
@@ -861,9 +874,11 @@ function callServiceCore(
     const info = latencyFor(project, catalog, entityId);
     sim = addLog(sim, 'info', `Servicio ${name} → ${friendly(sim, entityId)}: latencia simulada de ${info.ms} ms${info.cloud ? ' (nube)' : ''}; con la simulación en pausa se aplica al momento`, logExtra);
   }
+  if (isHelperDomain(target)) return helperServiceCall(sim, project, entityId, target, service, name, current, data, logExtra, exec);
   const caps = entityCapabilities(project, entityId);
-  const res = applyService(target, service, current, data, { now: sim.now, capabilities: caps });
-  if (!res) return outcome(addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra), false, 'servicio no soportado en la simulación');
+  const owner = target === 'alarm_control_panel' ? findEntityOwner(project, entityId) : undefined;
+  const res = applyService(target, service, current, data, { now: sim.now, capabilities: caps, code: owner?.device.alarmCode ?? DEFAULT_ALARM_CODE });
+  if (!res) return fatalOutcome(addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra), 'servicio no soportado en la simulación');
   const desc = describeServiceData(data);
   let next = addLog(sim, 'info', `Servicio ${name} → ${friendly(sim, entityId)}${desc ? ` (${desc})` : ''}`, logExtra);
   for (const w of res.warnings) next = addLog(next, 'warning', `${friendly(sim, entityId)}: ${w}`, logExtra);
@@ -878,6 +893,90 @@ function callServiceCore(
     next = scheduleTimer(next, entityTimerKey(entityId), next.now + res.after.seconds * SECOND_MS, timer);
   }
   return outcome(next, true, res.warnings.length > 0 ? res.warnings.join('; ') : undefined);
+}
+
+/** Tanda 3: servicio sobre un helper (input_*, timer, counter). */
+function helperServiceCall(
+  sim: SimulationState,
+  project: Project,
+  entityId: string,
+  domain: Parameters<typeof applyHelperService>[0],
+  service: string,
+  name: string,
+  current: EntityState,
+  data: ServiceData | undefined,
+  logExtra: LogExtra,
+  exec: Exec,
+): Outcome {
+  const res = applyHelperService(domain, entityId, service, current, data, sim.now, findHelperByEntity(project, entityId));
+  if (!res) return fatalOutcome(addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra), 'servicio no soportado en la simulación');
+  const desc = describeServiceData(data);
+  let next = addLog(sim, 'info', `Servicio ${name} → ${friendly(sim, entityId)}${desc ? ` (${desc})` : ''}`, logExtra);
+  for (const w of res.warnings) next = addLog(next, 'warning', `${friendly(sim, entityId)}: ${w}`, logExtra);
+  if (res.timer) {
+    next = cancelTimer(next, entityTimerKey(entityId));
+    if ('start' in res.timer) next = scheduleTimer(next, entityTimerKey(entityId), next.now + res.timer.start * SECOND_MS, { kind: 'helper_timer', entityId });
+  }
+  next = applyChange(next, project, entityId, res.state, exec, true);
+  if (res.event) next = fireEventInternal(next, project, res.event.type, res.event.data, exec);
+  return outcome(next, res.warnings.length === 0, res.warnings.length > 0 ? res.warnings.join('; ') : undefined);
+}
+
+/** Datos de un evento como variables trigger.event.* */
+function eventVariables(t: Trigger, index: number, eventType: string, data: Record<string, EntityStateValue>): Variables {
+  const vars: Variables = { 'trigger.platform': 'event', 'trigger.id': triggerIdOf(t, index), 'trigger.event.event_type': eventType };
+  for (const [k, v] of Object.entries(data)) vars[`trigger.event.data.${k}`] = v;
+  return vars;
+}
+
+function eventMatches(t: Trigger, eventType: string, data: Record<string, EntityStateValue>): boolean {
+  if (t.enabled === false || t.type !== 'event' || t.eventType !== eventType) return false;
+  return Object.entries(t.eventData ?? {}).every(([k, v]) => data[k] !== undefined && sameState(data[k] ?? '', v));
+}
+
+function fireEventInternal(sim: SimulationState, project: Project, eventType: string, data: Record<string, EntityStateValue>, exec: Exec): SimulationState {
+  const shown = Object.entries(data).map(([k, v]) => `${k}: ${String(v)}`).join(', ');
+  let result = addLog(sim, 'info', `Evento ${eventType}${shown ? ` (${shown})` : ''}`, typeof data.entity_id === 'string' ? { entityId: data.entity_id } : {});
+  // Esperas wait_for_trigger con disparador de evento.
+  for (const p of result.pending.filter((x) => x.wait?.triggers.some((t) => eventMatches(t, eventType, data)))) {
+    if (!result.pending.some((x) => x.id === p.id) || !p.wait) continue;
+    const i = p.wait.triggers.findIndex((t) => eventMatches(t, eventType, data));
+    const t = p.wait.triggers[i];
+    const vars = t ? eventVariables(t, i, eventType, data) : {};
+    result = completeWait(result, project, p, `evento ${eventType}`, { depth: exec.depth + 1, chain: exec.chain }, vars);
+  }
+  for (const a of project.automations) {
+    const i = a.triggers.findIndex((t) => eventMatches(t, eventType, data));
+    const t = a.triggers[i];
+    if (!t) continue;
+    result = runAutomationInternal(result, project, a, exec, `evento ${eventType}`, traceTrigger(t, i, result), { variables: eventVariables(t, i, eventType, data) });
+  }
+  return result;
+}
+
+/**
+ * Tanda 3: lanza un evento en el bus de HA (`event_type` y sus datos): dispara las
+ * automatizaciones con `trigger: event` que coinciden y completa las esperas de ese evento.
+ */
+export function fireEvent(sim: SimulationState, project: Project, eventType: string, data: Record<string, EntityStateValue> = {}): SimulationState {
+  return fireEventInternal(sim, project, eventType, data, ROOT);
+}
+
+/**
+ * Tanda 3: arranque (start) o parada (shutdown) de Home Assistant: dispara las automatizaciones
+ * con `trigger: homeassistant` de ese evento. Lo llaman el inicio de la simulación y el escenario
+ * «Home Assistant se reinicia» (setFailures).
+ */
+export function fireHomeAssistantEvent(sim: SimulationState, project: Project, event: 'start' | 'shutdown'): SimulationState {
+  let result = addLog(sim, 'info', event === 'start' ? 'Home Assistant arranca' : 'Home Assistant se detiene');
+  for (const a of project.automations) {
+    const i = a.triggers.findIndex((t) => t.enabled !== false && t.type === 'homeassistant' && t.event === event);
+    const t = a.triggers[i];
+    if (!t) continue;
+    const variables: Variables = { 'trigger.platform': 'homeassistant', 'trigger.id': triggerIdOf(t, i), 'trigger.event': event };
+    result = runAutomationInternal(result, project, a, ROOT, event === 'start' ? 'arranque de Home Assistant' : 'parada de Home Assistant', traceTrigger(t, i, result), { variables });
+  }
+  return result;
 }
 
 /**
@@ -901,7 +1000,7 @@ function notifyService(sim: SimulationState, project: Project, service: string, 
 function notifyOffline(sim: SimulationState, project: Project, service: string, extra: LogExtra): Outcome | undefined {
   const f = sim.failures;
   if (!f || (!f.internet && !f.powerOutage) || !isCloudNotifyService(service) || internetAvailable(project, catalog, f)) return undefined;
-  return outcome(addLog(sim, 'error', `Notificación ${service} no enviada: necesita Internet`, extra), false, 'notificación en la nube sin Internet');
+  return fatalOutcome(addLog(sim, 'error', `Notificación ${service} no enviada: necesita Internet`, extra), 'notificación en la nube sin Internet');
 }
 
 /** Fase 3 (B19): servicio sobre un grupo → mismo servicio en cada miembro. */
@@ -944,7 +1043,7 @@ function delayServiceCall(
   const extra = { entityId, ...(ctx.automationId === undefined ? {} : { automationId: ctx.automationId }) };
   const next: SimulationState = { ...sim, rngState: state };
   if (info.cloud && (rel?.failureRate ?? 0) > 0 && r2 < (rel?.failureRate ?? 0)) {
-    return outcome(addLog(next, 'error', `Servicio ${service} → ${friendly(sim, entityId)}: falló la llamada a la nube (fallo simulado)`, extra), false, 'fallo simulado de la nube');
+    return fatalOutcome(addLog(next, 'error', `Servicio ${service} → ${friendly(sim, entityId)}: falló la llamada a la nube (fallo simulado)`, extra), 'fallo simulado de la nube');
   }
   const timer: SimTimer = { kind: 'service_call', entityId, service };
   if (data !== undefined) timer.data = data;

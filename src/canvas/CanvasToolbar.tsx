@@ -51,7 +51,7 @@ export function CanvasToolbar() {
 
   return (
     <div className="flex flex-col items-start gap-1" data-export-ignore="">
-      <div className="flex flex-nowrap items-center gap-1 rounded-md border border-slate-200 bg-white/95 p-1 shadow-sm">
+      <div className="flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white/95 p-1 shadow-sm md:flex-nowrap">
         <div role="group" aria-label="Modo del lienzo" className="flex items-center gap-1">
           {modeButton('select', 'Edición', 'Seleccionar y mover elementos (V). Alt+clic o ⏻ = acción principal', 'V')}
           {modeButton('interact', 'Uso', 'Usar los dispositivos: clic = acción principal, rueda = ajustar (U)', 'U')}

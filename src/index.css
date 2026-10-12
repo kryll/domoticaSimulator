@@ -143,3 +143,52 @@ html, body, #root { height: 100%; }
 /* Atribución de React Flow con contraste AA. */
 .react-flow__attribution { background: rgb(255 255 255 / 0.9); }
 .react-flow__attribution a { color: #475569; }
+
+/* ---------- Pantallas táctiles (Tanda 3): objetivos de al menos 44 px ---------- */
+@media (pointer: coarse) {
+  button,
+  [role='button'],
+  [role='menuitem'],
+  [role='menuitemradio'],
+  [role='menuitemcheckbox'],
+  [role='tab'],
+  [role='option'],
+  select,
+  summary,
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']) {
+    min-height: 44px;
+  }
+  button,
+  [role='button'] {
+    min-width: 44px;
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 1.375rem;
+    height: 1.375rem;
+  }
+  input[type='range'] {
+    height: 44px;
+  }
+  /* Dentro de los nodos del lienzo el objetivo es el propio nodo. */
+  #ha-canvas .react-flow__node button {
+    min-height: 0;
+    min-width: 0;
+  }
+  .react-flow__controls-button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Sin menú del sistema ni selección de texto al mantener pulsado el plano. */
+#ha-canvas {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#ha-canvas input,
+#ha-canvas textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}

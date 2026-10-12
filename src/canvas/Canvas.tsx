@@ -1,3 +1,4 @@
+import { createLongPress } from './longPress';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   Background,
@@ -451,6 +452,28 @@ export function Canvas() {
     return () => clearTimeout(t);
   }, [focusRequest, fitView]);
 
+  // Pantallas táctiles: pulsación larga = menú contextual (del dispositivo o de la planta).
+  const longPress = useMemo(
+    () =>
+      createLongPress({
+        onLongPress: ({ x, y, target }) => {
+          if (readOnly) return;
+          const el = target instanceof Element ? target.closest<HTMLElement>('.react-flow__node-device') : null;
+          const id = el?.dataset.id;
+          const ui = useUiStore.getState();
+          if (id) {
+            ui.openContextMenu({ deviceId: id, x, y });
+            return;
+          }
+          if (target instanceof Element && target.closest('.react-flow__pane') && floorId) {
+            ui.openContextMenu(null);
+            useExtrasStore.getState().openFloorMenu({ floorId, x, y });
+          }
+        },
+      }),
+    [readOnly, floorId],
+  );
+
   const floorDevices = useMemo(() => project.devices.filter((d) => d.floorId === floorId), [project, floorId]);
   const floorRooms = useMemo(() => project.rooms.filter((r) => r.floorId === floorId), [project.rooms, floorId]);
 
@@ -463,6 +486,17 @@ export function Canvas() {
       role="region"
       aria-label="Lienzo del plano"
       tabIndex={-1}
+      onPointerDownCapture={(e) => longPress.down(e)}
+      onPointerMoveCapture={(e) => longPress.move(e)}
+      onPointerUpCapture={() => longPress.up()}
+      onPointerCancelCapture={() => longPress.up()}
+      onClickCapture={(e) => {
+        // El clic que sigue a una pulsación larga no debe cerrar el menú recién abierto.
+        if (longPress.consumeFired()) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      }}
     >
       <ReactFlow<AppNode, ProtocolEdge>
         nodes={nodes}
