@@ -20,6 +20,7 @@ import { formatSimTime, isTimeBetween, MINUTE_MS, SECOND_MS, sunTimesAt, type Su
 import { friendlyName, inNumericRange, normalizeState, sameState, toNumber } from './stateUtils';
 import { describeServiceData } from './services';
 import { serviceName } from './serviceCatalog';
+import { isNotifyService, notificationContent } from './notify';
 
 /** Trazas que se conservan por automatización (las más recientes). */
 export const MAX_TRACES_PER_AUTOMATION = 50;
@@ -140,6 +141,8 @@ export interface ConditionExplanation {
   result: boolean;
   description: string;
   detail: string;
+  /** Subcondiciones de and/or. */
+  children?: TraceCondition[];
 }
 
 /** Dónde calcular el sol: ubicación real o (tests) horas fijas. */
@@ -231,7 +234,8 @@ export function explainCondition(c: Condition, sim: SimulationState, where: SunS
       const result = c.type === 'and' ? parts.every((p) => p.result) : parts.some((p) => p.result);
       const joined = parts.map((p) => p.description).join(c.type === 'and' ? ' y ' : ' o ');
       const description = c.type === 'and' ? `Todas: ${joined || '(ninguna)'}` : `Alguna: ${joined || '(ninguna)'}`;
-      return { result, description, detail: `se cumplen ${ok} de ${parts.length}` };
+      const children: TraceCondition[] = parts.map((p, index) => ({ index, ...p }));
+      return { result, description, detail: `se cumplen ${ok} de ${parts.length}`, children };
     }
   }
 }
@@ -247,6 +251,10 @@ export function formatTraceCondition(c: Pick<TraceCondition, 'description' | 're
 export function describeAction(a: Action, sim: SimulationState, project: Pick<Project, 'scenes' | 'scripts'>): string {
   switch (a.type) {
     case 'service': {
+      if (isNotifyService(a.service)) {
+        const n = notificationContent(a.data);
+        return n ? `Notificar: ${n.title ? `${n.title} — ` : ''}${n.message}` : 'Notificar (sin mensaje)';
+      }
       const data = describeServiceData(a.data);
       const target = a.service.startsWith('script.') && a.service !== 'script.turn_on' ? '' : ` ${friendlyName(sim, a.entityId)}`;
       return `${serviceName(a.service)}${target}${data ? ` (${data})` : ''}`;

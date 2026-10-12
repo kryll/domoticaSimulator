@@ -2,10 +2,10 @@ import { useId } from 'react';
 import type { EntityStateValue } from '../types';
 import type { ServiceField } from '../simulation/serviceCatalog';
 import { formatRgb, parseRgb } from '../devices/color';
+import { defaultFieldValue, includeField, missingRequired, type ServiceDataRecord } from '../ui/serviceFields';
 import { inputClass } from '../ui/Field';
 import { cx } from '../ui/cx';
 
-export type ServiceDataRecord = Record<string, EntityStateValue>;
 
 const toHex = (n: number) => n.toString(16).padStart(2, '0');
 
@@ -13,28 +13,6 @@ function numberOf(v: EntityStateValue | undefined): number | undefined {
   if (typeof v === 'number') return v;
   if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
   return undefined;
-}
-
-/** Valor inicial de un campo al incluirlo. */
-function defaultValue(field: ServiceField): EntityStateValue {
-  switch (field.type) {
-    case 'percent':
-      return 100;
-    case 'kelvin':
-      return Math.round(((field.min ?? 2000) + (field.max ?? 6500)) / 2 / 100) * 100;
-    case 'temperature':
-      return 21;
-    case 'number':
-      return field.min !== undefined && field.min > 0 ? field.min : 0;
-    case 'color':
-      return formatRgb([255, 180, 80]);
-    case 'select':
-      return field.options?.[0]?.value ?? '';
-    case 'boolean':
-      return true;
-    case 'text':
-      return '';
-  }
 }
 
 function FieldControl({
@@ -140,42 +118,68 @@ export interface ServiceDataFieldsProps {
 export function ServiceDataFields({ fields, value, onChange }: ServiceDataFieldsProps) {
   const baseId = useId();
   if (fields.length === 0) return <p className="text-xs text-slate-500">Este servicio no necesita datos.</p>;
-  const set = (key: string, v: EntityStateValue | undefined) => {
+  const emit = (next: ServiceDataRecord) => onChange(Object.keys(next).length > 0 ? next : undefined);
+  const remove = (key: string) => {
     const next: ServiceDataRecord = { ...value };
-    if (v === undefined) delete next[key];
-    else next[key] = v;
-    onChange(Object.keys(next).length > 0 ? next : undefined);
+    delete next[key];
+    emit(next);
   };
+  const missing = missingRequired(fields, value);
   return (
     <div className="flex flex-col gap-1.5" role="group" aria-label="Datos del servicio">
       {fields.map((field) => {
         const id = `${baseId}-${field.key}`;
+        const errorId = `${id}-error`;
         const current = value?.[field.key];
         const included = current !== undefined;
+        const required = field.required === true;
+        const isMissing = required && !included;
         return (
           <div key={field.key} className="grid grid-cols-[8.5rem,1fr] items-center gap-2">
             <span className="flex items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={included}
-                aria-label={`Incluir ${field.label}`}
-                onChange={(e) => set(field.key, e.target.checked ? defaultValue(field) : undefined)}
-                className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-              />
-              <label htmlFor={included ? id : undefined} className={cx('text-xs font-medium', included ? 'text-slate-700' : 'text-slate-400')}>
+              {required ? (
+                <span className="inline-block h-4 w-4 text-center text-xs font-bold text-red-700" aria-hidden="true">
+                  *
+                </span>
+              ) : (
+                <input
+                  type="checkbox"
+                  checked={included}
+                  aria-label={`Incluir ${field.label}`}
+                  onChange={(e) => (e.target.checked ? emit(includeField(fields, value, field, defaultFieldValue(field))) : remove(field.key))}
+                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+              )}
+              <label htmlFor={included ? id : undefined} className={cx('text-xs font-medium', included || required ? 'text-slate-700' : 'text-slate-400')}>
                 {field.label}
+                {required && <span className="sr-only"> (obligatorio)</span>}
               </label>
             </span>
             {included ? (
-              <FieldControl field={field} value={current} id={id} onChange={(v) => set(field.key, v)} />
-            ) : (
-              <span id={id} className="text-xs italic text-slate-400">
-                sin cambiar
+              <FieldControl field={field} value={current} id={id} onChange={(v) => emit(includeField(fields, value, field, v))} />
+            ) : isMissing ? (
+              <span className="flex items-center gap-2">
+                <span id={errorId} role="alert" className="text-xs font-medium text-red-700">
+                  Obligatorio
+                </span>
+                <button
+                  type="button"
+                  aria-describedby={errorId}
+                  onClick={() => emit(includeField(fields, value, field, defaultFieldValue(field)))}
+                  className="rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                >
+                  Rellenar {field.label}
+                </button>
               </span>
+            ) : (
+              <span className="text-xs italic text-slate-400">sin cambiar</span>
             )}
           </div>
         );
       })}
+      {missing.length > 0 && (
+        <p className="text-xs text-red-700">Faltan datos obligatorios: {missing.map((f) => f.label).join(', ')}. La acción fallará en Home Assistant.</p>
+      )}
     </div>
   );
 }

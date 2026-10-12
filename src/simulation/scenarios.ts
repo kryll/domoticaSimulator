@@ -151,6 +151,8 @@ function partialStatus(total: number, fallen: number): ImpactStatus {
 
 const unique = (ids: string[]): string[] => [...new Set(ids)];
 
+const HA_RESTART_REASON = 'Home Assistant se está reiniciando: no se pueden activar escenas ni ejecutar scripts';
+
 /**
  * Qué deja de funcionar con estos fallos: dispositivos no disponibles (con motivo) y estado de
  * cada automatización (broken si su disparador depende de una entidad caída o HA se reinicia;
@@ -188,6 +190,7 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
     const ids = Object.keys(s.entities);
     const fallen = ids.filter((id) => down.has(id));
     const reasonsList = fallen.map((id) => describeDown('Entidad', id, down.get(id) ?? { name: id, reason: '' }));
+    if (failures.haRestarting) return { sceneId: s.id, status: 'broken' as const, reasons: [HA_RESTART_REASON, ...reasonsList] };
     return { sceneId: s.id, status: partialStatus(ids.length, fallen.length), reasons: reasonsList };
   });
 
@@ -195,6 +198,7 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
     const ids = unique(actionEntities(s.sequence, project));
     const fallen = ids.filter((id) => down.has(id));
     const reasonsList = fallen.map((id) => describeDown('Acción', id, down.get(id) ?? { name: id, reason: '' }));
+    if (failures.haRestarting) return { scriptId: s.id, status: 'broken' as const, reasons: [HA_RESTART_REASON, ...reasonsList] };
     return { scriptId: s.id, status: partialStatus(ids.length, fallen.length), reasons: reasonsList };
   });
 

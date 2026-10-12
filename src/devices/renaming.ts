@@ -89,6 +89,8 @@ function conditionRefs(c: Condition): string[] {
 
 function actionRefs(a: Action): string[] {
   if (a.type !== 'service') return [];
+  // notify.* no tiene entidad de destino.
+  if (a.service.startsWith('notify.') && a.entityId === '') return [];
   // "script.<slug>" llama al script directamente y no necesita entity_id.
   if (a.service.startsWith('script.') && a.service !== 'script.turn_on') return [a.service];
   return [a.entityId];

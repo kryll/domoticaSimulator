@@ -51,3 +51,15 @@ describe('Ajustes del proyecto y «Ir a…»', () => {
     expect(useSimulationStore.getState().sim.now).toBe(expected.sunset);
   });
 });
+
+describe('«Ir a…» y el teclado', () => {
+  it('Escape cierra el diálogo y devuelve el foco al botón', async () => {
+    render(<SimClock />);
+    const button = screen.getByRole('button', { name: /Ir a…/ });
+    await userEvent.click(button);
+    expect(screen.getByRole('dialog', { name: 'Ir a…' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Ir a…' })).toBeNull();
+    expect(button).toHaveFocus();
+  });
+});

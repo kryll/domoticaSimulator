@@ -53,4 +53,23 @@ describe('TemplateGallery', () => {
     expect(within(dialog).getByRole('button', { name: /Luz con movimiento/ })).toBeInTheDocument();
     expect(within(dialog).queryByRole('region', { name: 'Otras plantillas' })).toBeNull();
   });
+
+  it('las plantillas no aplicables aparecen desactivadas con su motivo', () => {
+    useUiStore.getState().openTemplates({});
+    render(<TemplateGallery />);
+    const others = screen.getByRole('region', { name: 'Otras plantillas' });
+    const leak = within(others).getByRole('button', { name: /fuga/i });
+    expect(leak).toBeDisabled();
+    expect(leak).toHaveAccessibleDescription(/Falta en el proyecto/);
+  });
+
+  it('desde un dispositivo, no deja crear una plantilla a la que le faltan entidades', () => {
+    const p = makeProject({ devices: [makeDevice('aqara-motion-p1', 'm1', 0, 0, 'Sensor solo')] });
+    useProjectStore.getState().loadProject(p);
+    useUiStore.getState().openTemplates({ deviceId: 'm1' });
+    render(<TemplateGallery />);
+    const card = screen.getByRole('button', { name: /Luz con movimiento/ });
+    expect(card).toBeDisabled();
+    expect(card).toHaveAccessibleDescription(/Falta en el proyecto: «Luz»/);
+  });
 });

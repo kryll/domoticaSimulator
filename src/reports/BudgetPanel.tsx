@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { catalog } from '../devices/catalog';
@@ -16,10 +16,13 @@ function PriceInput({ line }: { line: BomLine }) {
   const value = draft ?? shown;
   const parsed = parseMoneyInput(value);
 
+  const errorId = useId();
   const commit = () => {
     if (draft === null) return;
+    // Un valor inválido no se descarta: se queda en el campo con el error visible.
+    if (parsed === undefined) return;
     setDraft(null);
-    if (parsed === undefined || Math.abs(parsed - line.unitPrice) < 0.005) return;
+    if (Math.abs(parsed - line.unitPrice) < 0.005) return;
     useProjectStore.getState().setPrice(line.definitionId, Math.round(parsed * 100) / 100);
     useUiStore.getState().notify(`Precio de ${line.name}: ${formatMoney(parsed)}`, 'success', {
       action: { label: 'Deshacer', run: () => useProjectStore.getState().undo() },
@@ -27,11 +30,13 @@ function PriceInput({ line }: { line: BomLine }) {
   };
 
   return (
+    <span className="inline-flex flex-col items-end">
     <input
       type="text"
       inputMode="decimal"
       aria-label={`Precio unitario de ${line.name}`}
       aria-invalid={parsed === undefined}
+      aria-describedby={parsed === undefined ? errorId : undefined}
       value={value}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
@@ -48,6 +53,12 @@ function PriceInput({ line }: { line: BomLine }) {
         parsed === undefined ? 'border-red-400' : line.priceSource === 'project' ? 'border-sky-300 bg-sky-50' : 'border-slate-300',
       )}
     />
+    {parsed === undefined && (
+      <span id={errorId} role="alert" className="text-[11px] text-red-700">
+        Precio no válido (p. ej. 1.299 o 12,50)
+      </span>
+    )}
+    </span>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { Project } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
@@ -7,6 +7,7 @@ import {
   AUTOMATION_TEMPLATES,
   buildTemplate,
   defaultTemplateValues,
+  isTemplateApplicable,
   missingTemplateInputs,
   suggestTemplates,
   templateCandidates,
@@ -25,6 +26,18 @@ interface Choice {
   template: AutomationTemplate;
   values: TemplateValues;
   reason?: string;
+  /** Si no se puede usar en este proyecto, por qué. */
+  blocked?: string;
+}
+
+/** Motivo por el que una plantilla no se puede aplicar (undefined si se puede). */
+function blockedReason(template: AutomationTemplate, project: Project): string | undefined {
+  if (isTemplateApplicable(template, project, catalog)) return undefined;
+  const lacking = template.inputs.filter(
+    (i) => i.kind === 'entity' && !i.optional && templateCandidates(project, catalog, i).length === 0,
+  );
+  if (lacking.length > 0) return `Falta en el proyecto: ${lacking.map((i) => `«${i.label}»`).join(', ')}`;
+  return 'Los dispositivos del proyecto no encajan con esta plantilla';
 }
 
 /** Plantillas aplicables a un dispositivo, con su entidad ya elegida en la primera entrada compatible. */
@@ -44,7 +57,9 @@ function choicesForDevice(project: Project, deviceId: string): Choice[] {
         used = true;
       }
     }
-    if (used) out.push({ template, values, reason: `Con ${device.name}` });
+    if (!used) continue;
+    const blocked = blockedReason(template, project);
+    out.push({ template, values, reason: `Con ${device.name}`, ...(blocked ? { blocked } : {}) });
   }
   return out;
 }
@@ -71,6 +86,7 @@ function InputField({
           domains={input.domains}
           deviceClasses={input.deviceClass}
           allowedIds={allowed}
+          optional={input.optional === true}
           hint={allowed.length === 0 ? 'No hay ninguna entidad compatible en el proyecto.' : input.hint}
         />
       );
@@ -120,7 +136,7 @@ function InputField({
 function TemplateForm({ choice, onBack, onDone }: { choice: Choice; onBack: () => void; onDone: () => void }) {
   const project = useProjectStore((s) => s.project);
   const [values, setValues] = useState<TemplateValues>(choice.values);
-  const missing = missingTemplateInputs(choice.template, values);
+  const missing = missingTemplateInputs(choice.template, values, project);
 
   const create = () => {
     if (missing.length > 0) return;
@@ -174,16 +190,25 @@ function TemplateForm({ choice, onBack, onDone }: { choice: Choice; onBack: () =
 }
 
 function TemplateCard({ choice, onPick }: { choice: Choice; onPick: () => void }) {
+  const reasonId = useId();
+  const blocked = choice.blocked !== undefined;
   return (
     <li>
       <button
         type="button"
         onClick={onPick}
-        className="flex h-full w-full flex-col gap-0.5 rounded-md border border-slate-200 p-2 text-left hover:border-sky-400 hover:bg-sky-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+        disabled={blocked}
+        aria-describedby={blocked ? reasonId : undefined}
+        className="flex h-full w-full flex-col gap-0.5 rounded-md border border-slate-200 p-2 text-left hover:border-sky-400 hover:bg-sky-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70 disabled:hover:border-slate-200"
       >
         <span className="text-sm font-semibold text-slate-800">{choice.template.name}</span>
         <span className="text-xs text-slate-600">{choice.template.description}</span>
-        {choice.reason && <span className="text-[11px] font-medium text-emerald-700">✨ {choice.reason}</span>}
+        {choice.reason && !blocked && <span className="text-[11px] font-medium text-emerald-700">✨ {choice.reason}</span>}
+        {blocked && (
+          <span id={reasonId} className="text-[11px] font-medium text-amber-800">
+            ⚠ {choice.blocked}
+          </span>
+        )}
       </button>
     </li>
   );
@@ -207,7 +232,12 @@ export function TemplateGallery() {
       if (template) sug.push({ template, values: s.values, reason: s.reason });
     }
     const ids = new Set(sug.map((c) => c.template.id));
-    const rest = AUTOMATION_TEMPLATES.filter((t) => !ids.has(t.id)).map((template) => ({ template, values: defaultTemplateValues(template) }));
+    const rest = AUTOMATION_TEMPLATES.filter((t) => !ids.has(t.id))
+      .map((template): Choice => {
+        const blocked = blockedReason(template, project);
+        return { template, values: defaultTemplateValues(template), ...(blocked ? { blocked } : {}) };
+      })
+      .sort((a, b) => Number(a.blocked !== undefined) - Number(b.blocked !== undefined));
     return { suggested: sug, others: rest };
     // Se calcula al abrir: no hace falta seguir los cambios del proyecto con el diálogo abierto.
     // eslint-disable-next-line react-hooks/exhaustive-deps

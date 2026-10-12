@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Automation, AutomationTrace } from '../types';
+import type { Automation, AutomationTrace, TraceCondition } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
@@ -12,6 +12,33 @@ import { automationDeviceIds } from '../ui/entityDevices';
 import { ACTION_STATUS, TRACE_RESULT, traceTriggerText } from '../ui/traceLabels';
 
 const EMPTY: AutomationTrace[] = [];
+
+/** Condiciones evaluadas en árbol: las anidadas (Y/O) cuelgan de su grupo. */
+function ConditionTree({ items, label, nested = false }: { items: TraceCondition[]; label: string; nested?: boolean }) {
+  return (
+    <ol className={cx('flex flex-col gap-1', nested ? 'ml-5 mt-1 border-l-2 border-slate-200 pl-2' : 'mt-0.5')} aria-label={label}>
+      {items.map((c) => (
+        <li key={c.index}>
+          <div
+            className={cx(
+              'flex items-start gap-2 rounded-md border px-2 py-1',
+              c.result ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50',
+            )}
+          >
+            <span className={cx('font-bold', c.result ? 'text-emerald-700' : 'text-red-700')} role="img" aria-label={c.result ? 'Se cumple' : 'No se cumple'}>
+              {c.result ? '✓' : '✗'}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-slate-800">{c.description}</span>
+              {c.detail && <span className="block text-xs text-slate-600">{c.detail}</span>}
+            </span>
+          </div>
+          {c.children && c.children.length > 0 && <ConditionTree items={c.children} label={`Dentro de: ${c.description}`} nested />}
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 function TraceDetail({ trace }: { trace: AutomationTrace }) {
   const result = TRACE_RESULT[trace.result];
@@ -34,29 +61,7 @@ function TraceDetail({ trace }: { trace: AutomationTrace }) {
         {trace.conditions.length === 0 ? (
           <p className="mt-0.5 text-xs text-slate-500">Sin condiciones evaluadas.</p>
         ) : (
-          <ol className="mt-0.5 flex flex-col gap-1" aria-label="Condiciones evaluadas">
-            {trace.conditions.map((c) => (
-              <li
-                key={c.index}
-                className={cx(
-                  'flex items-start gap-2 rounded-md border px-2 py-1',
-                  c.result ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50',
-                )}
-              >
-                <span
-                  className={cx('font-bold', c.result ? 'text-emerald-700' : 'text-red-700')}
-                  role="img"
-                  aria-label={c.result ? 'Se cumple' : 'No se cumple'}
-                >
-                  {c.result ? '✓' : '✗'}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-slate-800">{c.description}</span>
-                  {c.detail && <span className="block text-xs text-slate-600">{c.detail}</span>}
-                </span>
-              </li>
-            ))}
-          </ol>
+          <ConditionTree items={trace.conditions} label="Condiciones evaluadas" />
         )}
       </section>
       <section>
@@ -76,7 +81,8 @@ function TraceDetail({ trace }: { trace: AutomationTrace }) {
                     <span className="block text-slate-800">{a.description}</span>
                     <span className="block text-xs text-slate-600">
                       {st.label}
-                      {a.at !== undefined && ` · ${formatSimTime(a.at, { seconds: true })}`}
+                      {/* En las esperas la hora ya va en el detalle («hasta las …»). */}
+                      {a.at !== undefined && a.status !== 'waiting' && ` · ${formatSimTime(a.at, { seconds: true })}`}
                       {a.detail && ` · ${a.detail}`}
                     </span>
                   </span>

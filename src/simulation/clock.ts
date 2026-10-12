@@ -1,6 +1,7 @@
 // Reloj simulado. La hora simulada se expresa como "hora de pared" en UTC: así el motor es
 // determinista e independiente de la zona horaria del navegador. Usa simNowFromLocalDate
 // para arrancar la simulación a la hora local actual.
+import { defaultSettings, type Project } from '../types';
 
 export const SECOND_MS = 1000;
 export const MINUTE_MS = 60 * SECOND_MS;
@@ -191,8 +192,15 @@ export function sunTimesAt(dateMs: number, where: SunLocation | SunConfig): { su
   return sunTimes(dateMs, where.latitude, where.longitude, where.timeZone);
 }
 
-/** Hora simulada equivalente a la hora local de pared de una fecha real. */
-export function simNowFromLocalDate(date: Date): number {
+/**
+ * Hora simulada equivalente a la hora de pared de una fecha real: en la zona horaria indicada
+ * (IANA) o, sin ella, en la del navegador.
+ */
+export function simNowFromLocalDate(date: Date, timeZone?: string): number {
+  if (timeZone !== undefined) {
+    const utc = Math.floor(date.getTime() / 1000) * 1000;
+    return utc + timeZoneOffsetMinutes(utc, timeZone) * MINUTE_MS;
+  }
   return Date.UTC(
     date.getFullYear(),
     date.getMonth(),
@@ -201,6 +209,15 @@ export function simNowFromLocalDate(date: Date): number {
     date.getMinutes(),
     date.getSeconds(),
   );
+}
+
+/**
+ * Hora simulada de arranque para un proyecto: la hora de pared en su zona horaria (por defecto
+ * la de los ajustes por defecto, Madrid; si tiene ajustes sin zona, la del navegador).
+ */
+export function simNowForProject(project: Pick<Project, 'settings'>, date: Date): number {
+  const timeZone = project.settings ? project.settings.timeZone : defaultSettings().timeZone;
+  return simNowFromLocalDate(date, timeZone);
 }
 
 /** ¿Está la hora dentro de [after, before)? Admite rangos que cruzan medianoche. */

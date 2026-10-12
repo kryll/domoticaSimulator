@@ -42,6 +42,8 @@ import { energyStep, initialBatteryLevel, LOW_BATTERY_LEVEL, loadWatts, projectS
 import { friendlyName, inNumericRange, normalizeState, sameState, toNumber } from './stateUtils';
 import { addTrace, describeTrigger, explainCondition, newTrace, setTraceAction, updateTrace, type SunSource } from './trace';
 import { reconcileAvailability } from './availability';
+import { scriptKeys } from './scriptKeys';
+import { formatNotification, isNotifyService, notificationContent } from './notify';
 import {
   applyService,
   coverPosition,
@@ -99,11 +101,12 @@ function addLog(
   sim: SimulationState,
   level: LogLevel,
   message: string,
-  extra: { entityId?: string; automationId?: Id } = {},
+  extra: { entityId?: string; automationId?: Id; notification?: LogEntry['notification'] } = {},
 ): SimulationState {
   const entry: LogEntry = { id: `log-${nextSeq(sim.log)}`, timestamp: sim.now, level, message };
   if (extra.entityId !== undefined) entry.entityId = extra.entityId;
   if (extra.automationId !== undefined) entry.automationId = extra.automationId;
+  if (extra.notification !== undefined) entry.notification = extra.notification;
   const log = [...sim.log, entry];
   return { ...sim, log: log.length > MAX_LOG_ENTRIES ? log.slice(log.length - MAX_LOG_ENTRIES) : log };
 }
@@ -321,16 +324,43 @@ interface RunOpts {
 }
 
 /** Quita las esperas de una automatización (modo restart) y marca sus pasos como no ejecutados. */
-function cancelRuns(sim: SimulationState, automationId: Id): SimulationState {
-  let result: SimulationState = { ...sim, pending: sim.pending.filter((p) => p.automationId !== automationId) };
-  for (const p of sim.pending) {
-    if (p.automationId !== automationId || p.traceId === undefined) continue;
+function cancelWhere(sim: SimulationState, match: (p: PendingAction) => boolean, detail: string): SimulationState {
+  const dropped = [...sim.pending.filter((p) => !isTimer(p) && match(p)), ...(sim.queue ?? []).filter(match)];
+  if (dropped.length === 0) return sim;
+  let result: SimulationState = { ...sim, pending: sim.pending.filter((p) => isTimer(p) || !match(p)) };
+  if (sim.queue) result.queue = sim.queue.filter((p) => !match(p));
+  for (const p of dropped) {
+    if (p.traceId === undefined) continue;
     result = updateTrace(result, p.traceId, (t) => ({
       ...t,
-      actions: t.actions.map((x) => (x.status === 'waiting' ? { ...x, status: 'skipped', detail: 'cancelada: la automatización se reinició' } : x)),
+      actions: t.actions.map((x) => (x.status === 'waiting' || (t.result === 'queued' && x.status === 'skipped') ? { ...x, status: 'skipped', detail } : x)),
     }));
   }
   return result;
+}
+
+/** Quita las esperas de una automatización (modo restart) y marca sus pasos como no ejecutados. */
+function cancelRuns(sim: SimulationState, automationId: Id): SimulationState {
+  return cancelWhere(sim, (p) => p.automationId === automationId && !sim.queue?.includes(p), 'cancelada: la automatización se reinició');
+}
+
+/** Detalle de las trazas cuyas esperas se cancelan al reiniciarse Home Assistant. */
+export const HA_RESTART_CANCEL_DETAIL = 'cancelada: Home Assistant se reinició';
+
+/**
+ * Cancela todas las esperas de automatizaciones y scripts y las ejecuciones en cola (como al
+ * reiniciar Home Assistant). Los temporizadores internos de los dispositivos siguen.
+ */
+export function cancelAllRuns(sim: SimulationState, detail = HA_RESTART_CANCEL_DETAIL): SimulationState {
+  const before = userWaits(sim).length + (sim.queue?.length ?? 0);
+  const result = cancelWhere(sim, () => true, detail);
+  return before === 0 ? result : addLog(result, 'warning', `${before} espera${before === 1 ? '' : 's'} de automatizaciones o scripts cancelada${before === 1 ? '' : 's'}: Home Assistant se reinició`);
+}
+
+/** Aviso y bloqueo mientras Home Assistant se reinicia. */
+function haBlocked(sim: SimulationState, what: string, extra: { entityId?: string; automationId?: Id } = {}): SimulationState | undefined {
+  if (!isHaRestarting(sim)) return undefined;
+  return addLog(sim, 'warning', `${what} no ejecutado: Home Assistant se está reiniciando`, extra);
 }
 
 function runAutomationInternal(
@@ -499,10 +529,13 @@ export function findScene(project: Pick<Project, 'scenes'>, ref: string): Scene 
   return project.scenes.find((s) => s.id === key || slugify(s.name) === key);
 }
 
-/** Busca un script por id o por entity_id "script.<slug del nombre>". */
+/** Busca un script por id o por entity_id "script.<clave>" (slug del nombre; _2, _3... si se repite). */
 export function findScript(project: Pick<Project, 'scripts'>, ref: string): Script | undefined {
   const key = ref.startsWith('script.') ? ref.slice(7) : ref;
-  return project.scripts.find((s) => s.id === key || slugify(s.name) === key);
+  const byId = project.scripts.find((s) => s.id === key);
+  if (byId) return byId;
+  const keys = scriptKeys(project.scripts);
+  return project.scripts.find((s) => keys[s.id] === key);
 }
 
 interface Outcome {
@@ -514,6 +547,8 @@ interface Outcome {
 const outcome = (sim: SimulationState, ok: boolean, detail?: string): Outcome => (detail === undefined ? { sim, ok } : { sim, ok, detail });
 
 function activateSceneInternal(sim: SimulationState, project: Project, sceneId: Id, exec: Exec): Outcome {
+  const blocked = haBlocked(sim, `Escena ${sceneId}`);
+  if (blocked) return outcome(blocked, false, 'Home Assistant se está reiniciando');
   const scene = findScene(project, sceneId);
   if (!scene) return outcome(addLog(sim, 'warning', `Escena desconocida: ${sceneId}`), false, 'escena desconocida');
   if (exec.depth > MAX_DEPTH) return outcome(addLog(sim, 'error', `Escena «${scene.name}» no activada: posible bucle infinito`), false, 'posible bucle infinito');
@@ -536,6 +571,8 @@ function activateSceneInternal(sim: SimulationState, project: Project, sceneId: 
 }
 
 function runScriptInternal(sim: SimulationState, project: Project, scriptId: Id, ctx: RunCtx, exec: Exec): Outcome {
+  const blocked = haBlocked(sim, `Script ${scriptId}`);
+  if (blocked) return outcome(blocked, false, 'Home Assistant se está reiniciando');
   const script = findScript(project, scriptId);
   if (!script) return outcome(addLog(sim, 'warning', `Script desconocido: ${scriptId}`), false, 'script desconocido');
   if (exec.chain.includes(script.id)) {
@@ -574,6 +611,9 @@ function callServiceCore(
   ctx: RunCtx,
   exec: Exec,
 ): Outcome {
+  const blocked = haBlocked(sim, `Servicio ${fullService}`, { entityId });
+  if (blocked) return outcome(blocked, false, 'Home Assistant se está reiniciando');
+  if (isNotifyService(fullService)) return sendNotification(sim, fullService, data, ctx);
   const target = entityDomain(entityId);
   const [domain = '', service = ''] = fullService.includes('.') ? fullService.split('.') : [target, fullService];
   const name = `${domain}.${service}`;
@@ -612,6 +652,14 @@ function callServiceCore(
     next = scheduleTimer(next, entityTimerKey(entityId), next.now + res.after.seconds * SECOND_MS, timer);
   }
   return outcome(next, true, res.warnings.length > 0 ? res.warnings.join('; ') : undefined);
+}
+
+/** notify.*: deja la notificación en el registro (no necesita entidad). */
+function sendNotification(sim: SimulationState, service: string, data: ServiceData | undefined, ctx: RunCtx): Outcome {
+  const extra = ctx.automationId === undefined ? {} : { automationId: ctx.automationId };
+  const content = notificationContent(data);
+  if (!content) return outcome(addLog(sim, 'warning', `Servicio ${service}: falta el mensaje ("message")`, extra), false, 'falta el mensaje');
+  return outcome(addLog(sim, 'info', formatNotification(content), { ...extra, notification: content }), true);
 }
 
 /**
@@ -688,8 +736,7 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
       case 'delay': {
         const seconds = Math.max(0, action.seconds);
         if (ctx.trace && traceIndex !== undefined) {
-          const until = result.now + seconds * SECOND_MS;
-          result = setTraceAction(result, ctx.trace.id, traceIndex, { status: 'waiting', at: until, detail: `hasta las ${formatSimTime(until, { seconds: true })}` });
+          result = setTraceAction(result, ctx.trace.id, traceIndex, { status: 'waiting', at: result.now });
         }
         const next = ctx.trace && traceIndex !== undefined ? { ...ctx, trace: { id: ctx.trace.id, offset: traceIndex + 1 } } : ctx;
         return schedule(result, actions.slice(i + 1), seconds, next);
@@ -806,12 +853,17 @@ function runTimer(sim: SimulationState, project: Project, timer: SimTimer): Simu
 function runPending(sim: SimulationState, project: Project, p: PendingAction): SimulationState {
   const rest = { ...sim, now: Math.max(sim.now, p.dueAt), pending: sim.pending.filter((x) => x.id !== p.id) };
   if (p.timer) return runTimer(rest, project, p.timer);
+  if (isHaRestarting(rest)) {
+    // Normalmente ya se cancelaron al empezar el reinicio; por si acaso, no se ejecutan.
+    const dropped = p.traceId === undefined ? rest : setTraceAction(rest, p.traceId, (p.traceOffset ?? 1) - 1, { status: 'skipped', detail: HA_RESTART_CANCEL_DETAIL });
+    return addLog(dropped, 'warning', 'Espera descartada: Home Assistant se está reiniciando', p.automationId === undefined ? {} : { automationId: p.automationId });
+  }
   const ctx: RunCtx = {};
   if (p.automationId !== undefined) ctx.automationId = p.automationId;
   if (p.scriptId !== undefined) ctx.scriptId = p.scriptId;
   let ready: SimulationState = rest;
   if (p.traceId !== undefined && p.traceOffset !== undefined) {
-    ready = setTraceAction(ready, p.traceId, p.traceOffset - 1, { status: 'done', at: rest.now, detail: undefined });
+    ready = setTraceAction(ready, p.traceId, p.traceOffset - 1, { status: 'done', detail: undefined }); // `at` sigue siendo el inicio de la espera
     ctx.trace = { id: p.traceId, offset: p.traceOffset };
   }
   const chain = [ctx.automationId, ctx.scriptId].filter((x): x is Id => x !== undefined);

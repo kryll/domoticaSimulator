@@ -10,6 +10,7 @@ import { servicesForDomain } from '../simulation/serviceCatalog';
 import { entityCapabilities } from '../devices/capabilities';
 import { entityDomain } from '../devices/entities';
 import { ServiceDataFields } from './ServiceDataFields';
+import { withRequiredDefaults } from '../ui/serviceFields';
 
 type ActionData = Extract<Action, { type: 'service' }>['data'];
 
@@ -65,8 +66,9 @@ function ServiceActionEditor({ value, onChange }: { value: ServiceAction; onChan
           onChange={(entityId) => {
             const nextDomain = entityDomain(entityId);
             const keep = value.service && value.service.split('.')[0] === nextDomain;
-            const first = servicesForDomain(nextDomain, entityCapabilities(project, entityId))[0]?.service ?? '';
-            onChange({ ...value, entityId, service: keep ? value.service : first });
+            const first = servicesForDomain(nextDomain, entityCapabilities(project, entityId))[0];
+            if (keep) onChange({ ...value, entityId });
+            else onChange({ ...value, entityId, service: first?.service ?? '', data: withRequiredDefaults(first?.fields ?? [], undefined) });
           }}
         />
         {showAdvanced ? (
@@ -81,8 +83,9 @@ function ServiceActionEditor({ value, onChange }: { value: ServiceAction; onChan
             onChange={(e) => {
               const next = services.find((s) => s.service === e.target.value);
               const keys = new Set(next?.fields.map((f) => f.key) ?? []);
-              const data = Object.fromEntries(Object.entries(value.data ?? {}).filter(([k]) => keys.has(k)));
-              onChange({ ...value, service: e.target.value, data: Object.keys(data).length > 0 ? data : undefined });
+              const kept = Object.fromEntries(Object.entries(value.data ?? {}).filter(([k]) => keys.has(k)));
+              const data = withRequiredDefaults(next?.fields ?? [], Object.keys(kept).length > 0 ? kept : undefined);
+              onChange({ ...value, service: e.target.value, data });
             }}
           />
         )}

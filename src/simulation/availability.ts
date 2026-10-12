@@ -7,8 +7,8 @@
 import type { Device, DeviceDefinition, Failures, Id, Project, SimulationState } from '../types';
 import { isBleProxy, isInfra } from '../devices/roles';
 import { canConnect } from '../network/connections';
-import { appendLog } from './engine';
-import { setDeviceOffline } from './events';
+import { appendLog, cancelAllRuns } from './engine';
+import { setDeviceOfflineRaw } from './events';
 import { activeFailures, internetAvailable, isCloudDevice, needsMains } from './connectivity';
 
 export { activeFailures, hasFailures, internetAvailable, isCloudDevice, isHaRestarting, needsMains, NO_FAILURES } from './connectivity';
@@ -40,8 +40,11 @@ function buildGraph(project: Project, defs: DeviceDefinition[], placed: Map<Id, 
     graph.set(b, (graph.get(b) ?? new Set()).add(a));
   };
   for (const c of project.connections) link(c.sourceId, c.targetId);
+  // Solo los dispositivos sin ninguna conexión dibujada usan enlaces implícitos; se decide antes
+  // del bucle para que el resultado no dependa del orden de los dispositivos.
+  const explicit = new Set(project.connections.flatMap((c) => [c.sourceId, c.targetId]));
   for (const p of placed.values()) {
-    if (graph.has(p.device.id)) continue;
+    if (explicit.has(p.device.id)) continue;
     for (const other of placed.values()) {
       if (other.device.id === p.device.id || !relays(other.def)) continue;
       if (canConnect(p.device, other.device, defs).ok) link(p.device.id, other.device.id);
@@ -179,11 +182,11 @@ export function reconcileAvailability(sim: SimulationState, project: Project, de
   const target = new Set([...reasons.keys()].filter((id) => !manual.includes(id)));
   let result: SimulationState = sim;
   for (const id of byFailure) {
-    if (!target.has(id)) result = setDeviceOffline(result, project, id, false, defs);
+    if (!target.has(id)) result = setDeviceOfflineRaw(result, project, id, false, defs);
   }
   const down: Id[] = [];
   for (const id of target) {
-    if (!result.offline?.[id]) result = setDeviceOffline(result, project, id, true, defs);
+    if (!result.offline?.[id]) result = setDeviceOfflineRaw(result, project, id, true, defs);
     if (result.offline?.[id]) down.push(id);
   }
   const unchanged = down.length === byFailure.size && down.every((id) => byFailure.has(id));
@@ -208,6 +211,7 @@ export function setFailures(sim: SimulationState, project: Project, defs: Device
   for (const key of ['internet', 'powerOutage', 'haRestarting'] as const) {
     if (before[key] !== failures[key]) result = appendLog(result, failures[key] ? 'warning' : 'info', FAILURE_LOG[key][failures[key] ? 0 : 1]);
   }
+  if (failures.haRestarting && !before.haRestarting) result = cancelAllRuns(result);
   const name = (id: Id): string => project.devices.find((d) => d.id === id)?.name ?? id;
   for (const id of failures.devicesDown) {
     if (!before.devicesDown.includes(id)) result = appendLog(result, 'warning', `Fallo simulado: «${name(id)}» deja de funcionar`);
@@ -227,4 +231,27 @@ export function setFailures(sim: SimulationState, project: Project, defs: Device
 /** ¿Está el dispositivo caído por los fallos simulados (no a mano)? */
 export function isDownByFailure(sim: Pick<SimulationState, 'failureOffline'>, deviceId: Id): boolean {
   return sim.failureOffline?.includes(deviceId) ?? false;
+}
+
+function capitalize(text: string): string {
+  return text === '' ? text : `${text[0]?.toUpperCase() ?? ''}${text.slice(1)}`;
+}
+
+/**
+ * Por qué un dispositivo no puede volver a estar disponible aunque se reconecte a mano
+ * («Depende de «Coordinador Zigbee»», «Sin batería», «Sin corriente por el corte de luz»...),
+ * o null si nada lo impide. Cuenta los fallos activos, las baterías agotadas y los demás
+ * dispositivos desconectados a mano.
+ */
+export function offlineBlockReason(sim: SimulationState, project: Project, defs: DeviceDefinition[], deviceId: Id): string | null {
+  const byFailure = new Set(sim.failureOffline ?? []);
+  const extra = new Map<Id, string>();
+  for (const id of Object.keys(sim.offline ?? {})) if (id !== deviceId && !byFailure.has(id)) extra.set(id, 'desconectado a mano');
+  for (const id of depletedDevices(sim)) extra.set(id, 'batería agotada');
+  const reason = unavailabilityReasons(project, defs, activeFailures(sim), extra).get(deviceId);
+  if (reason === undefined) return null;
+  if (reason === 'batería agotada') return 'Sin batería';
+  const parent = /^depende de («.+»), que no está disponible$/.exec(reason);
+  if (parent) return `Depende de ${parent[1] ?? ''}`;
+  return capitalize(reason);
 }

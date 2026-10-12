@@ -5,6 +5,7 @@ import { entityCapabilities } from '../devices/capabilities';
 import { entitiesForDevice } from '../devices/entities';
 import { appendLog, cancelTimer, entityTimerKey, scheduleTimer, setEntityState } from './engine';
 import { SECOND_MS } from './clock';
+import { isDownByFailure, offlineBlockReason, reconcileAvailability } from './availability';
 
 function warn(sim: SimulationState, message: string, entityId?: string): SimulationState {
   return appendLog(sim, 'warning', message, entityId === undefined ? {} : { entityId });
@@ -100,10 +101,37 @@ function recovered(entityId: string, st: EntityState): EntityState {
 }
 
 /**
- * Simula que un dispositivo se desconecta (offline = true): sus entidades pasan a 'unavailable'
- * y se cancelan sus temporizadores. Al recuperarse vuelven a su estado anterior.
+ * Simula que un dispositivo se desconecta a mano (offline = true): sus entidades pasan a
+ * 'unavailable' y se cancelan sus temporizadores. Al reconectarlo vuelven a su estado anterior,
+ * salvo que siga caído por un fallo simulado, por la red o por tener la batería agotada: entonces
+ * sigue no disponible (queda a cargo de los fallos) y se avisa del motivo en el registro.
  */
 export function setDeviceOffline(
+  sim: SimulationState,
+  project: Project,
+  deviceId: Id,
+  offline: boolean,
+  defs: DeviceDefinition[] = catalog,
+): SimulationState {
+  const byFailure = isDownByFailure(sim, deviceId);
+  if (offline) {
+    // Ya caído por un fallo: pasa a estar desconectado a mano (conserva el estado guardado).
+    if (byFailure) return { ...sim, failureOffline: (sim.failureOffline ?? []).filter((id) => id !== deviceId) };
+    return setDeviceOfflineRaw(sim, project, deviceId, true, defs);
+  }
+  const restored = byFailure ? sim : setDeviceOfflineRaw(sim, project, deviceId, false, defs);
+  const result = reconcileAvailability(restored, project, defs);
+  if (!isDeviceOffline(result, deviceId)) return result;
+  const reason = offlineBlockReason(result, project, defs, deviceId);
+  const name = project.devices.find((d) => d.id === deviceId)?.name ?? deviceId;
+  return warn(result, `«${name}» sigue sin estar disponible${reason ? `: ${reason}` : ''}`);
+}
+
+/**
+ * Mecanismo base (uso interno de availability.ts): pasa las entidades del dispositivo a
+ * 'unavailable' guardando su estado, o lo restaura, sin comprobar fallos ni baterías.
+ */
+export function setDeviceOfflineRaw(
   sim: SimulationState,
   project: Project,
   deviceId: Id,

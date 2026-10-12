@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { catalog } from '../devices/catalog';
 import { createDemoProject } from '../store/demoProject';
 import { createSimulationState, tick } from '../simulation/engine';
-import { motionPulse, setLeak } from '../simulation/events';
+import { motionPulse, openDoor, setLeak } from '../simulation/events';
 import { HOUR_MS } from '../simulation/clock';
 import type { Automation, Project } from '../types';
 import {
@@ -10,6 +10,8 @@ import {
   buildTemplate,
   defaultTemplateValues,
   findTemplate,
+  isTemplateApplicable,
+  validateTemplate,
   missingTemplateInputs,
   suggestTemplates,
   templateCandidates,
@@ -69,7 +71,15 @@ describe('plantillas de automatización (B7)', () => {
   it('puerta abierta con for y aviso por altavoz', () => {
     const [a] = buildTemplate(T('door_left_open'), { door: 'binary_sensor.puerta_entrada_door', duration: 600, notifier: 'media_player.altavoz_salon' }, demo);
     expect(a?.triggers).toEqual([{ type: 'state', entityId: 'binary_sensor.puerta_entrada_door', to: 'on', for: 600 }]);
-    expect(a?.actions[0]).toMatchObject({ service: 'media_player.play_media', entityId: 'media_player.altavoz_salon' });
+    expect(a?.actions[0]).toMatchObject({ service: 'notify.persistent_notification', entityId: '', data: { title: 'Puerta abierta' } });
+    expect(a?.actions[1]).toMatchObject({ service: 'media_player.play_media', entityId: 'media_player.altavoz_salon' });
+    const [plain] = buildTemplate(T('door_left_open'), { door: 'binary_sensor.puerta_entrada_door' }, demo);
+    expect(plain?.actions).toHaveLength(1);
+    const p = withAutos([plain!]);
+    let sim = createSimulationState(p, catalog, 0);
+    sim = tick(openDoor(sim, p, 'binary_sensor.puerta_entrada_door'), p, 301_000);
+    const note = sim.log.find((l) => l.notification);
+    expect(note).toMatchObject({ level: 'info', message: 'Notificación: Puerta abierta — Puerta entrada Puerta lleva tiempo abierta', notification: { title: 'Puerta abierta' } });
   });
 
   it('fuga de agua: corta el enchufe y avisa con una luz', () => {
@@ -137,6 +147,17 @@ describe('plantillas de automatización (B7)', () => {
     const p = withAutos([one!]);
     const sim = tick({ ...createSimulationState(p, catalog, 0), batteries: { 'demo-fuga-bano': 15.2 } }, p, HOUR_MS * 24 * 30);
     expect(sim.log.some((l) => l.message.startsWith('Automatización «Batería baja: Fuga baño Batería» disparada'))).toBe(true);
+  });
+
+  it('no deja crear automatizaciones sin disparadores; isTemplateApplicable y suggestTemplates solo las aplicables', () => {
+    const noBatteries: Project = { ...demo, devices: demo.devices.filter((d) => d.id === 'demo-luz-salon' || d.id === 'demo-altavoz') };
+    expect(missingTemplateInputs(T('low_battery'), {}, noBatteries)).toEqual(['La automatización no tendría ningún disparador (no hay entidades que encajen)']);
+    expect(validateTemplate(T('low_battery'), {}, demo)).toEqual([]);
+    expect(isTemplateApplicable(T('low_battery'), noBatteries, catalog)).toBe(false);
+    expect(isTemplateApplicable(T('low_battery'), demo, catalog)).toBe(true);
+    expect(isTemplateApplicable(T('motion_light'), noBatteries, catalog)).toBe(false);
+    for (const s of suggestTemplates(noBatteries, catalog)) expect(isTemplateApplicable(T(s.templateId), noBatteries, catalog)).toBe(true);
+    expect(suggestTemplates(noBatteries, catalog).map((s) => s.templateId)).toEqual(['leave_home', 'presence_simulation']);
   });
 
   it('entradas obligatorias y valores por defecto', () => {

@@ -18,13 +18,18 @@ export interface EntityPickerProps {
   /** Lista cerrada de entity_id admitidos. */
   allowedIds?: readonly string[];
   hint?: string;
+  /** Entrada opcional: añade «— Ninguna —» (valor vacío). */
+  optional?: boolean;
 }
+
+/** Opción «— Ninguna —» de las entradas opcionales. */
+const NONE: EntityOption = { entityId: '', label: '— Ninguna —', icon: '', stateText: '', domain: '', deviceId: '', search: '' };
 
 /**
  * Selector de entidades accesible (patrón combobox de ARIA): búsqueda, agrupado por planta y
  * sala, «Dispositivo · Entidad» con icono y estado actual.
  */
-export function EntityPicker({ label, value, onChange, domains, deviceClasses, numericOnly, allowedIds, hint }: EntityPickerProps) {
+export function EntityPicker({ label, value, onChange, domains, deviceClasses, numericOnly, allowedIds, hint, optional }: EntityPickerProps) {
   const project = useProjectStore((s) => s.project);
   const states = useSimulationStore((s) => s.sim.entities);
   const baseId = useId();
@@ -43,7 +48,12 @@ export function EntityPicker({ label, value, onChange, domains, deviceClasses, n
     [project, states, domains?.join(), deviceClasses?.join(), numericOnly, allowedIds?.join()],
   );
   const filtered = useMemo(() => searchGroups(groups, query), [groups, query]);
-  const flat = useMemo(() => filtered.flatMap((g) => g.options), [filtered]);
+  const showNone = optional === true && query.trim() === '';
+  const flat = useMemo<EntityOption[]>(
+    () => [...(showNone ? [NONE] : []), ...filtered.flatMap((g) => g.options)],
+    [filtered, showNone],
+  );
+  const resultCount = flat.length - (showNone ? 1 : 0);
   const selected = useMemo(() => groups.flatMap((g) => g.options).find((o) => o.entityId === value), [groups, value]);
 
   useEffect(() => {
@@ -120,9 +130,11 @@ export function EntityPicker({ label, value, onChange, domains, deviceClasses, n
   };
 
   const activeOption = open ? flat[active] : undefined;
+  const hintId = `${baseId}-hint`;
+  const countId = `${baseId}-count`;
   const optionId = (o: EntityOption) => `${baseId}-opt-${o.entityId.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
   const display = open ? query : selected ? selected.label : value ? `${value} (no existe)` : '';
-  let index = -1;
+  let index = showNone ? 0 : -1;
 
   return (
     <div ref={rootRef} className="relative flex flex-col gap-1">
@@ -143,10 +155,11 @@ export function EntityPicker({ label, value, onChange, domains, deviceClasses, n
           aria-autocomplete="list"
           aria-activedescendant={activeOption ? optionId(activeOption) : undefined}
           aria-invalid={value !== '' && !selected ? true : undefined}
+          aria-describedby={hint ? hintId : undefined}
           autoComplete="off"
           spellCheck={false}
           className={cx(inputClass, 'pr-14', !open && selected && 'pl-7', value && !selected && 'text-red-700')}
-          placeholder={open ? 'Buscar entidad…' : '— Elige una entidad —'}
+          placeholder={open ? 'Buscar entidad…' : optional ? '— Ninguna —' : '— Elige una entidad —'}
           title={value || undefined}
           value={display}
           onFocus={() => {
@@ -178,7 +191,14 @@ export function EntityPicker({ label, value, onChange, domains, deviceClasses, n
           ▾
         </button>
       </div>
-      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+      {hint && (
+        <p id={hintId} className="text-xs text-slate-500">
+          {hint}
+        </p>
+      )}
+      <span id={countId} className="sr-only" role="status" aria-live="polite">
+        {open ? (resultCount === 1 ? '1 resultado' : `${resultCount} resultados`) : ''}
+      </span>
       {open && (
         <ul
           ref={listRef}
@@ -187,7 +207,21 @@ export function EntityPicker({ label, value, onChange, domains, deviceClasses, n
           aria-label={`Opciones: ${label}`}
           className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 min-w-[16rem] overflow-auto rounded-md border border-slate-200 bg-white py-1 text-sm shadow-lg"
         >
-          {flat.length === 0 && (
+          {showNone && (
+            <li
+              id={optionId(NONE)}
+              role="option"
+              aria-selected={value === ''}
+              data-index={0}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setActive(0)}
+              onClick={() => choose(NONE)}
+              className={cx('cursor-pointer px-3 py-1 italic', active === 0 ? 'bg-sky-100 text-sky-900' : 'text-slate-600')}
+            >
+              — Ninguna —
+            </li>
+          )}
+          {resultCount === 0 && (
             <li role="presentation" className="px-3 py-2 text-xs text-slate-500">
               Sin resultados
             </li>

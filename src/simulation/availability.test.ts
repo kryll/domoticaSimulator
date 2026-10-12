@@ -3,9 +3,10 @@ import { catalog } from '../devices/catalog';
 import { dev, project } from '../devices/testUtils';
 import { createDemoProject } from '../store/demoProject';
 import type { Project, SimulationState } from '../types';
-import { computeUnavailable, isDownByFailure, setFailures, unavailabilityReasons } from './availability';
+import { computeUnavailable, isDownByFailure, offlineBlockReason, setFailures, unavailabilityReasons } from './availability';
 import { NO_FAILURES } from './connectivity';
-import { callService, createSimulationState, runAutomation } from './engine';
+import { activateScene, callService, createSimulationState, runAutomation, runScript, setDeviceBattery, userWaits } from './engine';
+import { lastTrace } from './trace';
 import { motionPulse, setDeviceOffline, setLeak } from './events';
 
 const T0 = Date.UTC(2026, 9, 12, 12, 0, 0);
@@ -127,5 +128,72 @@ describe('setFailures', () => {
     sim = setFailures(sim, demo, catalog, { devicesDown: [] });
     expect(st(sim, 'binary_sensor.movimiento_pasillo_motion')).toBe('off');
     expect(sim.now).toBe(T0);
+  });
+});
+
+describe('revisión de la fase 2', () => {
+  it('la disponibilidad no depende del orden de los dispositivos', () => {
+    const devices = [
+      dev('ha', 'ha-green'),
+      dev('ap', 'tplink-deco-x50'),
+      dev('co', 'sonoff-zbdongle-p'),
+      dev('r', 'sonoff-s26r2zb', undefined, { integration: 'zha' }),
+      dev('s', 'aqara-door-window', undefined, { integration: 'zha' }),
+      dev('plug', 'tapo-p110'),
+    ];
+    const connections = [
+      { id: 'c1', sourceId: 'co', targetId: 'ha', protocol: 'zigbee' as const },
+      { id: 'c2', sourceId: 's', targetId: 'r', protocol: 'zigbee' as const },
+    ];
+    const failures = { ...NO_FAILURES, devicesDown: ['co'] };
+    const forward = computeUnavailable(project(devices, { connections }), catalog, failures);
+    const backward = computeUnavailable(project([...devices].reverse(), { connections }), catalog, failures);
+    expect([...backward].sort()).toEqual([...forward].sort());
+    expect([...forward].sort()).toEqual(['co', 'r', 's']);
+  });
+
+  it('HA reiniciando: cancela las esperas y bloquea servicios, escenas y scripts', () => {
+    let sim = motionPulse(start(), demo, 'binary_sensor.movimiento_pasillo_motion');
+    sim = { ...sim, now: Date.UTC(2026, 9, 12, 22) };
+    sim = motionPulse(sim, demo, 'binary_sensor.movimiento_pasillo_motion');
+    sim = runScript(sim, demo, 'demo-script-salir');
+    expect(userWaits(sim).length).toBe(2);
+    sim = setFailures(sim, demo, catalog, { haRestarting: true });
+    expect(userWaits(sim)).toEqual([]);
+    expect(sim.pending.some((p) => p.timer)).toBe(true); // el autoapagado del sensor sigue
+    expect(lastTrace(sim, 'demo-auto-movimiento')?.actions[1]).toMatchObject({ status: 'skipped', detail: 'cancelada: Home Assistant se reinició' });
+    const before = sim.entities['light.luz_cocina_switch'];
+    sim = callService(sim, demo, 'switch.luz_cocina_switch', 'turn_on');
+    expect(sim.entities['light.luz_cocina_switch']).toBe(before);
+    expect(sim.log.at(-1)).toMatchObject({ level: 'warning', message: 'Servicio switch.turn_on no ejecutado: Home Assistant se está reiniciando' });
+    sim = activateScene(sim, demo, 'demo-escena-cine');
+    expect(sim.log.at(-1)?.message).toBe('Escena demo-escena-cine no ejecutado: Home Assistant se está reiniciando');
+    sim = runScript(sim, demo, 'demo-script-salir');
+    expect(sim.log.at(-1)?.message).toMatch(/^Script demo-script-salir no ejecutado/);
+    expect(userWaits(sim)).toEqual([]);
+    sim = setFailures(sim, demo, catalog, { haRestarting: false });
+    expect(callService(sim, demo, 'switch.luz_cocina_switch', 'turn_on').entities['switch.luz_cocina_switch']?.state).toBe('on');
+  });
+
+  it('reconectar a mano no deja disponible lo que sigue caído por un fallo o sin batería', () => {
+    let sim = setFailures(start(), demo, catalog, { devicesDown: ['demo-coordinador'] });
+    expect(offlineBlockReason(sim, demo, catalog, 'demo-fuga-bano')).toBe('Depende de «Coordinador Zigbee»');
+    expect(offlineBlockReason(sim, demo, catalog, 'demo-coordinador')).toBe('Fallo simulado del dispositivo');
+    expect(offlineBlockReason(sim, demo, catalog, 'demo-luz-salon')).toBeNull();
+    sim = setDeviceOffline(sim, demo, 'demo-fuga-bano', false);
+    expect(st(sim, 'binary_sensor.fuga_bano_leak')).toBe('unavailable');
+    expect(sim.log.at(-1)?.message).toBe('«Fuga baño» sigue sin estar disponible: Depende de «Coordinador Zigbee»');
+    // desconectado a mano y luego reconectado mientras su coordinador sigue caído
+    sim = setDeviceOffline(sim, demo, 'demo-mando', true);
+    sim = setDeviceOffline(sim, demo, 'demo-mando', false);
+    expect(st(sim, 'sensor.mando_salon_action')).toBe('unavailable');
+    expect(isDownByFailure(sim, 'demo-mando')).toBe(true);
+    sim = setFailures(sim, demo, catalog, { devicesDown: [] });
+    expect(st(sim, 'sensor.mando_salon_action')).toBe('none');
+    // batería agotada
+    sim = setDeviceBattery(sim, demo, catalog, 'demo-puerta', 0);
+    expect(offlineBlockReason(sim, demo, catalog, 'demo-puerta')).toBe('Sin batería');
+    sim = setDeviceOffline(sim, demo, 'demo-puerta', false);
+    expect(st(sim, 'binary_sensor.puerta_entrada_door')).toBe('unavailable');
   });
 });

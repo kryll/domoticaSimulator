@@ -395,6 +395,8 @@ export interface TraceCondition {
   description: string;
   result: boolean;
   detail: string;
+  /** Subcondiciones de and/or, con su propio resultado. */
+  children?: TraceCondition[];
 }
 
 export type TraceActionStatus = 'done' | 'waiting' | 'skipped' | 'error';
@@ -403,7 +405,7 @@ export interface TraceAction {
   index: number;
   description: string;
   status: TraceActionStatus;
-  /** Hora simulada en que se ejecutó (o se ejecutará, si espera). */
+  /** Hora simulada en que se ejecutó (en una espera, la hora en que empezó a esperar). */
   at?: number;
   detail?: string;
 }
@@ -453,6 +455,8 @@ export interface LogEntry {
   message: string;
   entityId?: string;
   automationId?: Id;
+  /** Si es una notificación (notify.persistent_notification), su contenido. */
+  notification?: { title?: string; message: string };
 }
 
 // ---------- Validador ----------

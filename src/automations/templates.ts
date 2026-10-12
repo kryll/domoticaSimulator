@@ -3,6 +3,7 @@
 import type { Action, Automation, Condition, DeviceDefinition, EntityDomain, Project, Trigger } from '../types';
 import { catalog } from '../devices/catalog';
 import { entitiesForDevice } from '../devices/entities';
+import { notifyAction } from '../simulation/notify';
 
 export type TemplateValue = string | number;
 /** Valores de las entradas: entity_id (texto, vacío si es opcional), segundos, "HH:MM", número o %. */
@@ -119,13 +120,16 @@ function onOff(entityId: string, on: boolean, data?: Record<string, string | num
   return service(`${svc}.${on ? 'turn_on' : 'turn_off'}`, entityId, data);
 }
 
-/** Aviso con un altavoz (reproduce un mensaje) o una luz (destello). */
-function alertAction(entityId: string, message: string): Action[] {
-  if (entityId === '') return [];
+/**
+ * Aviso: siempre una notificación persistente (notify.persistent_notification) y, si se elige,
+ * además un altavoz (reproduce el mensaje) o una luz (destello).
+ */
+function alertAction(entityId: string, message: string, title = 'Home Assistant'): Action[] {
+  const actions: Action[] = [notifyAction(message, title)];
   const domain = entityId.split('.')[0];
-  if (domain === 'media_player') return [service('media_player.play_media', entityId, { media_content_id: message, media_content_type: 'music' })];
-  if (domain === 'light') return [service('light.turn_on', entityId, { flash: 'long' })];
-  return [];
+  if (domain === 'media_player') actions.push(service('media_player.play_media', entityId, { media_content_id: message, media_content_type: 'music' }));
+  if (domain === 'light') actions.push(service('light.turn_on', entityId, { flash: 'long' }));
+  return actions;
 }
 
 const automation = (
@@ -135,7 +139,14 @@ const automation = (
   extra: { conditions?: Condition[]; mode?: Automation['mode'] } = {},
 ): Omit<Automation, 'id'> => ({ name, enabled: true, mode: extra.mode ?? 'single', triggers, conditions: extra.conditions ?? [], actions });
 
-const NOTIFIER: EntityInput = { key: 'notifier', label: 'Avisar con (altavoz o luz)', kind: 'entity', domains: ['media_player', 'light'], optional: true, hint: 'Opcional: si no eliges ninguno, el aviso queda en el registro' };
+const NOTIFIER: EntityInput = {
+  key: 'notifier',
+  label: 'Avisar también con (altavoz o luz)',
+  kind: 'entity',
+  domains: ['media_player', 'light'],
+  optional: true,
+  hint: 'Opcional: el aviso siempre llega como notificación de Home Assistant',
+};
 const MOTION_CLASSES = ['motion', 'occupancy', 'presence'];
 
 // ---------- Plantillas ----------
@@ -175,7 +186,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
       return automation(
         `Aviso: ${nameOf(project, door)} abierta`,
         [{ type: 'state', entityId: door, to: 'on', for: num(v.duration, 300) }],
-        alertAction(str(v.notifier), `${nameOf(project, door)} lleva tiempo abierta`),
+        alertAction(str(v.notifier), `${nameOf(project, door)} lleva tiempo abierta`, 'Puerta abierta'),
       );
     },
   },
@@ -193,7 +204,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
       return automation(
         `Fuga en ${nameOf(project, leak)}: cortar y avisar`,
         [{ type: 'state', entityId: leak, to: 'on' }],
-        [service('switch.turn_off', str(v.shutoff)), ...alertAction(str(v.notifier), `Fuga de agua detectada en ${nameOf(project, leak)}`)],
+        [service('switch.turn_off', str(v.shutoff)), ...alertAction(str(v.notifier), `Fuga de agua detectada en ${nameOf(project, leak)}`, 'Fuga de agua')],
       );
     },
   },
@@ -305,7 +316,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
       return automation(
         chosen !== '' ? `Batería baja: ${nameOf(project, chosen)}` : 'Batería baja en algún dispositivo',
         ids.map((entityId) => ({ type: 'numeric_state', entityId, below: threshold })),
-        alertAction(str(v.notifier), `Batería por debajo del ${threshold} %`),
+        alertAction(str(v.notifier), `Batería por debajo del ${threshold} %`, 'Batería baja'),
       );
     },
     relevant: (entities) => entities.some((e) => e.domain === 'sensor' && e.deviceClass === 'battery'),
@@ -347,9 +358,23 @@ export function defaultTemplateValues(template: AutomationTemplate): TemplateVal
   return values;
 }
 
-/** Entradas obligatorias sin rellenar (mensajes en español); vacío si se puede construir. */
-export function missingTemplateInputs(template: AutomationTemplate, values: TemplateValues): string[] {
-  return template.inputs.filter((i) => i.kind === 'entity' && !i.optional && str(values[i.key]) === '').map((i) => `Falta «${i.label}»`);
+/**
+ * Problemas que impiden crear la automatización (mensajes en español); vacío si se puede crear.
+ * Sin proyecto solo comprueba las entradas obligatorias; con él, además, que todas las
+ * automatizaciones generadas tengan al menos un disparador y una acción.
+ */
+export function missingTemplateInputs(template: AutomationTemplate, values: TemplateValues, project?: Project): string[] {
+  const missing = template.inputs.filter((i) => i.kind === 'entity' && !i.optional && str(values[i.key]) === '').map((i) => `Falta «${i.label}»`);
+  if (missing.length > 0 || !project) return missing;
+  const built = buildTemplate(template, values, project);
+  if (built.some((a) => a.triggers.length === 0)) missing.push('La automatización no tendría ningún disparador (no hay entidades que encajen)');
+  if (built.some((a) => a.actions.length === 0)) missing.push('La automatización no tendría ninguna acción');
+  return missing;
+}
+
+/** Igual que missingTemplateInputs con el proyecto: lista de errores (vacía si es válida). */
+export function validateTemplate(template: AutomationTemplate, values: TemplateValues, project: Project): string[] {
+  return missingTemplateInputs(template, values, project);
 }
 
 /** Todas las automatizaciones que genera la plantilla (sin id). */
@@ -380,34 +405,62 @@ function bestFirst(template: AutomationTemplate, candidates: ProjectEntity[], en
   return [...candidates].sort((a, b) => score(b) - score(a))[0];
 }
 
-/** Plantillas que tienen sentido con los dispositivos del proyecto, con valores propuestos. */
+interface Proposal {
+  values: TemplateValues;
+  chosen: ProjectEntity[];
+  possible: boolean;
+}
+
+/** Valores propuestos para una plantilla: entidades (preferiblemente de la misma sala) y valores por defecto. */
+function propose(template: AutomationTemplate, entities: ProjectEntity[]): Proposal {
+  const values = defaultTemplateValues(template);
+  const chosen: ProjectEntity[] = [];
+  let possible = true;
+  for (const input of template.inputs) {
+    if (input.kind !== 'entity') continue;
+    const candidates = entities.filter((e) => matches(input, e));
+    if (candidates.length === 0) {
+      if (!input.optional) possible = false;
+      continue;
+    }
+    if (input.optional && input.key !== 'remote') continue;
+    const room = chosen[0]?.roomId;
+    const pick =
+      chosen.length === 0
+        ? bestFirst(template, candidates, entities)
+        : (candidates.find((c) => room !== undefined && c.roomId === room && !chosen.includes(c)) ?? candidates.find((c) => !chosen.includes(c)) ?? candidates[0]);
+    if (pick) {
+      values[input.key] = pick.entityId;
+      chosen.push(pick);
+    }
+  }
+  return { values, chosen, possible };
+}
+
+function applicable(template: AutomationTemplate, project: Project, entities: ProjectEntity[], proposal: Proposal): boolean {
+  if (!proposal.possible || (template.relevant && !template.relevant(entities))) return false;
+  return missingTemplateInputs(template, proposal.values, project).length === 0;
+}
+
+/**
+ * ¿Tiene sentido la plantilla en este proyecto? Hay entidades para sus entradas obligatorias,
+ * es relevante (p. ej. hay baterías para el aviso de batería baja) y lo que genera tiene
+ * disparadores y acciones.
+ */
+export function isTemplateApplicable(template: AutomationTemplate, project: Project, defs: DeviceDefinition[]): boolean {
+  const entities = projectEntities(project, defs);
+  return applicable(template, project, entities, propose(template, entities));
+}
+
+/** Plantillas que tienen sentido con los dispositivos del proyecto (solo las aplicables), con valores propuestos. */
 export function suggestTemplates(project: Project, defs: DeviceDefinition[]): TemplateSuggestion[] {
   const entities = projectEntities(project, defs);
   const roomName = (id: string | undefined): string | undefined => project.rooms.find((r) => r.id === id)?.name;
   const result: TemplateSuggestion[] = [];
   for (const template of AUTOMATION_TEMPLATES) {
-    const values = defaultTemplateValues(template);
-    const chosen: ProjectEntity[] = [];
-    let possible = true;
-    for (const input of template.inputs) {
-      if (input.kind !== 'entity') continue;
-      const candidates = entities.filter((e) => matches(input, e));
-      if (candidates.length === 0) {
-        if (!input.optional) possible = false;
-        continue;
-      }
-      if (input.optional && input.key !== 'remote') continue;
-      const room = chosen[0]?.roomId;
-      const pick =
-        chosen.length === 0
-          ? bestFirst(template, candidates, entities)
-          : (candidates.find((c) => room !== undefined && c.roomId === room && !chosen.includes(c)) ?? candidates.find((c) => !chosen.includes(c)) ?? candidates[0]);
-      if (pick) {
-        values[input.key] = pick.entityId;
-        chosen.push(pick);
-      }
-    }
-    if (!possible || (template.relevant && !template.relevant(entities))) continue;
+    const proposal = propose(template, entities);
+    if (!applicable(template, project, entities, proposal)) continue;
+    const { chosen, values } = proposal;
     const names = chosen.map((c) => c.name);
     const sameRoom = chosen.length > 1 && chosen.every((c) => c.roomId !== undefined && c.roomId === chosen[0]?.roomId) ? roomName(chosen[0]?.roomId) : undefined;
     const reason =

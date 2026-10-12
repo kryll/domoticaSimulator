@@ -29,6 +29,21 @@ describe('BudgetPanel', () => {
     expect(useProjectStore.getState().project.settings?.prices?.['hue-white-e27']).toBeUndefined();
   });
 
+  it('acepta miles con punto y avisa de un precio no válido sin descartarlo', () => {
+    render(<BudgetPanel />);
+    const input = () => screen.getAllByRole('textbox', { name: /Precio unitario de/ })[0] as HTMLInputElement;
+    fireEvent.change(input(), { target: { value: '1.299' } });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    expect(useProjectStore.getState().project.settings?.prices?.['hue-white-e27']).toBe(1299);
+
+    fireEvent.change(input(), { target: { value: '12,,5' } });
+    fireEvent.blur(input());
+    expect(screen.getByRole('alert')).toHaveTextContent('Precio no válido');
+    expect(input()).toHaveValue('12,,5');
+    expect(input()).toHaveAttribute('aria-invalid', 'true');
+    expect(useProjectStore.getState().project.settings?.prices?.['hue-white-e27']).toBe(1299);
+  });
+
   it('muestra los totales por sala, protocolo y categoría con formato es-ES', () => {
     render(<BudgetPanel />);
     expect(screen.getByRole('region', { name: 'Total por sala' })).toHaveTextContent('Sin sala');

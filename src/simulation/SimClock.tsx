@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/simulationStore';
 import { useProjectStore, projectSettings } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
@@ -16,7 +16,7 @@ function useSunToday(dayStart: number): { sunrise: number; sunset: number } {
   }, [dayStart, settings]);
 }
 
-function JumpPopover({ onClose }: { onClose: () => void }) {
+function JumpPopover({ onClose, onEscape }: { onClose: () => void; onEscape: () => void }) {
   const [time, setTime] = useState('');
   const settings = useProjectStore((s) => s.project.settings);
   const ref = useRef<HTMLDivElement>(null);
@@ -29,7 +29,7 @@ function JumpPopover({ onClose }: { onClose: () => void }) {
       if (root && !root.contains(e.target as Node)) onClose();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onEscape();
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
@@ -37,7 +37,7 @@ function JumpPopover({ onClose }: { onClose: () => void }) {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [onClose]);
+  }, [onClose, onEscape]);
 
   const go = (target: number, label: string) => {
     useSimulationStore.getState().jumpTo(target);
@@ -101,6 +101,12 @@ export function SimClock() {
   const day = startOfDay(now);
   const sun = useSunToday(day);
   const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  const escape = useCallback(() => {
+    setOpen(false);
+    buttonRef.current?.focus();
+  }, []);
   return (
     <div className="relative ml-1 flex items-center gap-1">
       <div
@@ -115,10 +121,10 @@ export function SimClock() {
         <span title="Amanecer">🌅 {formatSimTime(sun.sunrise)}</span>
         <span title="Atardecer">🌇 {formatSimTime(sun.sunset)}</span>
       </div>
-      <Button size="sm" variant="ghost" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog" title="Saltar a una hora">
+      <Button ref={buttonRef} size="sm" variant="ghost" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog" title="Saltar a una hora">
         ⏩ Ir a…
       </Button>
-      {open && <JumpPopover onClose={() => setOpen(false)} />}
+      {open && <JumpPopover onClose={close} onEscape={escape} />}
     </div>
   );
 }

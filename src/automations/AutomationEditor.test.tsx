@@ -136,3 +136,38 @@ describe('ActionListEditor', () => {
     expect(screen.getByLabelText('Datos (clave=valor)')).toBeInTheDocument();
   });
 });
+
+describe('ServiceDataFields', () => {
+  it('marcar «Variar brillo» desmarca «Brillo» (grupo exclusivo)', async () => {
+    useProjectStore.getState().loadProject(makeProject({ devices: [makeDevice('hue-white-e27', 'd1', 0, 0, 'Luz salón')] }));
+    let actions: Action[] = [{ type: 'service', service: 'light.turn_on', entityId: 'light.luz_salon', data: { brightness_pct: 40 } }];
+    function H() {
+      const [list, setList] = useState(actions);
+      return <ActionListEditor actions={list} onChange={(n) => { actions = n; setList(n); }} />;
+    }
+    render(<H />);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Incluir Variar brillo' }));
+    expect(screen.getByRole('checkbox', { name: 'Incluir Brillo' })).not.toBeChecked();
+    expect(actions[0]).toMatchObject({ data: { brightness_step_pct: 0 } });
+    expect(actions[0]?.type === 'service' ? actions[0].data : null).not.toHaveProperty('brightness_pct');
+  });
+
+  it('un campo obligatorio va incluido sin casilla y, si falta, muestra un error', async () => {
+    useProjectStore.getState().loadProject(makeProject({ devices: [makeDevice('netatmo-thermostat', 't1', 0, 0, 'Termostato')] }));
+    let actions: Action[] = [{ type: 'service', service: 'climate.set_hvac_mode', entityId: 'climate.termostato' }];
+    function H() {
+      const [list, setList] = useState(actions);
+      return <ActionListEditor actions={list} onChange={(n) => { actions = n; setList(n); }} />;
+    }
+    render(<H />);
+    expect(screen.queryByRole('checkbox', { name: 'Incluir Modo' })).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('Obligatorio');
+    await userEvent.click(screen.getByRole('button', { name: 'Rellenar Modo' }));
+    expect(actions[0]).toMatchObject({ data: { hvac_mode: expect.any(String) } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    // al elegir otro servicio con obligatorios, se rellenan solos
+    await userEvent.selectOptions(screen.getByLabelText('Servicio'), 'climate.set_temperature');
+    await userEvent.selectOptions(screen.getByLabelText('Servicio'), 'climate.set_hvac_mode');
+    expect(actions[0]).toMatchObject({ service: 'climate.set_hvac_mode', data: { hvac_mode: expect.any(String) } });
+  });
+});

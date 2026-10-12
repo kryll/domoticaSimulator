@@ -75,7 +75,8 @@ describe('escenarios de fallo (B2) con la casa de ejemplo', () => {
     const r = scenarioImpact(demo, catalog, 'ha_restart');
     expect(r.unavailableDevices).toEqual([]);
     expect(r.automations.every((a) => a.status === 'broken' && /reiniciando/.test(a.reasons[0] ?? ''))).toBe(true);
-    expect(r.scenes.every((s) => s.status === 'ok')).toBe(true);
+    expect(r.scenes.every((s) => s.status === 'broken')).toBe(true);
+    expect(r.scripts.every((s) => s.status === 'broken' && /reiniciando/.test(s.reasons[0] ?? ''))).toBe(true);
   });
 
   it('hubs: caen el puente Hue, el Nest Hub y lo que cuelga de ellos', () => {

@@ -49,4 +49,23 @@ describe('Trazas de automatizaciones', () => {
     expect(within(screen.getByRole('list', { name: 'Ejecuciones' })).getAllByRole('button')).toHaveLength(2);
     expect(screen.getByLabelText('Detalle de la traza')).toHaveTextContent('Ejecutada');
   });
+
+  it('pinta las condiciones anidadas en árbol', async () => {
+    const p = useProjectStore.getState().project;
+    useProjectStore.getState().loadProject({
+      ...p,
+      automations: [
+        {
+          ...p.automations[0]!,
+          conditions: [{ type: 'or', conditions: [{ type: 'state', entityId: 'light.luz', state: 'on' }, { type: 'time', after: '23:59', before: '00:00' }] }],
+        },
+      ],
+    });
+    render(<AutomationsPanel />);
+    await userEvent.click(screen.getByRole('button', { name: /Probar disparador 1/ }));
+    const top = screen.getByRole('list', { name: 'Condiciones evaluadas' });
+    const nested = within(top).getByRole('list', { name: /^Dentro de:/ });
+    expect(within(nested).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(nested).getAllByRole('img', { name: 'No se cumple' }).length).toBeGreaterThan(0);
+  });
 });

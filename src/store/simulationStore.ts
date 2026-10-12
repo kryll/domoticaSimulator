@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import type { EntityState, EntityStateValue, Failures, Id, Project, ServiceData, SimulationState } from '../types';
-import { setFailures } from '../simulation/availability';
+import { NO_FAILURES, hasFailures, reconcileAvailability, setFailures } from '../simulation/availability';
 import { entitiesForDevice, initialEntityStates } from '../devices/entities';
 import { catalog, getDefinition } from '../devices/catalog';
 import { applyQuickAction, primaryAction, setLevelAction, stepAction, type QuickAction } from '../devices/presentation';
-import { simNowFromLocalDate } from '../simulation/clock';
+import { simNowForProject } from '../simulation/clock';
 import { jamLock, motionPulse, openDoor, pressButton, setDeviceOffline, setSensorValue } from '../simulation/events';
 import {
   activateScene,
@@ -88,13 +88,14 @@ function project(): Project {
 }
 
 export const useSimulationStore = create<SimulationStoreState>()((set, get) => ({
-  sim: createSimulationState(project(), catalog, simNowFromLocalDate(new Date())),
+  sim: createSimulationState(project(), catalog, simNowForProject(project(), new Date())),
   running: false,
   speed: 1,
 
   reset: (p) => {
     stopLoop();
-    const sim = createSimulationState(p ?? project(), catalog, simNowFromLocalDate(new Date()));
+    const target = p ?? project();
+    const sim = createSimulationState(target, catalog, simNowForProject(target, new Date()));
     set({ sim: { ...sim, speed: get().speed, running: false }, running: false });
   },
   start: () => {
@@ -136,7 +137,12 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
     lastTick = performance.now();
     set((s) => ({ sim: jumpTo(s.sim, project(), catalog, targetMs) }));
   },
-  setDeviceOffline: (deviceId, offline) => set((s) => ({ sim: setDeviceOffline(s.sim, project(), deviceId, offline) })),
+  setDeviceOffline: (deviceId, offline) =>
+    set((s) => {
+      const p = project();
+      // Después de cambiar el dispositivo, recalcula lo que depende de él (hijos de un coordinador...).
+      return { sim: reconcileAvailability(setDeviceOffline(s.sim, p, deviceId, offline), p, catalog) };
+    }),
   motionPulse: (entityId, seconds) => set((s) => ({ sim: motionPulse(s.sim, project(), entityId, seconds) })),
   setBinary: (entityId, on) => set((s) => ({ sim: openDoor(s.sim, project(), entityId, on) })),
   setSensorValue: (entityId, value) => set((s) => ({ sim: setSensorValue(s.sim, project(), entityId, value) })),
@@ -163,10 +169,30 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
       }
     }
     if (Object.keys(current).some((id) => !(id in entities))) changed = true;
-    if (!changed) return;
-    set({ sim: { ...base, entities } });
+    let next = changed ? { ...base, entities } : base;
+    // Olvida desconexiones de dispositivos borrados: si vuelven (rehacer) nacen con estado inicial.
+    const ids = new Set(p.devices.map((d) => d.id));
+    const staleOffline = Object.keys(next.offline ?? {}).filter((id) => !ids.has(id));
+    const staleFailure = (next.failureOffline ?? []).filter((id) => !ids.has(id));
+    if (staleOffline.length > 0 || staleFailure.length > 0) {
+      const offline = Object.fromEntries(Object.entries(next.offline ?? {}).filter(([id]) => ids.has(id)));
+      next = { ...next, offline, failureOffline: (next.failureOffline ?? []).filter((id) => ids.has(id)) };
+    }
+    // Con fallos, desconexiones o baterías, la disponibilidad depende del proyecto: un dispositivo
+    // nuevo durante un fallo, deshacer, cambiar el SAI o la integración, borrar el coordinador...
+    if (needsReconcile(next)) next = reconcileAvailability(next, p, catalog);
+    if (next !== get().sim) set({ sim: next });
   },
 }));
+
+function needsReconcile(sim: SimulationState): boolean {
+  return (
+    hasFailures(sim.failures ?? NO_FAILURES) ||
+    Object.keys(sim.offline ?? {}).length > 0 ||
+    (sim.failureOffline?.length ?? 0) > 0 ||
+    Object.keys(sim.batteries ?? {}).length > 0
+  );
+}
 
 /** "turn_on" -> "light.turn_on" (el motor recibe siempre dominio.servicio). */
 export function normalizeService(entityId: string, service: string): string {

@@ -60,6 +60,23 @@ describe('EntityPicker', () => {
     expect(options()).toEqual(['binary_sensor.pasillo_motion']);
   });
 
+  it('anuncia el número de resultados y enlaza la ayuda', async () => {
+    render(<EntityPicker label="Entidad" value="" onChange={() => {}} hint="Elige el sensor" />);
+    const input = screen.getByRole('combobox', { name: 'Entidad' });
+    expect(input).toHaveAccessibleDescription('Elige el sensor');
+    await userEvent.click(input);
+    await userEvent.type(input, 'clima hum');
+    expect(screen.getByRole('status')).toHaveTextContent('1 resultado');
+  });
+
+  it('en una entrada opcional ofrece «— Ninguna —»', async () => {
+    let chosen = 'light.luz';
+    render(<EntityPicker label="Entidad" value="light.luz" optional onChange={(id) => (chosen = id)} />);
+    await userEvent.click(screen.getByRole('combobox', { name: 'Entidad' }));
+    await userEvent.click(screen.getByRole('option', { name: '— Ninguna —' }));
+    expect(chosen).toBe('');
+  });
+
   it('muestra un aviso si la entidad no existe', () => {
     render(<EntityPicker label="Entidad" value="light.fantasma" onChange={() => {}} />);
     expect(screen.getByRole('combobox', { name: 'Entidad' })).toHaveValue('light.fantasma (no existe)');

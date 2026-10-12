@@ -124,11 +124,23 @@ export function standbyWatts(def: DeviceDefinition): number {
   return STANDBY_WATTS[def.category];
 }
 
-/** Potencia total (W) del dispositivo ahora: reposo + carga; 0 si está sin corriente. */
-export function devicePowerWatts(device: Device, def: DeviceDefinition, sim: Pick<SimulationState, 'entities' | 'failures'>): number {
+/**
+ * Estado físico de las entidades del dispositivo: si está no disponible por la red, la nube o
+ * una desconexión, sus cargas siguen como estaban (estado guardado en sim.offline).
+ */
+export function physicalEntities(sim: Pick<SimulationState, 'entities' | 'offline'>, deviceId: Id): Record<string, EntityState> {
+  const saved = sim.offline?.[deviceId];
+  return saved ? { ...sim.entities, ...saved } : sim.entities;
+}
+
+/**
+ * Potencia total (W) del dispositivo ahora: reposo + carga. Solo el corte de luz (sin SAI) la
+ * pone a 0; un dispositivo no disponible por la red o la nube sigue consumiendo su carga.
+ */
+export function devicePowerWatts(device: Device, def: DeviceDefinition, sim: Pick<SimulationState, 'entities' | 'failures' | 'offline'>): number {
   if (def.power === 'battery') return 0;
   if (activeFailures(sim).powerOutage && needsMains(def) && device.ups !== true) return 0;
-  return standbyWatts(def) + loadWatts(device, def, sim.entities);
+  return standbyWatts(def) + loadWatts(device, def, physicalEntities(sim, device.id));
 }
 
 export interface EnergyStep {

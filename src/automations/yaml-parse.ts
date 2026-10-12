@@ -420,7 +420,8 @@ export function parseAction(v: YamlValue, i = 0, ctx?: Ctx): Action {
   if (service === 'script.turn_on') return { type: 'script', scriptId: resolveScript(entityIdOf(m, where), ctx, where) };
   if (service.startsWith('script.')) return { type: 'script', scriptId: resolveScript(service, ctx, where) };
   if (!/^[a-z_]+\.[a-z0-9_]+$/.test(service)) throw new Error(`Servicio no válido en ${where}: "${service}"`);
-  const action: Action = { type: 'service', service, entityId: entityIdOf(m, where) };
+  const noTarget = service.startsWith('notify.') && m.entity_id === undefined && m.target === undefined;
+  const action: Action = { type: 'service', service, entityId: noTarget ? '' : entityIdOf(m, where) };
   const data = serviceData(m, where);
   if (data) action.data = data;
   return action;

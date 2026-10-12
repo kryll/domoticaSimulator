@@ -13,9 +13,11 @@ import {
   requiredHubBrand,
   zigbeeNetworkOf,
 } from '../devices/roles';
-import { entityIdsForDevice } from '../devices/entities';
+import { entityIdsForDevice, slugify } from '../devices/entities';
 import { collectEntityRefs, type EntityReference } from '../devices/renaming';
 import { findScene, findScript } from '../simulation/engine';
+import { missingRequiredFields } from '../simulation/serviceCatalog';
+import type { Action } from '../types';
 import { canConnect } from './connections';
 import { isInRange } from './coverage';
 import { analyzeMesh } from './mesh';
@@ -252,6 +254,36 @@ function roomRule(ctx: Ctx): ValidationIssue[] {
     .map((d) => issue('info', 'dispositivo-sin-sala', `«${d.name}» no está asignado a ninguna sala`, [d.id]));
 }
 
+function missingFieldRule(ctx: Ctx): ValidationIssue[] {
+  const result: ValidationIssue[] = [];
+  const check = (kind: EntityReference['kind'], ownerId: string, ownerName: string, actions: Action[]): void => {
+    actions.forEach((a, i) => {
+      if (a.type !== 'service') return;
+      for (const f of missingRequiredFields(a.service, a.data)) {
+        result.push(
+          issue('error', 'servicio-falta-campo', `${KIND_LABELS[kind]} «${ownerName}» llama a ${a.service} (acción ${i + 1}) sin el campo obligatorio «${f.label}» (${f.key})`, [], `${kind}:${ownerId}:${i}:${f.key}`),
+        );
+      }
+    });
+  };
+  for (const a of ctx.project.automations) check('automation', a.id, a.name, a.actions);
+  for (const s of ctx.project.scripts) check('script', s.id, s.name, s.sequence);
+  return result;
+}
+
+function duplicateScriptNameRule(ctx: Ctx): ValidationIssue[] {
+  const groups = new Map<string, string[]>();
+  for (const s of ctx.project.scripts) {
+    const slug = slugify(s.name);
+    groups.set(slug, [...(groups.get(slug) ?? []), s.name]);
+  }
+  return [...groups.entries()]
+    .filter(([, list]) => list.length > 1)
+    .map(([slug, list]) =>
+      issue('warning', 'nombre-script-duplicado', `Hay ${list.length} scripts con el mismo nombre (${list.map((n) => `«${n}»`).join(', ')}): sus entity_id serán script.${slug}, script.${slug}_2...; cámbiales el nombre para distinguirlos`, [], slug),
+    );
+}
+
 const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1, info: 2 };
 
 /** Valida el proyecto. Devuelve los problemas ordenados por gravedad (errores primero). */
@@ -276,6 +308,8 @@ export function validateProject(project: Project, defs: DeviceDefinition[]): Val
     ...connectionRules(ctx),
     ...duplicateEntityRule(ctx),
     ...unknownEntityRule(ctx),
+    ...missingFieldRule(ctx),
+    ...duplicateScriptNameRule(ctx),
     ...isolatedInfraRule(ctx),
     ...cloudRule(ctx),
     ...roomRule(ctx),

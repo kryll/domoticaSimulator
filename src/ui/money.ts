@@ -37,10 +37,24 @@ export function formatKwh(kwh: number): string {
   return Math.abs(kwh) < 0.1 ? `${formatDecimal(kwh * 1000, 0)} Wh` : `${formatDecimal(kwh, 2)} kWh`;
 }
 
-/** Interpreta «12,50» o «12.50» como número. */
+/**
+ * Interpreta un importe escrito a la española o con punto decimal:
+ * «12,50» → 12.5; «1.234,56» → 1234.56; «1.299» → 1299 (punto + 3 cifras = miles); «12.5» → 12.5.
+ * Devuelve undefined si está vacío o no es un número válido no negativo.
+ */
 export function parseMoneyInput(text: string): number | undefined {
-  const t = text.trim().replace(/\s|€/g, '').replace(',', '.');
+  let t = text.trim().replace(/[\s\u00a0€]/g, '');
   if (t === '') return undefined;
+  if (t.includes(',')) {
+    // Con coma: los puntos son separadores de miles y la coma es la decimal.
+    if ((t.match(/,/g) ?? []).length > 1) return undefined;
+    if (t.includes('.') && !/^\d{1,3}(\.\d{3})+,\d*$/.test(t)) return undefined;
+    t = t.replace(/\./g, '').replace(',', '.');
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(t)) {
+    // Solo puntos seguidos de 3 cifras: separadores de miles.
+    t = t.replace(/\./g, '');
+  }
+  if (!/^\d+(\.\d+)?$|^\d+\.$|^\.\d+$/.test(t)) return undefined;
   const n = Number(t);
   return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
