@@ -80,7 +80,7 @@ describe('deviceView', () => {
 
   it('infraestructura, cerradura, aspiradora y no disponible', () => {
     expect(view('coord')).toMatchObject({ kind: 'infrastructure', active: true });
-    expect(view('cerr')).toMatchObject({ kind: 'lock', summary: 'Cerrada con llave', active: false, jammed: false });
+    expect(view('cerr')).toMatchObject({ kind: 'lock', summary: 'Bloqueada', active: false, jammed: false });
     expect(view('robot')).toMatchObject({ kind: 'vacuum', summary: 'En la base' });
     expect(view('cam')).toMatchObject({ kind: 'camera' });
     expect(view('luz', setDeviceOffline(start(), p, 'luz', true))).toMatchObject({ unavailable: true, summary: 'No disponible' });
@@ -93,7 +93,7 @@ describe('textos y estados', () => {
     expect(view('termo', off)).toMatchObject({ summary: '21,5° · Apagado', heating: false });
     expect(view('termo', off).secondary).toBeUndefined();
     const eco = callService(start(), p, 'climate.termo_climate', 'climate.set_preset_mode', { preset_mode: 'away' });
-    expect(view('termo', eco).secondary).toBe('En reposo · Calefacción · Ausente');
+    expect(view('termo', eco).secondary).toBe('Inactivo · Calefacción · Ausente');
     const cold = setTemperature(eco, p, 'sensor.termo_temperature', 18);
     expect(view('termo', cold).secondary).toBe('Calentando · Calefacción · Ausente');
   });

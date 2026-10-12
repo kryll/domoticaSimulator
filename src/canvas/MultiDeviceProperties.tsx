@@ -1,4 +1,5 @@
 import type { Device, Integration } from '../types';
+import { countLabel } from '../ui/plural';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { CATEGORY_LABELS, INTEGRATION_LABELS } from '../devices/catalog';
@@ -53,7 +54,7 @@ export function MultiDeviceProperties({ devices }: { devices: Device[] }) {
   return (
     <div className="flex flex-col gap-4 p-3">
       <section aria-label="Resumen de la selección" className="flex flex-col gap-1 text-xs text-slate-700">
-        <p className="text-sm font-medium text-slate-800">{devices.length} dispositivos seleccionados</p>
+        <p className="text-sm font-medium text-slate-800">{countLabel(devices.length, 'dispositivo seleccionado', 'dispositivos seleccionados')}</p>
         <p>{[...byCategory].map(([label, n]) => `${n} × ${label}`).join(' · ')}</p>
         {!sameFloor && <p>En {floorIds.length} plantas: {floorIds.map((id) => floorName.get(id) ?? '?').join(', ')}</p>}
       </section>

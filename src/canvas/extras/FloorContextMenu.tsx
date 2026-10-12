@@ -19,7 +19,7 @@ export function FloorContextMenu() {
       label: 'Apagar todo en esta planta',
       onSelect: () => {
         const n = turnOffFloor(floor.id);
-        useUiStore.getState().notify(n === 0 ? `No había nada encendido en «${floor.name}»` : `Apagados ${n} elementos en «${floor.name}»`, n === 0 ? 'info' : 'success');
+        useUiStore.getState().notify(n === 0 ? `No había nada encendido en «${floor.name}»` : `${n === 1 ? 'Apagado 1 elemento' : `Apagados ${n} elementos`} en «${floor.name}»`, n === 0 ? 'info' : 'success');
       },
     },
     { kind: 'separator' },

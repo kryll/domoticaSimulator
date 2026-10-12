@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { countLabel } from '../ui/plural';
 import type { LogLevel } from '../types';
 import { useSimulationStore } from '../store/simulationStore';
 import { formatSimTime } from './clock';
@@ -34,7 +35,7 @@ export function LogbookPanel() {
           onChange={(e) => setLevel(e.target.value as LogLevel | '')}
           fieldClassName="w-40"
         />
-        <span className="pb-1 text-xs text-slate-500">{entries.length} entradas</span>
+        <span className="pb-1 text-xs text-slate-500">{countLabel(entries.length, 'entrada', 'entradas')}</span>
       </div>
       {entries.length === 0 ? (
         <EmptyState>Aún no hay eventos. Inicia la simulación o cambia el estado de algún dispositivo.</EmptyState>

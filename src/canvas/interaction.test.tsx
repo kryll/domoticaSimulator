@@ -139,7 +139,7 @@ describe('interacción directa en el lienzo', () => {
 
   it('el pulso de movimiento muestra la cuenta atrás', () => {
     act(() => useSimulationStore.getState().quickAction('mov'));
-    expect(within(node('mov')).getByTestId('node-summary')).toHaveTextContent('movimiento');
+    expect(within(node('mov')).getByTestId('node-summary')).toHaveTextContent('Detectado');
     expect(within(node('mov')).getByText(/⏱/)).toBeInTheDocument();
   });
 

@@ -8,6 +8,7 @@ import { callService, entityTimerKey, findTimer } from '../simulation/engine';
 import { jamLock, motionPulse, openDoor, pressButton, setLeak } from '../simulation/events';
 import { brightnessToPct, COVER_STEP, coverPosition, coverStepSeconds } from '../simulation/services';
 import { HVAC_ACTION_LABELS, HVAC_MODE_LABELS, labelOf, PRESET_LABELS } from './labels';
+import { stateLabel } from './stateLabels';
 
 export type DeviceKind =
   | 'light'
@@ -188,24 +189,8 @@ const COVER_LABEL = (pos: number): string => (pos >= 100 ? 'Abierta' : pos <= 0 
 const ON_OFF_F = (on: boolean): string => (on ? 'Encendida' : 'Apagada');
 const ON_OFF_M = (on: boolean): string => (on ? 'Encendido' : 'Apagado');
 
-const LOCK_LABELS: Record<string, string> = {
-  locked: 'Cerrada con llave',
-  unlocked: 'Sin llave',
-  open: 'Abierta',
-  jammed: 'Atascada',
-  locking: 'Cerrando',
-  unlocking: 'Abriendo',
-};
-const VACUUM_LABELS: Record<string, string> = {
-  cleaning: 'Limpiando',
-  paused: 'En pausa',
-  returning: 'Volviendo a la base',
-  docked: 'En la base',
-  idle: 'Parada',
-  error: 'Error',
-};
-const MEDIA_LABELS: Record<string, string> = { playing: 'Reproduciendo', paused: 'En pausa', idle: 'Inactivo', on: 'Encendido', off: 'Apagado' };
-const CAMERA_LABELS: Record<string, string> = { idle: 'En reposo', recording: 'Grabando', streaming: 'Emitiendo', off: 'Apagada' };
+/** Estado traducido con la tabla única (devices/stateLabels.ts). */
+const label = (domain: string, value: string, deviceClass?: string): string => stateLabel(domain, value, deviceClass);
 
 /** Posición interpolada y segundos hasta el objetivo de una persiana en movimiento. */
 function coverMotion(sim: SimulationState, entityId: string, st: EntityState, caps: EntityCapabilities): { position: number; seconds?: number } {
@@ -279,7 +264,7 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
     }
     case 'motion': {
       const on = s === 'on';
-      const view: DeviceView = { ...base, active: on, summary: on ? 'Hay movimiento' : 'Sin movimiento' };
+      const view: DeviceView = { ...base, active: on, summary: label('binary_sensor', s, primary.definition.deviceClass) };
       const left = on ? remaining(sim, primary.entityId) : undefined;
       if (left !== undefined) view.countdownSeconds = left;
       const lux = num(sibling(entities, sim, (e) => e.definition.deviceClass === 'illuminance')?.state);
@@ -288,11 +273,11 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
       return view;
     }
     case 'contact':
-      return { ...base, active: s === 'on', summary: s === 'on' ? 'Abierta' : 'Cerrada', ...(batteryText ? { secondary: batteryText } : {}) };
+      return { ...base, active: s === 'on', summary: label('binary_sensor', s, primary.definition.deviceClass), ...(batteryText ? { secondary: batteryText } : {}) };
     case 'leak':
-      return { ...base, active: s === 'on', summary: s === 'on' ? 'Fuga de agua' : 'Seco', ...(batteryText ? { secondary: batteryText } : {}) };
+      return { ...base, active: s === 'on', summary: s === 'on' ? 'Fuga de agua' : label('binary_sensor', s, 'moisture'), ...(batteryText ? { secondary: batteryText } : {}) };
     case 'smoke':
-      return { ...base, active: s === 'on', summary: s === 'on' ? 'Alarma' : 'Normal', ...(batteryText ? { secondary: batteryText } : {}) };
+      return { ...base, active: s === 'on', summary: label('binary_sensor', s, primary.definition.deviceClass), ...(batteryText ? { secondary: batteryText } : {}) };
     case 'climate_sensor': {
       const temp = num(sibling(entities, sim, (e) => e.definition.deviceClass === 'temperature')?.state);
       const hum = num(sibling(entities, sim, (e) => e.definition.deviceClass === 'humidity')?.state);
@@ -329,17 +314,17 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
       return view;
     }
     case 'lock':
-      return { ...base, active: s !== 'locked', jammed: s === 'jammed', summary: LOCK_LABELS[s] ?? s, ...(batteryText ? { secondary: batteryText } : {}) };
+      return { ...base, active: s !== 'locked', jammed: s === 'jammed', summary: label('lock', s), ...(batteryText ? { secondary: batteryText } : {}) };
     case 'camera': {
       const motion = sibling(entities, sim, (e) => e.definition.domain === 'binary_sensor' && MOTION_CLASSES.includes(e.definition.deviceClass ?? ''));
-      const view: DeviceView = { ...base, active: s === 'recording' || s === 'streaming' || motion?.state === 'on', summary: CAMERA_LABELS[s] ?? s };
+      const view: DeviceView = { ...base, active: s === 'recording' || s === 'streaming' || motion?.state === 'on', summary: label('camera', s) };
       if (motion?.state === 'on') view.secondary = 'Movimiento';
       return view;
     }
     case 'media': {
       const vol = num(st.attributes?.volume_level);
       const muted = st.attributes?.is_volume_muted === true;
-      const view: DeviceView = { ...base, active: s === 'playing' || s === 'on', summary: MEDIA_LABELS[s] ?? s };
+      const view: DeviceView = { ...base, active: s === 'playing' || s === 'on', summary: label('media_player', s) };
       if (s !== 'off' && vol !== undefined) {
         view.volumePct = Math.round(vol * 100);
         view.summary = `${view.summary} · ${muted ? 'Silenciado' : `${view.volumePct} %`}`;
@@ -348,14 +333,14 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
       return view;
     }
     case 'vacuum': {
-      const view: DeviceView = { ...base, active: s === 'cleaning' || s === 'returning', summary: VACUUM_LABELS[s] ?? s };
+      const view: DeviceView = { ...base, active: s === 'cleaning' || s === 'returning', summary: label('vacuum', s) };
       const left = s === 'returning' ? remaining(sim, primary.entityId) : undefined;
       if (left !== undefined) view.countdownSeconds = left;
       if (batteryText) view.secondary = batteryText;
       return view;
     }
     case 'remote': {
-      const view: DeviceView = { ...base, summary: s === 'none' || s === '' ? 'En espera' : `Pulsado: ${s}` };
+      const view: DeviceView = { ...base, summary: s === 'none' || s === '' ? 'En espera' : `Pulsado: ${label(primary.entityId, s)}` };
       if (batteryText) view.secondary = batteryText;
       return view;
     }

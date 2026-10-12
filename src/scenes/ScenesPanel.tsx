@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import type { EntityState, Scene } from '../types';
+import type { EntityDefinition, EntityState, Scene } from '../types';
 import { captureSceneEntities } from '../simulation/scenes';
 import { ActuatorControl } from '../simulation/controls/ActuatorControl';
-import { formatState } from '../canvas/style';
+import { entityStateText } from '../ui/stateText';
 import { EntityPicker } from '../automations/EntityPicker';
 import { sceneTargetAfterService } from './sceneTarget';
 import { SCENE_DOMAINS, labeledEntities } from './sceneEntities';
@@ -15,8 +15,8 @@ import { cx } from '../ui/cx';
 import { ActionListEditor } from '../automations/ActionEditor';
 import { SceneCreator } from './SceneCreator';
 
-function describeTarget(st: EntityState, unit?: string): string {
-  const base = formatState(st, unit);
+function describeTarget(entityId: string, st: EntityState, definition?: EntityDefinition): string {
+  const base = entityStateText(entityId, st, definition);
   const a = st.attributes ?? {};
   const extra: string[] = [];
   if (typeof a.brightness === 'number') extra.push(`${Math.round((a.brightness / 255) * 100)} %`);
@@ -58,7 +58,7 @@ function SceneEditor({ scene }: { scene: Scene }) {
                   <div className="truncate text-xs font-semibold text-slate-800" title={id}>
                     {ref?.label ?? id}
                   </div>
-                  <div className="text-[11px] text-slate-500">Objetivo: {describeTarget(target, ref?.definition.unit)}</div>
+                  <div className="text-[11px] text-slate-500">Objetivo: {describeTarget(id, target, ref?.definition)}</div>
                 </div>
                 <Button
                   size="sm"
@@ -181,7 +181,7 @@ function SceneSummary({ scene }: { scene: Scene }) {
     <ul className="mt-1 flex flex-wrap gap-1">
       {Object.entries(scene.entities).map(([id, st]) => (
         <li key={id} className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700" title={id}>
-          {refs.get(id)?.label ?? id}: <strong>{describeTarget(st, refs.get(id)?.definition.unit)}</strong>
+          {refs.get(id)?.label ?? id}: <strong>{describeTarget(id, st, refs.get(id)?.definition)}</strong>
         </li>
       ))}
     </ul>

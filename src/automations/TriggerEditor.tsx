@@ -2,7 +2,8 @@ import type { Trigger } from '../types';
 import { EntityPicker } from './EntityPicker';
 import { TRIGGER_LABELS } from '../ui/automationOptions';
 import { SelectField, TextField } from '../ui/Field';
-import { parseNumberInput, parseStateInput, stateToInput } from '../ui/formValues';
+import { parseNumberInput } from '../ui/formValues';
+import { StateSelect } from './StateSelect';
 import { DurationField } from './DurationField';
 import { DeviceActionTriggerEditor, ZoneTriggerEditor } from './advanced/AdvancedTriggerEditor';
 
@@ -22,17 +23,19 @@ function TriggerFields({ value, onChange }: { value: Trigger; onChange: (t: Trig
           {header}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr,1fr,1fr,1fr]">
             <EntityPicker label="Entidad" value={value.entityId} onChange={(entityId) => onChange({ ...value, entityId })} />
-            <TextField
+            <StateSelect
               label="Desde (opcional)"
-              value={stateToInput(value.from)}
-              placeholder="cualquiera"
-              onChange={(e) => onChange({ ...value, from: parseStateInput(e.target.value) })}
+              entityId={value.entityId}
+              value={value.from}
+              emptyLabel="Cualquiera"
+              onChange={(from) => onChange({ ...value, from })}
             />
-            <TextField
+            <StateSelect
               label="Hasta (opcional)"
-              value={stateToInput(value.to)}
-              placeholder="on, off, open…"
-              onChange={(e) => onChange({ ...value, to: parseStateInput(e.target.value) })}
+              entityId={value.entityId}
+              value={value.to}
+              emptyLabel="Cualquiera"
+              onChange={(to) => onChange({ ...value, to })}
             />
             <DurationField value={value.for} onChange={(sec) => onChange(withFor(value, sec))} />
           </div>

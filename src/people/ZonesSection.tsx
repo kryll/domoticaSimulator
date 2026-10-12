@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { countLabel } from '../ui/plural';
 import type { Zone } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { DEFAULT_ZONE_RADIUS, MAX_ZONE_RADIUS, MIN_ZONE_RADIUS, zoneConflicts, zoneGeo, type ZoneConflict } from '../simulation/zones';
@@ -186,7 +187,7 @@ export function ZonesSection() {
   return (
     <section aria-labelledby="zones-title" className="text-xs">
       <h4 id="zones-title" className="font-semibold text-slate-600">
-        Zonas ({zones.length}){conflicts.length > 0 && <span className="ml-1 font-normal text-amber-800">· {conflicts.length} avisos</span>}
+        Zonas ({zones.length}){conflicts.length > 0 && <span className="ml-1 font-normal text-amber-800">· {countLabel(conflicts.length, 'aviso', 'avisos')}</span>}
       </h4>
       <div className="mt-1 flex flex-wrap items-start gap-3">
         <ul className="flex min-w-[16rem] flex-1 flex-col gap-1" aria-label="Zonas">

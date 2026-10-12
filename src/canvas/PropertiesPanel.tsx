@@ -6,14 +6,7 @@ import { primarySelection, useUiStore } from '../store/uiStore';
 import { useShallow } from 'zustand/react/shallow';
 import { MultiDeviceProperties } from './MultiDeviceProperties';
 import { deleteDevices } from './selectionActions';
-import {
-  CATEGORY_LABELS,
-  INTEGRATION_LABELS,
-  POWER_LABELS,
-  PROTOCOL_LABELS,
-  IOT_CLASS_LABELS,
-  isCloud,
-} from '../devices/catalog';
+import { INTEGRATION_LABELS, PROTOCOL_LABELS } from '../devices/catalog';
 import { Panel, EmptyState } from '../ui/Panel';
 import { SelectField, TextField } from '../ui/Field';
 import { Button } from '../ui/Button';
@@ -21,9 +14,10 @@ import { Badge } from '../ui/Badge';
 import { EntityControls } from '../simulation/EntityControls';
 import { OfflineNotice } from '../simulation/OfflineNotice';
 import { useDeviceOffline } from '../simulation/useDeviceOffline';
-import { effectiveIotClass } from '../devices/roles';
 import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
-import { PROTOCOL_COLORS, formatState } from './style';
+import { PROTOCOL_INK } from './style';
+import { entityStateText } from '../ui/stateText';
+import { deviceTechSummary } from '../devices/techSummary';
 import { DeviceDisplayOptions, EntityHistory } from './extras/DevicePropertiesExtras';
 
 /** Input de texto que confirma el cambio al perder el foco o pulsar Intro. */
@@ -77,7 +71,7 @@ function DeviceProperties({ device }: { device: Device }) {
   const updateDevice = useProjectStore((s) => s.updateDevice);
   const entities = useSimulationStore((s) => s.sim.entities);
   const def = definitionOf(device);
-  const iotClass = def ? effectiveIotClass(device, def) : undefined;
+  const tech = def ? deviceTechSummary(device, def, project) : undefined;
   const refs = entitiesOfDevice(device);
   const issues = analyzeProject(project).issuesByDevice.get(device.id) ?? [];
   const rooms = project.rooms.filter((r) => r.floorId === device.floorId);
@@ -131,24 +125,22 @@ function DeviceProperties({ device }: { device: Device }) {
         <DeviceDisplayOptions device={device} />
       </section>
 
-      {def && iotClass && (
+      {tech && (
         <section aria-label="Ficha del dispositivo">
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Ficha</h3>
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Ficha</h3>
           <Dl
-            items={[
-              ['Marca', def.brand],
-              ['Modelo', def.model],
-              ['Categoría', CATEGORY_LABELS[def.category]],
-              [
-                'Conectividad',
-                <Badge key="c" tone={isCloud(iotClass) ? 'violet' : 'green'}>
-                  {isCloud(iotClass) ? 'Nube' : 'Local'} · {IOT_CLASS_LABELS[iotClass]}
-                </Badge>,
-              ],
-              ['Alimentación', POWER_LABELS[def.power]],
-              ...(def.requiresHub ? ([['Requiere hub', def.requiresHub]] as Array<[string, string]>) : []),
-              ...(def.rangeMeters ? ([['Alcance', `${def.rangeMeters} m`]] as Array<[string, string]>) : []),
-            ]}
+            items={tech.rows.map(([k, v]): [string, ReactNode] =>
+              k === 'Conectividad'
+                ? [
+                    k,
+                    <Badge key="c" tone={tech.cloud ? 'violet' : 'green'}>
+                      {v}
+                    </Badge>,
+                  ]
+                : k === 'Falta'
+                  ? [k, <span key="f" className="font-medium text-red-800">{v}</span>]
+                  : [k, v],
+            )}
           />
         </section>
       )}
@@ -186,14 +178,14 @@ function DeviceProperties({ device }: { device: Device }) {
             {refs.map((r) => (
               <li key={r.entityId} className="rounded-md border border-slate-200 p-2">
                 <div className="flex items-baseline justify-between gap-2">
-                  <code className="truncate text-[11px] text-slate-700" title={r.entityId}>
-                    {r.entityId}
-                  </code>
+                  <span className="min-w-0 truncate text-xs font-medium text-slate-800" title={r.entityId}>
+                    {r.definition.name}
+                  </span>
                   <span className="whitespace-nowrap text-xs font-semibold text-slate-900" aria-label={`Estado de ${r.entityId}`}>
-                    {formatState(entities[r.entityId], r.definition.unit)}
+                    {entityStateText(r.entityId, entities[r.entityId], r.definition)}
                   </span>
                 </div>
-                <div className="mb-1 text-[11px] text-slate-500">{r.definition.name}</div>
+                <code className="mb-1 block truncate text-[11px] text-slate-600">{r.entityId}</code>
                 <EntityControls entityId={r.entityId} definition={r.definition} state={entities[r.entityId]} />
                 <EntityHistory entityId={r.entityId} definition={r.definition} />
               </li>
@@ -269,7 +261,7 @@ function ConnectionProperties({ connection }: { connection: Connection }) {
         items={[
           [
             'Protocolo',
-            <Badge key="p" color={PROTOCOL_COLORS[connection.protocol]}>
+            <Badge key="p" color={PROTOCOL_INK[connection.protocol]}>
               {PROTOCOL_LABELS[connection.protocol]}
             </Badge>,
           ],

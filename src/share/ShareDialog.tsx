@@ -3,6 +3,7 @@ import { useProjectStore } from '../store/projectStore';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { shareUrl } from './share';
+import { withPresentationFlag } from '../presentation/presentationMode';
 
 type CopyState = 'idle' | 'copied' | 'manual';
 
@@ -10,7 +11,10 @@ type CopyState = 'idle' | 'copied' | 'manual';
 export function ShareDialog({ onClose }: { onClose: () => void }) {
   const project = useProjectStore((s) => s.project);
   const [withImages, setWithImages] = useState(false);
-  const [url, setUrl] = useState<string | null>(null);
+  const [present, setPresent] = useState(false);
+  const [baseUrl, setUrl] = useState<string | null>(null);
+  // La bandera de presentación va en nuestro lado del hash (#p=...&modo=presentacion).
+  const url = baseUrl === null ? null : withPresentationFlag(baseUrl, present);
   const [error, setError] = useState<string | null>(null);
   const [copy, setCopy] = useState<CopyState>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,10 +93,23 @@ export function ShareDialog({ onClose }: { onClose: () => void }) {
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={withImages} onChange={(e) => setWithImages(e.target.checked)} />
-            Incluir las imágenes de fondo de las plantas
-          </label>
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={withImages} onChange={(e) => setWithImages(e.target.checked)} />
+              Incluir las imágenes de fondo de las plantas
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={present}
+                onChange={(e) => {
+                  setPresent(e.target.checked);
+                  setCopy('idle');
+                }}
+              />
+              Abrir en modo presentación (vista de solo lectura para el cliente, también en el móvil)
+            </label>
+          </div>
           {url && <span>{kb} kB{url.length > 32_000 ? ' · enlace muy largo: algunos programas pueden cortarlo' : ''}</span>}
         </div>
         <p role="status" aria-live="polite" className="text-sm">

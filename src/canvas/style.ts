@@ -12,6 +12,21 @@ export const PROTOCOL_COLORS: Record<Protocol, string> = {
   rf433: '#65a30d',
 };
 
+/**
+ * Tinta oscura de cada protocolo para texto e insignias: contraste AA (≥ 4,5:1) tanto con texto
+ * blanco encima como sobre el fondo claro de la insignia. Las aristas usan PROTOCOL_COLORS.
+ */
+export const PROTOCOL_INK: Record<Protocol, string> = {
+  wifi: '#1e40af',
+  ethernet: '#334155',
+  zigbee: '#92400e',
+  zwave: '#5b21b6',
+  thread: '#115e59',
+  matter: '#9d174d',
+  ble: '#075985',
+  rf433: '#3f6212',
+};
+
 /** Icono (emoji) por categoría de dispositivo. */
 export const CATEGORY_ICONS: Record<DeviceCategory, string> = {
   light: '💡',

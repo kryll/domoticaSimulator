@@ -175,6 +175,23 @@ describe('JSON', () => {
     expect(withSettings({ latitude: 40, longitude: 0, electricityPriceEurKwh: 0.1, currency: 'USD' })).toThrow(/currency/);
   });
 
+  it('Tanda 2: conserva y valida los ajustes del presupuesto', () => {
+    const demo = createDemoProject();
+    const quote = { clientName: 'Ana', clientAddress: 'Calle 1', installerName: 'Sol', laborHours: 2, laborRateEurH: 40, perDeviceInstallMinutes: 20, marginPct: 10, discountPct: 5, vatPct: 21, validityDays: 30, notes: 'n', hidePrices: true };
+    const rich: Project = { ...demo, settings: { ...defaultSettings(), quote } };
+    expect(importProjectJson(exportProjectJson(rich)).settings?.quote).toEqual(quote);
+    const base = JSON.parse(exportProjectJson(demo)) as Record<string, unknown>;
+    const withQuote = (q: unknown) => () => importProjectJson(JSON.stringify({ ...base, settings: { ...defaultSettings(), quote: q } }));
+    expect(withQuote({ vatPct: 121 })).toThrow(/settings\.quote\.vatPct debe estar entre 0 y 100/);
+    expect(withQuote({ marginPct: -1 })).toThrow(/marginPct debe estar entre 0 y 100/);
+    expect(withQuote({ laborRateEurH: 'mucho' })).toThrow(/laborRateEurH debe ser un número/);
+    expect(withQuote({ validityDays: 0 })).toThrow(/validityDays debe estar entre 1 y 365/);
+    expect(withQuote({ validityDays: 1.5 })).toThrow(/entero/);
+    expect(withQuote({ clientName: 3 })).toThrow(/clientName debe ser un texto/);
+    expect(withQuote({ hidePrices: 'sí' })).toThrow(/hidePrices debe ser verdadero o falso/);
+    expect(withQuote({})()).toMatchObject({ settings: { quote: {} } });
+  });
+
   it.each([
     ['no es json', 'El archivo no es un JSON válido'],
     ['[]', 'el documento debe ser un objeto'],

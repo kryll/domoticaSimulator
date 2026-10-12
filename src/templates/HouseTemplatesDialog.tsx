@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { countLabel } from '../ui/plural';
 import type { Project } from '../types';
 import { HOUSE_TEMPLATES, createFromTemplate } from '../store/houseTemplates';
 import { openAsNewProject } from '../store/bootstrap';
@@ -53,7 +54,7 @@ export function HouseTemplatesDialog({ onClose }: { onClose: () => void }) {
             <h3 className="text-sm font-semibold text-slate-800">{template.name}</h3>
             <p className="flex-1 text-xs text-slate-600">{template.description}</p>
             <p className="text-xs text-slate-500">
-              {project.floors.length} {project.floors.length === 1 ? 'planta' : 'plantas'} · {project.rooms.length} salas · {project.devices.length} dispositivos · {project.automations.length} automatizaciones
+              {countLabel(project.floors.length, 'planta', 'plantas')} · {countLabel(project.rooms.length, 'sala', 'salas')} · {countLabel(project.devices.length, 'dispositivo', 'dispositivos')} · {countLabel(project.automations.length, 'automatización', 'automatizaciones')}
             </p>
             <Button variant="primary" size="sm" onClick={() => void create(template.id)} aria-label={`Crear desde ${template.name}`}>
               Crear

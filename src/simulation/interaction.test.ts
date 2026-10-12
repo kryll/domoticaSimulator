@@ -276,7 +276,7 @@ describe('escenas mediante servicios', () => {
     expect(sim.entities[LIGHT]?.attributes).toMatchObject({ brightness: 100, rgb_color: '[255, 120, 40]', friendly_name: 'Luz' });
     expect(state(sim, COVER)).toBe('opening');
     expect(tick(sim, p, 20_000).entities[COVER]?.attributes?.current_position).toBe(50);
-    expect(lastMessages(sim, 4)).toContain('Servicio cover.set_cover_position → Persiana Persiana (posición 50 %)');
+    expect(lastMessages(sim, 4)).toContain('Servicio cover.set_cover_position → Persiana (posición 50 %)');
   });
 });
 

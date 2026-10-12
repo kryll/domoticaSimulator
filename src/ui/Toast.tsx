@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useUiStore } from '../store/uiStore';
 import { cx } from './cx';
+import { useAutomationsWorkspaceOpen } from '../store/viewStore';
 
 /**
  * Aviso actual de la interfaz. Se muestra arriba y centrado sobre el lienzo para no tapar
@@ -9,6 +10,8 @@ import { cx } from './cx';
 export function Toast() {
   const notice = useUiStore((s) => s.notice);
   const clear = useUiStore((s) => s.clearNotice);
+  // Con el editor de automatizaciones en grande, el aviso va en la franja libre de abajo para no tapar campos.
+  const workspace = useAutomationsWorkspaceOpen();
 
   useEffect(() => {
     if (!notice) return;
@@ -20,7 +23,11 @@ export function Toast() {
     <div
       aria-live="polite"
       role="status"
-      className="pointer-events-none fixed left-1/2 top-40 z-50 w-max max-w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2"
+      className={cx(
+        'pointer-events-none fixed left-1/2 z-50 w-max max-w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2',
+        workspace ? 'bottom-2' : 'top-40',
+      )}
+      data-position={workspace ? 'bottom' : 'top'}
     >
       {notice && (
         <div

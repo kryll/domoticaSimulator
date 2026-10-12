@@ -1,7 +1,7 @@
 import { Suspense, lazy, memo, useEffect, useRef, useState } from 'react';
 import { Handle, NodeToolbar, Position, type NodeProps } from '@xyflow/react';
 import type { DeviceNode } from './types';
-import { PROTOCOL_COLORS } from './style';
+import { PROTOCOL_INK } from './style';
 import { PROTOCOL_LABELS, isCloud } from '../devices/catalog';
 import { effectiveIotClass } from '../devices/roles';
 import { useSimulationStore } from '../store/simulationStore';
@@ -68,7 +68,7 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
       ? undefined
       : view?.secondary;
   const linkFloors = [...new Set(crossFloorLinks.map((l) => l.floorName))];
-  const color = PROTOCOL_COLORS[device.protocol];
+  const color = PROTOCOL_INK[device.protocol];
   const cloud = definition ? isCloud(effectiveIotClass(device, definition)) : false;
   const interact = mode === 'interact';
   const unavailable = view?.unavailable ?? false;
@@ -113,7 +113,7 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
     <div
       ref={ref}
       className={cx(
-        'group relative flex min-h-[70px] w-[180px] items-center gap-2 rounded-lg border bg-white px-2 py-1.5 shadow-sm transition-colors motion-reduce:transition-none',
+        'ha-node group relative flex min-h-[70px] w-[180px] items-center gap-2 rounded-lg border bg-white px-2 py-1.5 shadow-sm transition-colors motion-reduce:transition-none',
         interact && !connectMode && 'cursor-pointer',
         interact && steppable && 'nowheel',
         active ? 'border-amber-400 bg-amber-50/70' : 'border-slate-300',
@@ -142,8 +142,8 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
           {icon}
         </span>
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1">
+      <div className="ha-node-main min-w-0 flex-1">
+        <div className="ha-node-detail flex items-center gap-1">
           <div className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800">{device.name}</div>
           {!interact && !connectMode && primaryLabel && !unavailable && (
             <button
@@ -168,17 +168,17 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
         ) : view ? (
           <NodeBody view={view} onStep={(dir) => useSimulationStore.getState().step(id, dir)} />
         ) : null}
-        <div className="mt-0.5 flex min-w-0 items-center gap-1">
-          <span className="shrink-0 rounded px-1 text-[9px] font-bold uppercase text-white" style={{ backgroundColor: color }}>
+        <div className="ha-node-detail mt-0.5 flex min-w-0 items-center gap-1">
+          <span className="shrink-0 rounded px-1 text-[10px] font-bold uppercase text-white" style={{ backgroundColor: color }}>
             {PROTOCOL_LABELS[device.protocol]}
           </span>
           {cloud && (
-            <span className="shrink-0 text-[9px] font-semibold text-violet-700" title="Integración en la nube">
+            <span className="shrink-0 text-[10px] font-semibold text-violet-800" title="Integración en la nube">
               ☁
             </span>
           )}
           {!unavailable && watts !== undefined && (
-            <span className="shrink-0 text-[10px] font-semibold tabular-nums text-amber-700" data-testid="node-watts">
+            <span className="shrink-0 text-[10px] font-semibold tabular-nums text-amber-800" data-testid="node-watts">
               · {watts} W
             </span>
           )}
@@ -186,7 +186,7 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
             <span
               className={cx(
                 'shrink-0 rounded px-0.5 text-[10px] font-semibold tabular-nums',
-                lowBattery ? 'bg-red-100 text-red-700' : 'text-slate-500',
+                lowBattery ? 'bg-red-100 text-red-800' : 'text-slate-600',
               )}
               title={lowBattery ? `Batería baja: ${batteryPct} %` : `Batería ${batteryPct} %`}
               data-testid="node-battery"
@@ -196,7 +196,7 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
             </span>
           )}
           {!unavailable && secondary && (
-            <span className="min-w-0 truncate text-[10px] text-slate-500" title={secondary}>
+            <span className="min-w-0 truncate text-[10px] text-slate-600" title={secondary}>
               {secondary}
             </span>
           )}
@@ -206,7 +206,7 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
         <span
           className={cx(
             'absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold text-white',
-            issueSeverity === 'error' || unreachable ? 'bg-red-600' : 'bg-amber-500',
+            issueSeverity === 'error' || unreachable ? 'bg-red-700' : 'bg-amber-700',
           )}
           aria-label={unreachable ? 'Inalcanzable' : 'Tiene incidencias'}
         >
@@ -215,7 +215,7 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
       )}
       {linkFloors.length > 0 && (
         <span
-          className="absolute -bottom-2.5 left-2 rounded-full border border-indigo-200 bg-indigo-50 px-1.5 text-[9px] font-semibold text-indigo-700"
+          className="ha-node-detail absolute -bottom-2.5 left-2 rounded-full border border-indigo-200 bg-indigo-50 px-1.5 text-[10px] font-semibold text-indigo-800"
           title={crossFloorLinks.map((l) => `${l.deviceName} (${l.floorName})`).join('\n')}
         >
           ↕ enlace a {linkFloors.join(', ')}

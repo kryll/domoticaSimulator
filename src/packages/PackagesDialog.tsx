@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { countLabel } from '../ui/plural';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
 import { catalog } from '../devices/catalog';
@@ -31,7 +32,7 @@ export function PackagesDialog({ onClose }: { onClose: () => void }) {
       const bytes = new Uint8Array(zip.byteLength);
       bytes.set(zip);
       downloadBlob(new Blob([bytes.buffer], { type: 'application/zip' }), `${safeFilename(project.name)}-home-assistant.zip`);
-      useUiStore.getState().notify(`Descargado el .zip con ${files.length} archivos`, 'success');
+      useUiStore.getState().notify(`Descargado el .zip con ${countLabel(files.length, 'archivo', 'archivos')}`, 'success');
     } catch (err) {
       useUiStore.getState().notify(`No se pudo generar el .zip: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }

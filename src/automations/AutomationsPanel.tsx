@@ -13,6 +13,7 @@ import { useMemo, useState } from 'react';
 import { ImportAutomationsDialog } from './ImportAutomationsDialog';
 import { lastTraceByAutomation, TRACE_RESULT } from '../ui/traceLabels';
 import { confirmDialog } from '../ui/confirm';
+import { useViewStore } from '../store/viewStore';
 
 function LastRun({ trace }: { trace: AutomationTrace | undefined }) {
   if (!trace) return null;
@@ -29,8 +30,13 @@ function LastRun({ trace }: { trace: AutomationTrace | undefined }) {
   );
 }
 
+export interface AutomationsPanelProps {
+  /** «docked»: en el panel inferior (con botón para abrirlo en grande); «workspace»: dentro del editor grande. */
+  layout?: 'docked' | 'workspace';
+}
+
 /** Lista de automatizaciones del proyecto con su editor. */
-export function AutomationsPanel() {
+export function AutomationsPanel({ layout = 'docked' }: AutomationsPanelProps) {
   const automations = useProjectStore((s) => s.project.automations);
   const addAutomation = useProjectStore((s) => s.addAutomation);
   const updateAutomation = useProjectStore((s) => s.updateAutomation);
@@ -52,8 +58,20 @@ export function AutomationsPanel() {
   return (
     <div className="flex h-full min-h-0">
       {importOpen && <ImportAutomationsDialog onClose={() => setImportOpen(false)} />}
-      <div className="flex w-60 shrink-0 flex-col border-r border-slate-200">
+      <div className={cx('flex shrink-0 flex-col border-r border-slate-200', layout === 'workspace' ? 'w-72' : 'w-60')}>
         <div className="p-2">
+          {layout === 'docked' && (
+            <Button
+              size="sm"
+              className="mb-1 w-full"
+              title="Abrir el editor casi a pantalla completa"
+              onClick={() => {
+                useViewStore.getState().setAutomationsDocked(false);
+              }}
+            >
+              <span aria-hidden="true">⛶</span> Abrir en grande
+            </Button>
+          )}
           <Button
             variant="primary"
             size="sm"

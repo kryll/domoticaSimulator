@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { countLabel } from '../ui/plural';
 import type { Project } from '../types';
 import { openAsNewProject } from '../store/bootstrap';
 import { useUiStore } from '../store/uiStore';
@@ -85,10 +86,10 @@ export function SharedLinkPrompt() {
           El enlace contiene el proyecto <strong>«{project.name}»</strong>. Se abrirá como un proyecto nuevo; el actual queda guardado tal cual.
         </p>
         <ul className="grid grid-cols-2 gap-1 text-xs text-slate-600">
-          <li>{project.floors.length} plantas</li>
-          <li>{project.rooms.length} salas</li>
-          <li>{project.devices.length} dispositivos</li>
-          <li>{project.automations.length} automatizaciones</li>
+          <li>{countLabel(project.floors.length, 'planta', 'plantas')}</li>
+          <li>{countLabel(project.rooms.length, 'sala', 'salas')}</li>
+          <li>{countLabel(project.devices.length, 'dispositivo', 'dispositivos')}</li>
+          <li>{countLabel(project.automations.length, 'automatización', 'automatizaciones')}</li>
         </ul>
       </div>
     </Modal>

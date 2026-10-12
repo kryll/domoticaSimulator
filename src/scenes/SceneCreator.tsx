@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { captureSceneEntities } from '../simulation/scenes';
-import { formatState } from '../canvas/style';
+import { entityStateText } from '../ui/stateText';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { TextField } from '../ui/Field';
@@ -75,7 +75,7 @@ export function SceneCreator({ onClose, initial = [] }: { onClose: () => void; i
               <label className="flex items-center gap-2 text-sm" title={r.entityId}>
                 <input type="checkbox" checked={checked.has(r.entityId)} onChange={() => toggle(r.entityId)} />
                 <span className="min-w-0 flex-1 truncate">{r.label}</span>
-                <span className="text-xs font-semibold text-slate-700">{formatState(entities[r.entityId], r.definition.unit)}</span>
+                <span className="text-xs font-semibold text-slate-700">{entityStateText(r.entityId, entities[r.entityId], r.definition)}</span>
               </label>
             </li>
           ))}

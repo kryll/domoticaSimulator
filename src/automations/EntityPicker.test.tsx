@@ -37,7 +37,7 @@ describe('EntityPicker', () => {
     expect(within(listbox).getByRole('group', { name: 'Salón' })).toBeInTheDocument();
     expect(within(listbox).getByRole('group', { name: 'Sin sala' })).toBeInTheDocument();
     // el estado actual se muestra junto al nombre
-    expect(labels.find((l) => l.includes('Luz'))).toMatch(/off/);
+    expect(labels.find((l) => l.includes('Luz'))).toMatch(/Apagada/);
   });
 
   it('filtra al escribir y elige con el teclado', async () => {

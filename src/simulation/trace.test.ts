@@ -17,21 +17,23 @@ describe('descripciones legibles', () => {
   it('estados en español según el dominio y la clase', () => {
     expect(stateLabel('light.x', 'on')).toBe('Encendida');
     expect(stateLabel('switch.x', false)).toBe('Apagado');
-    expect(stateLabel('binary_sensor.x', 'on', 'motion')).toBe('Movimiento detectado');
+    expect(stateLabel('binary_sensor.x', 'on', 'motion')).toBe('Detectado');
     expect(stateLabel('binary_sensor.x', 'off', 'door')).toBe('Cerrada');
-    expect(stateLabel('lock.x', 'locked')).toBe('Cerrada con llave');
+    expect(stateLabel('lock.x', 'locked')).toBe('Bloqueada');
     expect(stateLabel('sensor.x', 'unavailable')).toBe('No disponible');
     expect(stateLabel('sensor.x', 'single')).toBe('single');
+    expect(stateLabel('sensor.mando_action', 'single')).toBe('Pulsación');
+    expect(stateLabel('climate', 'heat')).toBe('Calefacción');
   });
 
   it('disparadores', () => {
     const sim = start();
     expect(describeTrigger({ type: 'state', entityId: 'light.luz_salon', to: 'on' }, sim)).toBe('Luz salón cambió a Encendida');
     expect(describeTrigger({ type: 'state', entityId: 'binary_sensor.movimiento_pasillo_motion', to: 'off', for: 120 }, sim)).toBe(
-      'Movimiento pasillo Movimiento cambió a Sin movimiento durante 2 min',
+      'Movimiento pasillo cambió a Despejado durante 2 min',
     );
     expect(describeTrigger({ type: 'numeric_state', entityId: 'sensor.clima_dormitorio_temperature', above: 26 }, sim)).toBe(
-      'Clima dormitorio Temperatura pasa a estar por encima de 26 °C',
+      'Clima dormitorio · Temperatura pasa a estar por encima de 26 °C',
     );
     expect(describeTrigger({ type: 'time', at: '07:30' }, sim)).toBe('Son las 07:30');
     expect(describeTrigger({ type: 'sun', event: 'sunset', offsetMinutes: -15 }, sim)).toBe('Atardecer (15 min antes)');
@@ -61,7 +63,7 @@ describe('trazas de ejecución (B4)', () => {
       automationId: 'demo-auto-movimiento',
       startedAt: at(22),
       result: 'ran',
-      trigger: { index: 0, description: 'Movimiento pasillo Movimiento cambió a Movimiento detectado' },
+      trigger: { index: 0, description: 'Movimiento pasillo cambió a Detectado' },
       conditions: [{ index: 0, description: 'Hora entre 20:00 y 07:30', result: true, detail: 'son las 22:00' }],
     });
     expect(trace?.actions.map((a) => [a.description, a.status])).toEqual([

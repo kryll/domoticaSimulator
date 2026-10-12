@@ -130,9 +130,9 @@ export function CtlButton({
         'inline-flex min-h-[28px] items-center justify-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 disabled:opacity-50',
         pressed
-          ? 'border-sky-700 bg-sky-600 text-white hover:bg-sky-700'
+          ? 'border-sky-800 bg-sky-700 text-white hover:bg-sky-800'
           : variant === 'primary'
-            ? 'border-sky-700 bg-sky-600 text-white hover:bg-sky-700'
+            ? 'border-sky-800 bg-sky-700 text-white hover:bg-sky-800'
             : variant === 'danger'
               ? 'border-red-300 bg-white text-red-700 hover:bg-red-50'
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',

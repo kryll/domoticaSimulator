@@ -86,6 +86,7 @@ import {
   sceneServiceCalls,
   updateClimateCurrentTemperature,
 } from './services';
+import { countLabel, plural } from '../ui/plural';
 
 export { capturableEntities, captureSceneEntities, type CapturableEntities } from './scenes';
 export { sameState } from './stateUtils';
@@ -319,7 +320,7 @@ export function createSimulationState(project: Project, defs: DeviceDefinition[]
   };
   let withAttrs = sim;
   for (const [id, e] of Object.entries(entities)) withAttrs = recordAttributeSamples(withAttrs, id, e);
-  return addLog(withAttrs, 'info', `Simulación preparada con ${Object.keys(sim.entities).length} entidades`);
+  return addLog(withAttrs, 'info', `Simulación preparada con ${countLabel(Object.keys(sim.entities).length, 'entidad', 'entidades', { zero: 'ninguna entidad' })}`);
 }
 
 // ---------- Condiciones ----------
@@ -909,7 +910,7 @@ function callGroupService(
   const id = groupEntityId(group);
   const groupState = sim.entities[id]?.state ?? 'off';
   const extra = { entityId: id, ...(ctx.automationId === undefined ? {} : { automationId: ctx.automationId }) };
-  let result = addLog(sim, 'info', `Servicio ${group.domain}.${service} → grupo «${group.name}» (${group.entityIds.length} miembros)`, extra);
+  let result = addLog(sim, 'info', `Servicio ${group.domain}.${service} → grupo «${group.name}» (${countLabel(group.entityIds.length, 'miembro', 'miembros', { zero: 'sin miembros' })})`, extra);
   const inner: Exec = { ...exec, depth: exec.depth + 1 };
   if (inner.depth > MAX_DEPTH) return addLog(result, 'error', `Grupo «${group.name}»: posible bucle infinito`, extra);
   for (const member of group.entityIds) {
@@ -1238,8 +1239,8 @@ function callServiceAction(sim: SimulationState, project: Project, action: Servi
     if (!r.ok) failed.push(r.detail ?? id);
     else if (r.detail !== undefined) notes.push(r.detail);
   }
-  if (failed.length > 0) return outcome(result, false, `${failed.length} de ${ids.length} destinos fallaron: ${failed.join('; ')}`);
-  return outcome(result, true, notes.length > 0 ? notes.join('; ') : `${ids.length} destinos`);
+  if (failed.length > 0) return outcome(result, false, `${failed.length} de ${countLabel(ids.length, 'destino', 'destinos')} ${plural(failed.length, 'falló', 'fallaron')}: ${failed.join('; ')}`);
+  return outcome(result, true, notes.length > 0 ? notes.join('; ') : countLabel(ids.length, 'destino', 'destinos', { zero: 'sin destinos' }));
 }
 
 /** Ejecuta una lista de acciones. Un delay deja el resto como PendingAction. */

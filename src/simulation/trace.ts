@@ -16,58 +16,22 @@ import type {
   TraceTrigger,
   Trigger,
 } from '../types';
-import { HVAC_MODE_LABELS, labelOf } from '../devices/labels';
+import { stateLabel } from '../devices/stateLabels';
 import { formatSimTime, isTimeBetween, MINUTE_MS, SECOND_MS, sunTimesAt, type SunConfig, type SunLocation } from './clock';
-import { friendlyName, inNumericRange, normalizeState, sameState, toNumber } from './stateUtils';
+import { friendlyName, inNumericRange, sameState, toNumber } from './stateUtils';
 import { describeServiceData } from './services';
 import { serviceName } from './serviceCatalog';
 import { isNotifyService, notificationContent } from './notify';
 import { serviceAreaIds, serviceEntityIds } from '../automations/walk';
+import { plural } from '../ui/plural';
 
 /** Trazas que se conservan por automatización (las más recientes). */
 export const MAX_TRACES_PER_AUTOMATION = 50;
 
 // ---------- Etiquetas de estado ----------
 
-const BINARY_LABELS: Record<string, [string, string]> = {
-  motion: ['Movimiento detectado', 'Sin movimiento'],
-  occupancy: ['Ocupado', 'Libre'],
-  presence: ['Presencia', 'Sin presencia'],
-  door: ['Abierta', 'Cerrada'],
-  window: ['Abierta', 'Cerrada'],
-  opening: ['Abierta', 'Cerrada'],
-  garage_door: ['Abierta', 'Cerrada'],
-  moisture: ['Fuga detectada', 'Seco'],
-  smoke: ['Humo detectado', 'Sin humo'],
-};
-
-const DOMAIN_LABELS: Record<string, Record<string, string>> = {
-  light: { on: 'Encendida', off: 'Apagada' },
-  switch: { on: 'Encendido', off: 'Apagado' },
-  fan: { on: 'Encendido', off: 'Apagado' },
-  cover: { open: 'Abierta', closed: 'Cerrada', opening: 'Abriéndose', closing: 'Cerrándose' },
-  lock: { locked: 'Cerrada con llave', unlocked: 'Abierta', open: 'Puerta abierta', jammed: 'Atascada', locking: 'Cerrando', unlocking: 'Abriendo' },
-  media_player: { on: 'Encendido', off: 'Apagado', playing: 'Reproduciendo', paused: 'En pausa', idle: 'Inactivo' },
-  vacuum: { cleaning: 'Limpiando', docked: 'En la base', returning: 'Volviendo a la base', paused: 'En pausa', idle: 'Parada' },
-  camera: { idle: 'En reposo', recording: 'Grabando', streaming: 'Emitiendo', off: 'Apagada' },
-  climate: HVAC_MODE_LABELS,
-};
-
-/** Etiqueta legible de un estado ("on" de una luz → "Encendida"). */
-export function stateLabel(entityId: string, value: EntityStateValue, deviceClass?: string): string {
-  const s = normalizeState(value);
-  if (s === 'unavailable') return 'No disponible';
-  if (s === 'unknown') return 'Desconocido';
-  const domain = entityId.split('.')[0] ?? '';
-  if (domain === 'binary_sensor') {
-    const pair = BINARY_LABELS[deviceClass ?? ''];
-    if (pair && (s === 'on' || s === 'off')) return s === 'on' ? pair[0] : pair[1];
-    if (s === 'on') return 'Activado';
-    if (s === 'off') return 'Desactivado';
-  }
-  const table = DOMAIN_LABELS[domain];
-  return table ? labelOf(table, s) : s;
-}
+// Tanda 2: la tabla de estados es única (devices/stateLabels.ts); se reexporta por compatibilidad.
+export { stateLabel };
 
 function deviceClassOf(sim: SimulationState, entityId: string): string | undefined {
   const dc = sim.entities[entityId]?.attributes?.device_class;
@@ -351,7 +315,7 @@ export function describeAction(a: Action, sim: SimulationState, project: Pick<Pr
     case 'repeat': {
       const n = a.sequence.length;
       const body = `${n} acci${n === 1 ? 'ón' : 'ones'}`;
-      if (a.count !== undefined) return `Repetir ${a.count} veces: ${body}`;
+      if (a.count !== undefined) return `Repetir ${a.count} ${plural(a.count, 'vez', 'veces')}: ${body}`;
       if (a.while) return `Repetir mientras ${describeConditions(a.while, sim)}: ${body}`;
       return `Repetir hasta ${describeConditions(a.until ?? [], sim)}: ${body}`;
     }

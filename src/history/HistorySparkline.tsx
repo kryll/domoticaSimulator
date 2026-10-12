@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react';
+import { countLabel } from '../ui/plural';
 import type { HistorySample } from '../types';
 import { useSimulationStore } from '../store/simulationStore';
 import { attributeKey, historyAttributes, historySeries } from '../simulation/history';
@@ -69,7 +70,7 @@ export function HistorySparkline({ entityId, unit: stateUnit, stateMode = 'numer
   const last = series[series.length - 1];
   const label = numeric && path
     ? `Historial de ${span / 3_600_000} h: mínimo ${fmt(path.min)}${unit ? ` ${unit}` : ''}, máximo ${fmt(path.max)}${unit ? ` ${unit}` : ''}`
-    : `Historial de ${span / 3_600_000} h: ${segs.length} periodos activos`;
+    : `Historial de ${span / 3_600_000} h: ${countLabel(segs.length, 'periodo activo', 'periodos activos')}`;
   const fullLabel = gaps.length > 0 ? `${label}, ${gaps.length} ${gaps.length === 1 ? 'tramo' : 'tramos'} sin datos` : label;
 
   return (
@@ -111,7 +112,7 @@ export function HistorySparkline({ entityId, unit: stateUnit, stateMode = 'numer
               onClick={() => setWin(i)}
               className={
                 i === win
-                  ? 'rounded bg-sky-600 px-1 text-[10px] font-semibold text-white'
+                  ? 'rounded bg-sky-700 px-1 text-[10px] font-semibold text-white'
                   : 'rounded px-1 text-[10px] text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500'
               }
             >

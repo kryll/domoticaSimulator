@@ -9,6 +9,8 @@ import { EmptyState } from '../ui/Panel';
 import { downloadText, safeFilename } from '../ui/download';
 import { formatMoney, parseMoneyInput } from '../ui/money';
 import { cx } from '../ui/cx';
+import { countLabel } from '../ui/plural';
+import { ProposalDataSection, QuoteBreakdown } from './QuoteSections';
 
 function PriceInput({ line }: { line: BomLine }) {
   const shown = line.unitPrice.toFixed(2).replace('.', ',');
@@ -88,7 +90,13 @@ export function BudgetPanel() {
   const project = useProjectStore((s) => s.project);
   const report = useMemo(() => billOfMaterials(project, catalog), [project]);
 
-  if (report.lines.length === 0) return <EmptyState>Añade dispositivos al plano para obtener el presupuesto.</EmptyState>;
+  if (report.lines.length === 0)
+    return (
+      <div className="flex flex-col gap-4 p-3">
+        <ProposalDataSection />
+        <EmptyState>Añade dispositivos al plano para obtener el presupuesto.</EmptyState>
+      </div>
+    );
 
   const units = report.lines.reduce((s, l) => s + l.quantity, 0);
 
@@ -96,11 +104,11 @@ export function BudgetPanel() {
     <div className="flex flex-col gap-4 p-3">
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-sm text-slate-700" role="status" aria-label="Total del presupuesto">
-          <span className="text-xs uppercase tracking-wide text-slate-500">Total</span>{' '}
+          <span className="text-xs uppercase tracking-wide text-slate-500">Materiales</span>{' '}
           <strong className="text-lg tabular-nums" data-testid="budget-total">
             {formatMoney(report.total)}
           </strong>{' '}
-          <span className="text-xs text-slate-500">({units} dispositivos, IVA incluido)</span>
+          <span className="text-xs text-slate-600">({countLabel(units, 'dispositivo', 'dispositivos')}, solo materiales, IVA incluido)</span>
         </p>
         <Button
           size="sm"
@@ -110,6 +118,9 @@ export function BudgetPanel() {
           ⬇ Exportar CSV
         </Button>
       </div>
+      <ProposalDataSection />
+      <QuoteBreakdown />
+      <h3 className="-mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Lista de materiales (precios editables)</h3>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[40rem] text-left text-sm">
           <caption className="sr-only">Lista de materiales</caption>

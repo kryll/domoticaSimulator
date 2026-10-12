@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { countLabel } from '../ui/plural';
 import type { ProjectVariant } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useUiStore } from '../store/uiStore';
@@ -195,7 +196,7 @@ export function VariantsSection() {
               <span className="flex w-full items-baseline justify-between gap-2">
                 <span className="truncate text-sm font-medium text-slate-800">{v.name}</span>
                 <span className="shrink-0 text-xs text-slate-500">
-                  {v.snapshot.devices.length} dispositivos · {v.snapshot.automations.length} automatizaciones
+                  {countLabel(v.snapshot.devices.length, 'dispositivo', 'dispositivos')} · {countLabel(v.snapshot.automations.length, 'automatización', 'automatizaciones')}
                 </span>
               </span>
               <Button

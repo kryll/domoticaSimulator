@@ -14,7 +14,14 @@ type Summary = Awaited<ReturnType<typeof listProjects>>[number];
 /** Diálogo para abrir o borrar proyectos guardados en el navegador. */
 export function ProjectsDialog({ onClose }: { onClose: () => void }) {
   const currentId = useProjectStore((s) => s.project.id);
-  const [items, setItems] = useState<Summary[] | null>(null);
+  const currentName = useProjectStore((s) => s.project.name);
+  const currentUpdated = useProjectStore((s) => s.project.updatedAt);
+  const [stored, setItems] = useState<Summary[] | null>(null);
+  // El proyecto abierto siempre aparece, aunque aún no se haya guardado (p. ej. la demo recién abierta).
+  const items =
+    stored === null || stored.some((p) => p.id === currentId)
+      ? stored
+      : [{ id: currentId, name: currentName, updatedAt: currentUpdated }, ...stored];
 
   const refresh = () => {
     listProjects()
@@ -24,6 +31,10 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }) {
   useEffect(refresh, []);
 
   const open = async (id: string) => {
+    if (id === currentId) {
+      onClose();
+      return;
+    }
     const project = await loadProject(id);
     if (!project) {
       useUiStore.getState().notify('No se pudo abrir el proyecto', 'error');

@@ -4,6 +4,7 @@ import { definitionOf, projectEntities } from '../canvas/analysis';
 import { deviceIcon, formatNumber } from '../devices/presentation';
 import { foldText } from '../devices/text';
 import { disambiguate, entityLabel } from './entityLabel';
+import { entityStateText } from './stateText';
 
 export interface EntityFilter {
   /** Dominios admitidos (light, sensor...). */
@@ -91,7 +92,7 @@ export function entityGroups(
       entityId: ref.entityId,
       label,
       icon: deviceDef ? deviceIcon(deviceDef, def.deviceClass) : '❔',
-      stateText: formatEntityState(st, def.unit),
+      stateText: entityStateText(ref.entityId, st, def),
       domain: def.domain,
       ...(def.deviceClass ? { deviceClass: def.deviceClass } : {}),
       deviceId: ref.device.id,

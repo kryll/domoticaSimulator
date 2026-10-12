@@ -79,7 +79,7 @@ describe('plantillas de automatización (B7)', () => {
     let sim = createSimulationState(p, catalog, 0);
     sim = tick(openDoor(sim, p, 'binary_sensor.puerta_entrada_door'), p, 301_000);
     const note = sim.log.find((l) => l.notification);
-    expect(note).toMatchObject({ level: 'info', message: 'Notificación: Puerta abierta — Puerta entrada Puerta lleva tiempo abierta', notification: { title: 'Puerta abierta' } });
+    expect(note).toMatchObject({ level: 'info', message: 'Notificación: Puerta abierta — Puerta entrada lleva tiempo abierta', notification: { title: 'Puerta abierta' } });
   });
 
   it('fuga de agua: corta el enchufe y avisa con una luz', () => {
@@ -146,7 +146,7 @@ describe('plantillas de automatización (B7)', () => {
     expect(all?.name).toBe('Batería baja en algún dispositivo');
     const p = withAutos([one!]);
     const sim = tick({ ...createSimulationState(p, catalog, 0), batteries: { 'demo-fuga-bano': 15.2 } }, p, HOUR_MS * 24 * 30);
-    expect(sim.log.some((l) => l.message.startsWith('Automatización «Batería baja: Fuga baño Batería» disparada'))).toBe(true);
+    expect(sim.log.some((l) => l.message.startsWith('Automatización «Batería baja: Fuga baño · Batería» disparada'))).toBe(true);
   });
 
   it('no deja crear automatizaciones sin disparadores; isTemplateApplicable y suggestTemplates solo las aplicables', () => {
@@ -170,7 +170,7 @@ describe('plantillas de automatización (B7)', () => {
     expect(suggestions.map((s) => s.templateId)).toEqual(AUTOMATION_TEMPLATES.map((t) => t.id));
     const motion = suggestions.find((s) => s.templateId === 'motion_light');
     expect(motion?.values).toMatchObject({ motion: 'binary_sensor.movimiento_pasillo_motion', light: 'light.luz_pasillo' });
-    expect(motion?.reason).toBe('Tienes Movimiento pasillo Movimiento y Luz pasillo en Pasillo');
+    expect(motion?.reason).toBe('Tienes Movimiento pasillo y Luz pasillo en Pasillo');
     const empty: Project = { ...demo, devices: demo.devices.filter((d) => d.id === 'demo-luz-salon') };
     expect(suggestTemplates(empty, catalog).map((s) => s.templateId)).toEqual(['leave_home', 'presence_simulation']);
   });

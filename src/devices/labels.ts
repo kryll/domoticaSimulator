@@ -157,41 +157,64 @@ export const INTEGRATION_IOT_CLASS: Record<Integration, IotClass> = {
   homeassistant: 'local_push',
 };
 
-/** hvac_action de un termostato. */
+/** hvac_action de un termostato (acción HVAC en curso, como HA en español). */
 export const HVAC_ACTION_LABELS: Record<string, string> = {
   heating: 'Calentando',
   cooling: 'Enfriando',
-  drying: 'Deshumidificando',
+  drying: 'Secando',
   fan: 'Ventilando',
-  idle: 'En reposo',
+  idle: 'Inactivo',
   off: 'Apagado',
+  preheating: 'Precalentando',
+  defrosting: 'Descongelando',
 };
 
 /** Modos HVAC (estado de una entidad climate). */
 export const HVAC_MODE_LABELS: Record<string, string> = {
-  off: 'Apagado',
   heat: 'Calefacción',
   cool: 'Refrigeración',
   heat_cool: 'Calor/frío',
-  auto: 'Automático',
+  auto: 'Auto',
   dry: 'Deshumidificar',
   fan_only: 'Solo ventilador',
+  off: 'Apagado',
 };
 
-/** Presets habituales de termostatos. */
+/** Presets de termostatos (preset_mode), incluidos los de Netatmo, Tuya y Aqara. */
 export const PRESET_LABELS: Record<string, string> = {
+  none: 'Ninguno',
   eco: 'Eco',
   away: 'Ausente',
   home: 'En casa',
   comfort: 'Confort',
   boost: 'Turbo',
   sleep: 'Noche',
-  manual: 'Manual',
-  auto: 'Automático',
-  schedule: 'Programación',
-  frost_guard: 'Antiheladas',
   activity: 'Actividad',
-  none: 'Ninguno',
+  manual: 'Manual',
+  auto: 'Auto',
+  schedule: 'Programación',
+  frost_guard: 'Antihielo',
+  frost_protection: 'Antihielo',
+  holiday: 'Vacaciones',
+};
+
+/** Acciones de los mandos (estado del sensor `*_action`). */
+export const BUTTON_ACTION_LABELS: Record<string, string> = {
+  single: 'Pulsación',
+  double: 'Doble',
+  triple: 'Triple',
+  hold: 'Mantener',
+  long: 'Larga',
+  release: 'Soltar',
+  shake: 'Agitar',
+  on: 'Encender',
+  off: 'Apagar',
+  brightness_up: 'Subir brillo',
+  brightness_down: 'Bajar brillo',
+  arrow_left: 'Izquierda',
+  arrow_right: 'Derecha',
+  toggle: 'Alternar',
+  none: 'En espera',
 };
 
 /** Etiqueta de un valor con su tabla, o el propio valor si no está. */

@@ -6,7 +6,7 @@ import { EntityControls } from '../simulation/EntityControls';
 import { OfflineNotice } from '../simulation/OfflineNotice';
 import { useDeviceOffline } from '../simulation/useDeviceOffline';
 import { entitiesOfDevice } from './analysis';
-import { formatState } from './style';
+import { entityStateText } from '../ui/stateText';
 
 /** Dominios de diagnóstico que se muestran al final y plegados. */
 const DIAGNOSTIC_KEYS = new Set(['battery', 'linkquality', 'rssi', 'signal_strength', 'voltage']);
@@ -81,7 +81,7 @@ export function DevicePopover({ deviceId }: { deviceId: string }) {
                       {r.definition.name}
                     </span>
                     <span className="text-xs tabular-nums text-slate-500">
-                      {formatState(entities[r.entityId], r.definition.unit)}
+                      {entityStateText(r.entityId, entities[r.entityId], r.definition)}
                     </span>
                   </div>
                 )}
@@ -97,7 +97,7 @@ export function DevicePopover({ deviceId }: { deviceId: string }) {
                   <li key={r.entityId}>
                     <div className="mb-0.5 flex justify-between text-slate-600">
                       <span>{r.definition.name}</span>
-                      <span className="tabular-nums">{formatState(entities[r.entityId], r.definition.unit)}</span>
+                      <span className="tabular-nums">{entityStateText(r.entityId, entities[r.entityId], r.definition)}</span>
                     </div>
                     <EntityControls entityId={r.entityId} definition={r.definition} state={entities[r.entityId]} />
                   </li>

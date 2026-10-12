@@ -34,15 +34,43 @@ export function entityDefinitionsForDevice(device: Pick<Device, 'showAs'>, def: 
   return def.entities.map((e, i) => (i === index ? converted : e));
 }
 
+/** Separador del nombre amigable «Dispositivo · Entidad». */
+export const FRIENDLY_SEPARATOR = ' · ';
+
+/** ¿Contiene `name` la palabra o palabras de `part` (sin acentos ni mayúsculas)? */
+function containsWords(name: string, part: string): boolean {
+  const words = (t: string): string[] => foldText(t).split(/[^a-z0-9]+/).filter(Boolean);
+  const hay = words(name);
+  const needle = words(part);
+  if (needle.length === 0) return false;
+  for (let i = 0; i + needle.length <= hay.length; i++) {
+    if (needle.every((w, j) => hay[i + j] === w)) return true;
+  }
+  return false;
+}
+
+/**
+ * Nombre amigable de una entidad: «Dispositivo · Entidad», sin repeticiones. Si el nombre del
+ * dispositivo ya incluye el de la entidad («Termostato» y «Termostato»), se usa solo el del
+ * dispositivo. Una entidad única lleva el nombre del dispositivo.
+ */
+export function entityFriendlyName(deviceName: string, entityName: string, single = false): string {
+  if (single || entityName.trim() === '' || containsWords(deviceName, entityName)) return deviceName;
+  return `${deviceName}${FRIENDLY_SEPARATOR}${entityName}`;
+}
+
 /** Entidades de un dispositivo con su entity_id y nombre amigable. */
 export function entitiesForDevice(device: Device, def: DeviceDefinition): DeviceEntity[] {
   const base = slugify(device.name);
   const single = def.entities.length === 1;
-  return entityDefinitionsForDevice(device, def).map((e) => ({
-    entityId: single ? `${e.domain}.${base}` : `${e.domain}.${base}_${e.key}`,
-    definition: e,
-    friendlyName: single ? device.name : `${device.name} ${e.name}`,
-  }));
+  const used = new Set<string>();
+  return entityDefinitionsForDevice(device, def).map((e) => {
+    let friendlyName = entityFriendlyName(device.name, e.name, single);
+    // Dos entidades no pueden llamarse igual: la segunda que se reduciría lleva su nombre completo.
+    if (used.has(friendlyName)) friendlyName = `${device.name}${FRIENDLY_SEPARATOR}${e.name}`;
+    used.add(friendlyName);
+    return { entityId: single ? `${e.domain}.${base}` : `${e.domain}.${base}_${e.key}`, definition: e, friendlyName };
+  });
 }
 
 export function entityIdsForDevice(device: Device, def: DeviceDefinition): string[] {

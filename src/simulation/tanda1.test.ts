@@ -75,7 +75,7 @@ describe('destinos múltiples de una acción de servicio', () => {
     const sim = runAutomation(start(p), p, 'a');
     const step = sim.traces?.[0]?.actions[0];
     expect(step?.status).toBe('error');
-    expect(step?.detail).toContain('1 de 3 destinos fallaron');
+    expect(step?.detail).toContain('1 de 3 destinos falló');
     expect(sim.entities['light.luz_tres']?.state).toBe('on');
     expect(describeAction(bad, sim, p)).toBe('Encender Luz uno, light.no_existe y área Cocina');
   });
@@ -90,7 +90,7 @@ describe('destinos múltiples de una acción de servicio', () => {
     // light.luz_2 no existe: el validador lo marca, y también el área inexistente.
     const codes = validateProject(renamed, catalog).map((i) => `${i.code}:${i.message}`);
     expect(codes.some((c) => c.startsWith('entidad-desconocida') && c.includes('light.luz_2'))).toBe(true);
-    expect(codes.some((c) => c.startsWith('area-desconocida') && c.includes('sala-borrada'))).toBe(true);
+    expect(codes.some((c) => c.startsWith('area-desconocida') && c.includes('un área que ya no existe'))).toBe(true);
     // La luz de la cocina (por área) cae: la automatización queda degradada.
     const impact = failureImpact(p, catalog, { internet: false, powerOutage: false, haRestarting: false, devicesDown: ['l3'] });
     expect(impact.automations[0]?.reasons.join(' ')).toContain('light.luz_tres');

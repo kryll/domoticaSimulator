@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { useExtrasStore } from '../store/extrasStore';
+import { hasSharedPresentation } from '../presentation/sharedPresentation';
 
 // Diálogos de la Fase 3, cargados bajo demanda.
 const HouseTemplatesDialog = lazy(() => import('../templates/HouseTemplatesDialog').then((m) => ({ default: m.HouseTemplatesDialog })));
@@ -9,7 +10,8 @@ const SharedLinkPrompt = lazy(() => import('../share/SharedLinkPrompt').then((m)
 
 /** Ofrece abrir el proyecto del enlace (#p=...) solo si la URL lo trae. */
 function hasSharedHash(): boolean {
-  return typeof window !== 'undefined' && window.location.hash.startsWith('#p=');
+  // Con «modo=presentacion» el enlace se abre directamente en el visor (ver App).
+  return typeof window !== 'undefined' && window.location.hash.startsWith('#p=') && !hasSharedPresentation();
 }
 
 export function ExtraDialogs() {

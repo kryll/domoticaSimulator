@@ -89,7 +89,7 @@ export function Dropdown({ label, ariaLabel, entries, active, title, align = 'le
         className={cx(
           'inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium transition-colors',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500',
-          active ? 'border-sky-700 bg-sky-600 text-white hover:bg-sky-700' : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-100',
+          active ? 'border-sky-800 bg-sky-700 text-white hover:bg-sky-800' : 'border-transparent bg-transparent text-slate-600 hover:bg-slate-100',
           buttonClassName,
         )}
       >

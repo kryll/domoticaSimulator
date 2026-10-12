@@ -5,7 +5,7 @@ import { useSimulationStore } from '../store/simulationStore';
 import { useUiStore } from '../store/uiStore';
 import { catalog } from '../devices/catalog';
 import { projectEntities } from '../canvas/analysis';
-import { formatState } from '../canvas/style';
+import { entityStateText } from '../ui/stateText';
 import { EntityControls } from '../simulation/EntityControls';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -13,6 +13,7 @@ import { Tabs } from '../ui/Tabs';
 import { EmptyState } from '../ui/Panel';
 import { downloadText } from '../ui/download';
 import { cx } from '../ui/cx';
+import { countLabel } from '../ui/plural';
 import { countCards, dashboardToYaml, generateDashboard, type DashboardCard } from './lovelace';
 import { domainIcon, tileAction, tileActive } from '../lovelace/tileAction';
 
@@ -32,12 +33,6 @@ function displayName(entityId: string, state: EntityState | undefined, lookup: L
   return lookup.get(entityId)?.name ?? (typeof friendly === 'string' ? friendly : entityId);
 }
 
-/** Estado de una persona en español: «En casa», «Fuera» o el nombre de la zona. */
-function personStateText(state: EntityState | undefined): string {
-  if (state?.state === 'home') return 'En casa';
-  if (state?.state === 'not_home') return 'Fuera';
-  return formatState(state);
-}
 
 function Tile({ entityId, name, lookup, onMore }: { entityId: string; name?: string; lookup: Lookup; onMore: (id: string) => void }) {
   const state = useEntity(entityId);
@@ -46,7 +41,7 @@ function Tile({ entityId, name, lookup, onMore }: { entityId: string; name?: str
   const active = tileActive(state);
   const info = lookup.get(entityId);
   const label = name ?? displayName(entityId, state, lookup);
-  const stateText = entityId.startsWith('person.') ? personStateText(state) : formatState(state, info?.definition?.unit);
+  const stateText = entityStateText(entityId, state, info?.definition);
   return (
     <div className={cx('flex items-center gap-2 rounded-xl border p-2 shadow-sm', active ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white')}>
       <button
@@ -94,7 +89,7 @@ function EntityRow({ entityId, lookup, onMore }: { entityId: string; lookup: Loo
           <span aria-hidden="true">{domainIcon(entityId)}</span>
           <span className="truncate text-slate-700">{displayName(entityId, state, lookup)}</span>
         </span>
-        <span className="shrink-0 font-medium tabular-nums text-slate-900">{formatState(state, info?.definition?.unit)}</span>
+        <span className="shrink-0 font-medium tabular-nums text-slate-900">{entityStateText(entityId, state, info?.definition)}</span>
       </button>
     </li>
   );
@@ -111,7 +106,7 @@ function ControlCard({ entityId, lookup }: { entityId: string; lookup: Lookup })
           <span aria-hidden="true">{domainIcon(entityId)} </span>
           {displayName(entityId, state, lookup)}
         </span>
-        <span className="text-xs text-slate-500">{formatState(state)}</span>
+        <span className="text-xs text-slate-600">{entityStateText(entityId, state, info?.definition)}</span>
       </div>
       {info?.definition ? <EntityControls entityId={entityId} definition={info.definition} state={state} /> : <p className="text-xs text-slate-500">{entityId}</p>}
     </div>
@@ -171,7 +166,7 @@ function MoreInfo({ entityId, lookup, onClose }: { entityId: string; lookup: Loo
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
           <code className="text-xs text-slate-500">{entityId}</code>
-          <strong className="text-sm">{formatState(state, info?.definition?.unit)}</strong>
+          <strong className="text-sm">{entityStateText(entityId, state, info?.definition)}</strong>
         </div>
         {info?.definition && <EntityControls entityId={entityId} definition={info.definition} state={state} />}
       </div>
@@ -180,7 +175,7 @@ function MoreInfo({ entityId, lookup, onClose }: { entityId: string; lookup: Loo
 }
 
 /** Pestaña «Dashboard»: el dashboard Lovelace generado, interactivo, con exportación a YAML (B15). */
-export function DashboardView() {
+export function DashboardView({ readOnly = false }: { readOnly?: boolean } = {}) {
   const project = useProjectStore((s) => s.project);
   const dashboard = useMemo(() => generateDashboard(project, catalog), [project]);
   const lookup = useMemo<Lookup>(() => {
@@ -209,10 +204,12 @@ export function DashboardView() {
             onChange={setViewPath}
           />
         )}
-        <span className="text-xs text-slate-500">{cards} tarjetas</span>
-        <Button size="sm" className="ml-auto" onClick={exportYaml}>
-          Exportar YAML Lovelace
-        </Button>
+        <span className="text-xs text-slate-600">{countLabel(cards, 'tarjeta', 'tarjetas')}</span>
+        {!readOnly && (
+          <Button size="sm" className="ml-auto" onClick={exportYaml}>
+            Exportar YAML Lovelace
+          </Button>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-3" role="region" aria-label={view ? `Vista ${view.title}` : 'Dashboard'}>
         {!view || view.sections.length === 0 ? (

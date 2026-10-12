@@ -15,9 +15,10 @@ function none(singular: string, feminine: boolean | undefined): string {
 const FEMININE_ENDINGS = ['ción', 'sión', 'dad', 'tud', 'umbre', 'a', 'as'];
 /** Excepciones frecuentes en la aplicación. */
 const MASCULINE_WORDS = new Set(['problema', 'sistema', 'tema', 'día', 'mapa', 'esquema', 'programa', 'idioma', 'clima']);
-const FEMININE_WORDS = new Set(['luz', 'red', 'llave', 'clase', 'tecla', 'persona', 'versión', 'imagen', 'base']);
+const FEMININE_WORDS = new Set(['luz', 'red', 'llave', 'clase', 'tecla', 'persona', 'versión', 'imagen', 'base', 'calle', 'noche', 'tarde', 'torre', 'suite']);
 
-function guessFeminine(phrase: string): boolean {
+/** ¿Es femenino el sustantivo (primera palabra de la frase)? Heurística para artículos y concordancia. */
+export function guessFeminine(phrase: string): boolean {
   const word = (phrase.trim().split(/\s+/)[0] ?? '').toLowerCase();
   if (MASCULINE_WORDS.has(word)) return false;
   if (FEMININE_WORDS.has(word)) return true;
@@ -33,7 +34,7 @@ export interface CountLabelOptions {
 
 /**
  * «1 automatización», «2 automatizaciones», «Ninguna automatización».
- * Los miles llevan separador español (1.234).
+ * Las cifras grandes llevan separador de miles español (12.345).
  */
 export function countLabel(n: number, singular: string, pluralForm: string, opts: CountLabelOptions = {}): string {
   if (n === 0) return opts.zero ?? none(singular, opts.feminine);

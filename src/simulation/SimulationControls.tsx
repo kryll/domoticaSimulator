@@ -29,11 +29,11 @@ export function SimulationControls() {
   return (
     <div className="flex items-center gap-1" role="group" aria-label="Simulación">
       {running ? (
-        <Button size="sm" onClick={pause} aria-label="Pausar simulación" title="Pausar (P)">
+        <Button size="sm" onClick={pause} aria-label="Pausar simulación" title="Pausar (P)" data-tour="simulate">
           ⏸ Pausar
         </Button>
       ) : (
-        <Button size="sm" variant="primary" onClick={onStart} aria-label="Iniciar simulación" title="Iniciar (P)">
+        <Button size="sm" variant="primary" onClick={onStart} aria-label="Iniciar simulación" title="Iniciar (P)" data-tour="simulate">
           ▶ Simular
         </Button>
       )}

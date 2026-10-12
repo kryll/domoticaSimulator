@@ -84,7 +84,7 @@ interface Placed {
 }
 
 /** Equipo propuesto para cada hub propietario. */
-const HUB_FOR_BRAND: Partial<Record<Brand, Id>> = { Aqara: 'aqara-hub-m2', IKEA: 'ikea-dirigera', 'Philips Hue': 'hue-bridge-v2' };
+export const HUB_FOR_BRAND: Partial<Record<Brand, Id>> = { Aqara: 'aqara-hub-m2', IKEA: 'ikea-dirigera', 'Philips Hue': 'hue-bridge-v2' };
 
 function missingInfrastructure(placed: Placed[], project: Project, defs: DeviceDefinition[]): BomInfrastructure[] {
   const has = (pred: (d: DeviceDefinition) => boolean): boolean => placed.some((p) => pred(p.def));

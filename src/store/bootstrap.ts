@@ -51,21 +51,35 @@ export async function openAsNewProject(project: Project): Promise<Project> {
   return unique;
 }
 
-/** Carga el último proyecto abierto (o el más reciente) o, si no hay ninguno, el de demo. */
-export async function loadInitialProject(): Promise<void> {
+export interface InitialLoad {
+  /** No había ningún proyecto guardado: es la primera visita. */
+  firstRun: boolean;
+}
+
+/**
+ * Carga el último proyecto abierto (o el más reciente) o, si no hay ninguno, el de demo. La demo
+ * se guarda en IndexedDB al abrirse (no solo tras la primera edición) para que otra pestaña abra
+ * el mismo proyecto.
+ */
+export async function loadInitialProject(): Promise<InitialLoad> {
+  let firstRun = true;
   try {
     const list = await listProjects();
+    firstRun = list.length === 0;
     const remembered = lastProjectId();
     const target = list.find((p) => p.id === remembered) ?? [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (target) {
       const project = await loadProject(target.id);
       if (project) {
         openProject(project);
-        return;
+        return { firstRun: false };
       }
     }
   } catch (err) {
     console.error('No se pudieron leer los proyectos guardados', err);
   }
-  openProject(createDemoProject());
+  const demo = createDemoProject();
+  await saveProject(demo).catch((err: unknown) => console.error('No se pudo guardar el proyecto de demo', err));
+  openProject(demo);
+  return { firstRun };
 }

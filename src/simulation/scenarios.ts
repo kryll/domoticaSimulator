@@ -10,6 +10,7 @@ import { findScene, findScript } from './engine';
 import { findGroupByEntity } from './logic';
 import { actionConditions, conditionEntityIds, flattenActions, serviceEntityIds, triggerEntityIds } from '../automations/walk';
 import { resolveServiceTargets } from '../devices/areas';
+import { plural } from '../ui/plural';
 
 export type FailureScenarioId = 'internet' | 'coordinator' | 'power' | 'ha_restart' | 'hub';
 
@@ -262,8 +263,8 @@ export function failureImpact(project: Project, defs: DeviceDefinition[], failur
   });
 
   const count = (items: ImpactItem[], st: ImpactStatus): number => items.filter((x) => x.status === st).length;
-  const autos = automations.length === 0 ? '' : `; automatizaciones: ${count(automations, 'broken')} rotas y ${count(automations, 'degraded')} degradadas de ${automations.length}`;
-  const summary = `${unavailableDevices.length} dispositivo${unavailableDevices.length === 1 ? '' : 's'} sin servicio${autos}`;
+  const autos = automations.length === 0 ? '' : `; automatizaciones: ${count(automations, 'broken')} ${plural(count(automations, 'broken'), 'rota', 'rotas')} y ${count(automations, 'degraded')} ${plural(count(automations, 'degraded'), 'degradada', 'degradadas')} de ${automations.length}`;
+  const summary = `${unavailableDevices.length} ${plural(unavailableDevices.length, 'dispositivo', 'dispositivos')} sin servicio${autos}`;
 
   return { unavailableDevices, unavailableEntities: [...down.keys()], automations, scenes, scripts, summary };
 }

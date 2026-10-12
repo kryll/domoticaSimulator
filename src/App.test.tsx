@@ -57,7 +57,7 @@ describe('App', () => {
     expect(within(props).getByLabelText('Nombre')).toHaveValue(devices[0]?.name);
     // simular movimiento desde el panel de propiedades
     await userEvent.click(within(props).getByRole('button', { name: 'Movimiento' }));
-    expect(within(props).getAllByText(/^on$/).length).toBeGreaterThan(0);
+    expect(within(props).getAllByText(/^Detectado$/).length).toBeGreaterThan(0);
   });
 
   it('renombra el proyecto', async () => {

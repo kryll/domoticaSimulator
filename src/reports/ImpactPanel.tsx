@@ -9,6 +9,7 @@ import { automationDeviceIds, revealDevice } from '../ui/entityDevices';
 import { EmptyState } from '../ui/Panel';
 import { Badge } from '../ui/Badge';
 import { cx } from '../ui/cx';
+import { countLabel } from '../ui/plural';
 
 type Status = 'ok' | 'degraded' | 'broken';
 
@@ -92,7 +93,7 @@ function StatusList({
 }
 
 /** Informe de impacto de los fallos activos: qué dispositivos caen y qué automatizaciones fallan. */
-export function ImpactPanel() {
+export function ImpactPanel({ presentation = false }: { presentation?: boolean } = {}) {
   const project = useProjectStore((s) => s.project);
   const failures = useSimulationStore((s) => s.sim.failures) ?? NO_FAILURES;
   const active = hasFailures(failures);
@@ -101,8 +102,9 @@ export function ImpactPanel() {
   if (!active || !report) {
     return (
       <EmptyState>
-        No hay fallos activos. Usa el menú «Escenarios» de la barra superior para simular la caída de Internet, un corte de
-        luz, el reinicio de Home Assistant o la caída de un coordinador.
+        {presentation
+          ? 'No hay fallos activos. Elige un escenario para ver qué seguiría funcionando.'
+          : 'No hay fallos activos. Usa el menú «Escenarios» de la barra superior para simular la caída de Internet, un corte de luz, el reinicio de Home Assistant o la caída de un coordinador.'}
       </EmptyState>
     );
   }
@@ -141,8 +143,10 @@ export function ImpactPanel() {
   return (
     <div className="flex flex-col gap-4 p-3">
       <p className="text-sm text-slate-700" role="status">
-        <strong>{failureLabels(failures, deviceName).join(' · ')}</strong>: {report.unavailableDevices.length} dispositivos no
-        disponibles, {broken} automatizaciones rotas y {degraded} degradadas.
+        <strong>{failureLabels(failures, deviceName).join(' · ')}</strong>:{' '}
+        {countLabel(report.unavailableDevices.length, 'dispositivo no disponible', 'dispositivos no disponibles', { zero: 'todos los dispositivos siguen disponibles' }).toLowerCase()},{' '}
+        {countLabel(broken, 'automatización rota', 'automatizaciones rotas').toLowerCase()} y{' '}
+        {countLabel(degraded, 'degradada', 'degradadas', { feminine: true }).toLowerCase()}.
       </p>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section aria-label="Dispositivos no disponibles">
@@ -180,7 +184,7 @@ export function ImpactPanel() {
               title="Automatizaciones"
               rows={automations}
               onSelect={selectAutomation}
-              onOpen={(id) => useUiStore.getState().showAutomation(id)}
+              onOpen={presentation ? undefined : (id) => useUiStore.getState().showAutomation(id)}
             />
           )}
           <StatusList title="Escenas" rows={scenes} />

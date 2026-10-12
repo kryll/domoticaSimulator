@@ -5,6 +5,13 @@ import { useExtrasStore } from '../store/extrasStore';
 import { useProjectStore } from '../store/projectStore';
 import { autoConnect } from './actions';
 import { toggleRouterSuggestion } from './extras/routerSuggestion';
+import { useViewStore, type ConnectionsLayer } from '../store/viewStore';
+
+const CONNECTION_LAYERS: Array<[ConnectionsLayer, string]> = [
+  ['all', 'Todas'],
+  ['selected', 'Solo del seleccionado'],
+  ['none', 'Ninguna'],
+];
 
 /** Altura reservada por la barra del lienzo (px): el encuadre deja este margen arriba. */
 export const CANVAS_TOOLBAR_PX = 52;
@@ -26,7 +33,8 @@ export function CanvasToolbar() {
   const firstFloor = useProjectStore((s) => s.project.floors[0]?.id);
   const floorId = activeFloorId ?? firstFloor;
   const drawing = mode === 'room' || mode === 'wall';
-  const layers = [showCoverage, showClimate, showSignal].filter(Boolean).length;
+  const connectionsLayer = useViewStore((s) => s.connectionsLayer);
+  const layers = [showCoverage, showClimate, showSignal, connectionsLayer !== 'all'].filter(Boolean).length;
 
   const modeButton = (m: 'select' | 'interact' | 'connect', label: string, hint: string, key: string) => (
     <Button
@@ -68,6 +76,18 @@ export function CanvasToolbar() {
             { kind: 'item', id: 'coverage', label: 'Cobertura', checked: showCoverage, keepOpen: true, onSelect: toggleCoverage },
             { kind: 'item', id: 'climate', label: 'Clima', title: 'Temperatura de cada sala', checked: showClimate, keepOpen: true, onSelect: () => useExtrasStore.getState().toggleClimate() },
             { kind: 'item', id: 'signal', label: 'Señal', title: 'Mapa de calor de la señal (RSSI)', checked: showSignal, keepOpen: true, onSelect: () => useExtrasStore.getState().toggleSignal() },
+            { kind: 'separator', id: 'sep-conn' },
+            { kind: 'header', id: 'conn', label: 'Conexiones' },
+            ...CONNECTION_LAYERS.map(([value, label]) => ({
+              kind: 'item' as const,
+              id: `conn-${value}`,
+              role: 'menuitemradio' as const,
+              label,
+              title: `Conexiones: ${label.toLowerCase()}`,
+              checked: connectionsLayer === value,
+              keepOpen: true,
+              onSelect: () => useViewStore.getState().setConnectionsLayer(value),
+            })),
           ]}
         />
         <Dropdown
@@ -84,19 +104,19 @@ export function CanvasToolbar() {
             },
           ]}
         />
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => openHelp(true)}
-          aria-label="Atajos de teclado"
-          title="Atajos de teclado (?)"
-          aria-keyshortcuts="?"
-        >
-          ?
-        </Button>
+        <Dropdown
+          label="?"
+          ariaLabel="Ayuda"
+          title="Ayuda: visita guiada y atajos de teclado (?)"
+          align="right"
+          entries={[
+            { kind: 'item', id: 'tour', label: 'Visita guiada (5 pasos)', onSelect: () => useViewStore.getState().startTour() },
+            { kind: 'item', id: 'shortcuts', label: 'Atajos de teclado', hint: '?', onSelect: () => openHelp(true) },
+          ]}
+        />
       </div>
       {mode === 'interact' && (
-        <p className="rounded-md bg-emerald-600/95 px-2 py-1 text-xs font-medium text-white shadow" role="status">
+        <p className="rounded-md bg-emerald-800/95 px-2 py-1 text-xs font-medium text-white shadow" role="status">
           Modo Uso: clic = acción principal · doble clic = control · Mayús+clic selecciona · rueda ajusta
         </p>
       )}

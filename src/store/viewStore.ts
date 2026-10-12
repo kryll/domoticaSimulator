@@ -3,6 +3,7 @@
 // Las preferencias del lienzo se recuerdan en localStorage (siempre con try/catch).
 import { create } from 'zustand';
 import type { Id } from '../types';
+import { useUiStore } from './uiStore';
 
 /** Qué conexiones se dibujan en el lienzo. */
 export type ConnectionsLayer = 'all' | 'selected' | 'none';
@@ -160,4 +161,14 @@ export function welcomeDone(): boolean {
 
 export function markWelcomeDone(): void {
   writePref(PREF_KEYS.welcomeDone, '1');
+}
+
+/**
+ * ¿Está abierto el editor de automatizaciones en grande? Solo mientras su pestaña está activa en
+ * el panel inferior (así un cambio de pestaña o un reinicio de la interfaz lo cierran).
+ */
+export function useAutomationsWorkspaceOpen(): boolean {
+  const flag = useViewStore((s) => s.automationsModal && !s.presentation);
+  const onTab = useUiStore((s) => s.bottomTab === 'automations' && s.bottomOpen);
+  return flag && onTab;
 }

@@ -3,7 +3,8 @@ import { EntityPicker } from './EntityPicker';
 import { CONDITION_LABELS, conditionFactories } from '../ui/automationOptions';
 import { ListEditor } from './ListEditor';
 import { SelectField, TextField } from '../ui/Field';
-import { parseNumberInput, parseStateInput, stateToInput } from '../ui/formValues';
+import { parseNumberInput } from '../ui/formValues';
+import { StateSelect } from './StateSelect';
 import { DurationField } from './DurationField';
 import { NotConditionEditor, ZoneConditionEditor } from './advanced/ConditionListEditor';
 import { TriggerConditionEditor } from './TriggerConditionEditor';
@@ -17,10 +18,11 @@ export function ConditionEditor({ value, onChange }: { value: Condition; onChang
           {header}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[2fr,1fr,1fr]">
             <EntityPicker label="Entidad" value={value.entityId} onChange={(entityId) => onChange({ ...value, entityId })} />
-            <TextField
+            <StateSelect
               label="Estado"
-              value={stateToInput(value.state)}
-              onChange={(e) => onChange({ ...value, state: parseStateInput(e.target.value) ?? '' })}
+              entityId={value.entityId}
+              value={value.state === '' ? undefined : value.state}
+              onChange={(state) => onChange({ ...value, state: state ?? '' })}
             />
             <DurationField
               label="Desde hace al menos (min:s)"

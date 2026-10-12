@@ -2,11 +2,12 @@ import { useCallback, useMemo, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import type { Brand, DeviceCategory, DeviceDefinition, Protocol } from '../types';
 import { CATEGORY_LABELS, PROTOCOL_LABELS, catalog, filterCatalog, type CatalogFilter } from '../devices/catalog';
-import { addDeviceFromDefinition, canvasCenter, freeSpotNear } from '../canvas/actions';
+import { addCatalogDevice } from '../canvas/placeDevice';
 import { Panel, EmptyState } from '../ui/Panel';
 import { SelectField, TextField } from '../ui/Field';
 import { Button } from '../ui/Button';
 import { CatalogCard } from './CatalogCard';
+import { countLabel } from '../ui/plural';
 
 type Connectivity = NonNullable<CatalogFilter['connectivity']>;
 
@@ -46,7 +47,7 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
   const handleAdd = useCallback(
     (def: DeviceDefinition) => {
       if (onAdd) onAdd(def);
-      else addDeviceFromDefinition(def.id, freeSpotNear(canvasCenter(screenToFlowPosition)));
+      else addCatalogDevice(def.id, screenToFlowPosition);
     },
     [onAdd, screenToFlowPosition],
   );
@@ -58,6 +59,7 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
       <div className="flex flex-col gap-2 border-b border-slate-200 p-3">
         <TextField
           label="Buscar dispositivo"
+          data-catalog-search=""
           type="search"
           placeholder="Marca, modelo o nombre…"
           value={query}
@@ -97,7 +99,7 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
           />
         </div>
         <div className="flex items-center justify-between text-xs text-slate-500">
-          <span aria-live="polite">{results.length} dispositivos</span>
+          <span aria-live="polite">{countLabel(results.length, 'dispositivo', 'dispositivos')}</span>
           {hasFilters && (
             <Button
               size="sm"
@@ -125,7 +127,7 @@ export function CatalogPanel({ definitions = catalog, onAdd }: CatalogPanelProps
             ))}
           </ul>
         )}
-        <p className="mt-2 px-1 text-[11px] text-slate-400">Arrastra una tarjeta al lienzo o pulsa «+» para añadirla.</p>
+        <p className="mt-2 px-1 text-[11px] text-slate-600">Arrastra una tarjeta al lienzo o pulsa «+» para añadirla a la sala seleccionada (o a la última dibujada).</p>
       </div>
     </Panel>
   );

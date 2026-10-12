@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import type { DeviceDefinition } from '../types';
-import { PROTOCOL_COLORS } from '../canvas/style';
+import { PROTOCOL_INK } from '../canvas/style';
 import { deviceIcon } from '../devices/presentation';
 import { DEVICE_DRAG_MIME } from '../canvas/types';
 import { PROTOCOL_LABELS, isCloud } from '../devices/catalog';
@@ -36,7 +36,7 @@ function CatalogCardImpl({ definition, onAdd }: CatalogCardProps) {
         </div>
         <div className="mt-1 flex flex-wrap gap-1">
           {definition.protocols.map((p) => (
-            <Badge key={p} color={PROTOCOL_COLORS[p]}>
+            <Badge key={p} color={PROTOCOL_INK[p]}>
               {PROTOCOL_LABELS[p]}
             </Badge>
           ))}
@@ -48,7 +48,7 @@ function CatalogCardImpl({ definition, onAdd }: CatalogCardProps) {
       <button
         type="button"
         onClick={() => onAdd(definition)}
-        className="rounded px-1.5 text-lg leading-none text-slate-400 hover:bg-sky-50 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+        className="rounded px-1.5 text-lg leading-none text-slate-600 hover:bg-sky-50 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
         aria-label={`Añadir ${definition.name} al lienzo`}
         title="Añadir al lienzo"
       >

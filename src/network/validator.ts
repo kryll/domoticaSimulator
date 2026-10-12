@@ -1,5 +1,5 @@
 // Validador del proyecto: reglas de red y de dominio con códigos estables y mensajes en español.
-import type { Action, Brand, Condition, Device, Integration, DeviceDefinition, Id, IssueSeverity, Project, Trigger, ValidationIssue } from '../types';
+import type { Action, Brand, Condition, Device, Integration, DeviceDefinition, Id, IssueRef, IssueSeverity, Project, Trigger, ValidationIssue } from '../types';
 import { INTEGRATION_LABELS } from '../devices/labels';
 import { isCloud } from '../devices/catalog';
 import {
@@ -36,9 +36,49 @@ interface Ctx {
   placed: Placed[];
 }
 
-function issue(severity: IssueSeverity, code: string, message: string, deviceIds: Id[], key = ''): ValidationIssue {
+/** Títulos legibles por código (el código es solo un dato estable para la lógica). */
+export const ISSUE_TITLES: Record<string, string> = {
+  'definicion-desconocida': 'Modelo desconocido',
+  'sin-servidor-ha': 'Falta el servidor de Home Assistant',
+  'zigbee-sin-coordinador': 'Falta el coordinador Zigbee',
+  'varios-coordinadores-zigbee': 'Varios coordinadores Zigbee',
+  'falta-hub-propietario': 'Falta el hub de la marca',
+  'thread-sin-border-router': 'Falta un border router Thread',
+  'zwave-sin-controlador': 'Falta el controlador Z-Wave',
+  'rf433-sin-puente': 'Falta el puente RF 433 MHz',
+  'thread-border-router-sin-credenciales': 'Border router Thread cerrado',
+  'ble-sin-proxy': 'Sin proxy Bluetooth cerca',
+  'integracion-cloud': 'Depende de la nube',
+  'fuera-de-cobertura': 'Fuera de cobertura',
+  'conexion-invalida': 'Conexión rota',
+  'conexion-protocolo-incompatible': 'Conexión no válida',
+  'infraestructura-sin-conexion': 'Equipo sin conectar',
+  'entidad-desconocida': 'Entidad que no existe',
+  'servicio-dominio-incompatible': 'Servicio de otro tipo de entidad',
+  'area-desconocida': 'Área que no existe',
+  'area-sin-entidades': 'Área sin entidades de ese tipo',
+  'zona-solapada': 'Zonas solapadas',
+  'zona-sin-coordenadas': 'Zona sin coordenadas',
+  'persona-desconocida': 'Persona que no existe',
+  'zona-desconocida': 'Zona que no existe',
+  'grupo-entidad-desconocida': 'Grupo con entidades que no existen',
+  'grupo-dominio-mezclado': 'Grupo con entidades de otro tipo',
+  'entity-id-duplicado': 'Nombres de entidad repetidos',
+  'dispositivo-sin-sala': 'Dispositivo sin sala',
+  'servicio-falta-campo': 'Falta un dato obligatorio',
+  'nombre-script-duplicado': 'Scripts con el mismo nombre',
+};
+
+/** Título legible de una incidencia (el suyo o, si no lo tiene, el de su código). */
+export function issueTitle(issue: Pick<ValidationIssue, 'code' | 'title'>): string {
+  return issue.title ?? ISSUE_TITLES[issue.code] ?? 'Revisión necesaria';
+}
+
+function issue(severity: IssueSeverity, code: string, message: string, deviceIds: Id[], key = '', ref?: IssueRef): ValidationIssue {
   const suffix = key || deviceIds.join(',');
-  return { id: suffix ? `${code}:${suffix}` : code, severity, code, message, deviceIds };
+  const result: ValidationIssue = { id: suffix ? `${code}:${suffix}` : code, severity, code, title: ISSUE_TITLES[code] ?? 'Revisión necesaria', message, deviceIds };
+  if (ref) result.ref = ref;
+  return result;
 }
 
 function names(items: Placed[]): string {
@@ -57,7 +97,7 @@ function unknownDefinitions(ctx: Ctx): ValidationIssue[] {
   return ctx.project.devices
     .filter((d) => !ctx.defs.some((def) => def.id === d.definitionId))
     .map((d) =>
-      issue('error', 'definicion-desconocida', `«${d.name}» usa una definición que no está en el catálogo (${d.definitionId})`, [d.id]),
+      issue('error', 'definicion-desconocida', `«${d.name}» usa un modelo que no está en el catálogo: cámbialo por uno del catálogo o elimínalo`, [d.id]),
     );
 }
 
@@ -107,7 +147,7 @@ function hubRules(ctx: Ctx): ValidationIssue[] {
   for (const [brand, affected] of byBrand) {
     if (ctx.placed.some((p) => p.def.role === 'hub' && p.def.brand === brand)) continue;
     result.push(
-      issue('error', 'falta-hub-propietario', `${names(affected)} necesita${affected.length > 1 ? 'n' : ''} el hub de ${brand} con su integración actual (o cámbialo a ZHA/Zigbee2MQTT)`, ids(affected), brand),
+      issue('error', 'falta-hub-propietario', `${names(affected)} necesita${affected.length > 1 ? 'n' : ''} el hub de ${brand} con su integración actual (o cámbia${affected.length > 1 ? 'los' : 'lo'} a ZHA/Zigbee2MQTT)`, ids(affected), brand),
     );
   }
   return result;
@@ -183,12 +223,12 @@ function connectionRules(ctx: Ctx): ValidationIssue[] {
     const a = ctx.project.devices.find((d) => d.id === c.sourceId);
     const b = ctx.project.devices.find((d) => d.id === c.targetId);
     if (!a || !b) {
-      result.push(issue('error', 'conexion-invalida', 'Hay una conexión con un dispositivo que ya no existe', [a?.id, b?.id].filter((x): x is Id => x !== undefined), c.id));
+      result.push(issue('error', 'conexion-invalida', 'Hay una conexión con un dispositivo que ya no existe', [a?.id, b?.id].filter((x): x is Id => x !== undefined), c.id, { kind: 'connection', id: c.id }));
       continue;
     }
     const r = canConnect(a, b, ctx.defs);
     if (!r.ok) {
-      result.push(issue('error', 'conexion-protocolo-incompatible', `Conexión «${a.name}» → «${b.name}» no válida: ${r.reason}`, [a.id, b.id], c.id));
+      result.push(issue('error', 'conexion-protocolo-incompatible', `Conexión «${a.name}» → «${b.name}» no válida: ${r.reason}`, [a.id, b.id], c.id, { kind: 'connection', id: c.id }));
     }
   }
   return result;
@@ -229,7 +269,7 @@ function unknownEntityRule(ctx: Ctx): ValidationIssue[] {
     if (seen.has(key) || refExists(ref.entityId, known, ctx.project)) continue;
     seen.add(key);
     const shown = ref.entityId === '' ? '(vacía)' : ref.entityId;
-    result.push(issue('error', 'entidad-desconocida', `${KIND_LABELS[ref.kind]} «${ref.ownerName}» usa la entidad ${shown}, que no existe`, [], key));
+    result.push(issue('error', 'entidad-desconocida', `${KIND_LABELS[ref.kind]} «${ref.ownerName}» usa la entidad ${shown}, que no existe`, [], key, { kind: ref.kind, id: ref.ownerId, entityId: ref.entityId }));
   }
   return result;
 }
@@ -243,9 +283,9 @@ const NEUTRAL_SERVICE_DOMAINS = new Set(['homeassistant', 'scene', 'script', 'no
  */
 function serviceDomainRule(ctx: Ctx): ValidationIssue[] {
   const result: ValidationIssue[] = [];
-  const owners: { kind: string; id: string; name: string; actions: Action[] }[] = [
-    ...ctx.project.automations.map((a) => ({ kind: 'La automatización', id: a.id, name: a.name, actions: a.actions })),
-    ...ctx.project.scripts.map((s) => ({ kind: 'El script', id: s.id, name: s.name, actions: s.sequence })),
+  const owners: { kind: string; ref: 'automation' | 'script'; id: string; name: string; actions: Action[] }[] = [
+    ...ctx.project.automations.map((a) => ({ kind: 'La automatización', ref: 'automation' as const, id: a.id, name: a.name, actions: a.actions })),
+    ...ctx.project.scripts.map((s) => ({ kind: 'El script', ref: 'script' as const, id: s.id, name: s.name, actions: s.sequence })),
   ];
   for (const o of owners) {
     for (const a of flattenActions(o.actions)) {
@@ -256,14 +296,14 @@ function serviceDomainRule(ctx: Ctx): ValidationIssue[] {
         const target = entityId.includes('.') ? entityId.slice(0, entityId.indexOf('.')) : '';
         if (NEUTRAL_SERVICE_DOMAINS.has(domain) || target === '' || domain === target) continue;
         result.push(
-          issue('error', 'servicio-dominio-incompatible', `${o.kind} «${o.name}» llama a ${a.service} sobre ${entityId}: el servicio debe ser del dominio ${target}`, [], `${o.id}:${entityId}:${a.service}`),
+          issue('error', 'servicio-dominio-incompatible', `${o.kind} «${o.name}» llama a ${a.service} sobre ${entityId}: el servicio debe ser del dominio ${target}`, [], `${o.id}:${entityId}:${a.service}`, { kind: o.ref, id: o.id, entityId, service: a.service }),
         );
       }
       // Tanda 1: áreas (salas) de destino que no existen o sin entidades del dominio.
       for (const roomId of serviceAreaIds(a)) {
         const room = ctx.project.rooms.find((r) => r.id === roomId);
         if (!room) {
-          result.push(issue('error', 'area-desconocida', `${o.kind} «${o.name}» llama a ${a.service} sobre un área que no existe (${roomId})`, [], `${o.id}:area:${roomId}`));
+          result.push(issue('error', 'area-desconocida', `${o.kind} «${o.name}» llama a ${a.service} sobre un área que ya no existe`, [], `${o.id}:area:${roomId}`, { kind: o.ref, id: o.id, service: a.service }));
         } else if (areaEntityIds(ctx.project, ctx.defs, roomId, domain).length === 0) {
           result.push(issue('warning', 'area-sin-entidades', `${o.kind} «${o.name}» llama a ${a.service} sobre el área «${room.name}», que no tiene entidades de ese tipo`, [], `${o.id}:area:${roomId}:${a.service}`));
         }
@@ -294,8 +334,8 @@ function fase3RefsRule(ctx: Ctx): ValidationIssue[] {
     const refs = [...triggers, ...[...a.conditions, ...nested.flatMap(actionConditions)].flatMap(leaves)];
     for (const r of refs) {
       if (r.type !== 'zone') continue;
-      if (!people.has(r.personId)) result.push(issue('error', 'persona-desconocida', `La automatización «${a.name}» usa una persona que no existe (${r.personId})`, [], `${a.id}:${r.personId}`));
-      if (!zones.has(r.zoneId)) result.push(issue('error', 'zona-desconocida', `La automatización «${a.name}» usa una zona que no existe (${r.zoneId})`, [], `${a.id}:${r.zoneId}`));
+      if (!people.has(r.personId)) result.push(issue('error', 'persona-desconocida', `La automatización «${a.name}» usa una persona que ya no existe`, [], `${a.id}:${r.personId}`, { kind: 'automation', id: a.id }));
+      if (!zones.has(r.zoneId)) result.push(issue('error', 'zona-desconocida', `La automatización «${a.name}» usa una zona que ya no existe`, [], `${a.id}:${r.zoneId}`, { kind: 'automation', id: a.id }));
     }
   }
   const known = knownEntityIds(ctx);
@@ -305,7 +345,7 @@ function fase3RefsRule(ctx: Ctx): ValidationIssue[] {
     const wrong = g.entityIds.filter((id) => known.has(id) && g.domain !== 'cover' && !['light', 'switch'].includes(id.split('.')[0] ?? ''));
     const wrongCover = g.entityIds.filter((id) => known.has(id) && g.domain === 'cover' && !id.startsWith('cover.'));
     if (wrong.length + wrongCover.length > 0) {
-      result.push(issue('warning', 'grupo-dominio-mezclado', `El grupo «${g.name}» (${g.domain}) incluye entidades de otro tipo: ${[...wrong, ...wrongCover].join(', ')}`, [], `${g.id}:dominio`));
+      result.push(issue('warning', 'grupo-dominio-mezclado', `El grupo «${g.name}» (${GROUP_DOMAIN_LABELS[g.domain]}) incluye entidades de otro tipo: ${[...wrong, ...wrongCover].join(', ')}`, [], `${g.id}:dominio`, { kind: 'group', id: g.id }));
     }
   }
   return result;
@@ -359,16 +399,21 @@ function missingFieldRule(ctx: Ctx): ValidationIssue[] {
 
 function duplicateScriptNameRule(ctx: Ctx): ValidationIssue[] {
   const groups = new Map<string, string[]>();
+  const scriptIds = new Map<string, Id[]>();
   for (const s of ctx.project.scripts) {
     const slug = slugify(s.name);
     groups.set(slug, [...(groups.get(slug) ?? []), s.name]);
+    scriptIds.set(slug, [...(scriptIds.get(slug) ?? []), s.id]);
   }
   return [...groups.entries()]
     .filter(([, list]) => list.length > 1)
-    .map(([slug, list]) =>
-      issue('warning', 'nombre-script-duplicado', `Hay ${list.length} scripts con el mismo nombre (${list.map((n) => `«${n}»`).join(', ')}): sus entity_id serán script.${slug}, script.${slug}_2...; cámbiales el nombre para distinguirlos`, [], slug),
+    .map(([slug, list]) => ({ slug, list, ids: scriptIds.get(slug) ?? [] }))
+    .map(({ slug, list, ids }) =>
+      issue('warning', 'nombre-script-duplicado', `Hay ${list.length} scripts con el mismo nombre (${list.map((n) => `«${n}»`).join(', ')}): sus entity_id serán script.${slug}, script.${slug}_2...; cámbiales el nombre para distinguirlos`, [], slug, { kind: 'script', id: ids[0] ?? '', slug }),
     );
 }
+
+const GROUP_DOMAIN_LABELS: Record<'light' | 'switch' | 'cover', string> = { light: 'luces', switch: 'interruptores', cover: 'persianas' };
 
 const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1, info: 2 };
 

@@ -10,7 +10,8 @@ import { updateWithRename } from '../store/entityRename';
 import { Button } from '../ui/Button';
 import { SelectField, TextField } from '../ui/Field';
 import { newId } from '../ui/ids';
-import { formatState } from '../canvas/style';
+import { entityStateText } from '../ui/stateText';
+import { countLabel } from '../ui/plural';
 
 const DOMAIN_LABELS: Record<GroupDomain, string> = { light: 'Luces', switch: 'Interruptores', cover: 'Persianas' };
 const EMPTY: EntityGroup[] = [];
@@ -120,10 +121,10 @@ function GroupRow({ group, onEdit }: { group: EntityGroup; onEdit: () => void })
       <div className="min-w-[10rem] flex-1">
         <div className="text-sm font-medium text-slate-800">{group.name}</div>
         <code className="text-[11px] text-slate-500">{entityId}</code>
-        <span className="ml-2 text-xs text-slate-500">{group.entityIds.length} miembros</span>
+        <span className="ml-2 text-xs text-slate-500">{countLabel(group.entityIds.length, 'miembro', 'miembros')}</span>
       </div>
       <span className="text-xs font-semibold text-slate-700" aria-label={`Estado de ${group.name}`}>
-        {formatState(state)}
+        {entityStateText(entityId, state)}
       </span>
       <Button size="sm" aria-label={`${cover ? 'Abrir' : 'Encender'} ${group.name}`} onClick={() => callService(entityId, cover ? 'open_cover' : 'turn_on')}>
         {cover ? 'Abrir' : 'Encender'}

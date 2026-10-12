@@ -24,7 +24,7 @@ describe('DashboardView', () => {
     expect(useSimulationStore.getState().sim.entities['light.luz_salon']?.state).toBe('on');
     expect(within(region).getByRole('button', { name: 'Apagar Luz salón' })).toBeInTheDocument();
     // la tarjeta del grupo refleja el estado de sus miembros
-    expect(screen.getByTestId('tile-state-light.grupo_luces')).toHaveTextContent('on');
+    expect(screen.getByTestId('tile-state-light.grupo_luces')).toHaveTextContent('Encendida');
   });
 
   it('abre «más información» con los controles existentes', async () => {

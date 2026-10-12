@@ -34,7 +34,7 @@ describe('entidades', () => {
   it('entitiesForDevice incluye el nombre amigable', () => {
     const d = dev('a', 'aqara-door-window', undefined, { name: 'Entrada' });
     const [door] = entitiesForDevice(d, def('aqara-door-window'));
-    expect(door).toMatchObject({ entityId: 'binary_sensor.entrada_door', friendlyName: 'Entrada Puerta' });
+    expect(door).toMatchObject({ entityId: 'binary_sensor.entrada_door', friendlyName: 'Entrada · Puerta' });
   });
 
   it('initialEntityStates usa el estado inicial y atributos de HA', () => {
@@ -45,7 +45,7 @@ describe('entidades', () => {
     const states = initialEntityStates(p, catalog);
     expect(states['sensor.clima_temperature']).toEqual({
       state: 21.5,
-      attributes: { friendly_name: 'Clima Temperatura', unit_of_measurement: '°C', device_class: 'temperature' },
+      attributes: { friendly_name: 'Clima · Temperatura', unit_of_measurement: '°C', device_class: 'temperature' },
     });
     expect(states['climate.termo_climate']?.attributes?.temperature).toBe(21);
     expect(Object.keys(states)).toHaveLength(6);

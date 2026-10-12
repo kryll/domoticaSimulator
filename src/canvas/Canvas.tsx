@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import {
   Background,
   ConnectionMode,
-  Controls,
   MiniMap,
   Panel as FlowPanel,
   ReactFlow,
@@ -46,7 +45,8 @@ import { CanvasExtras } from './extras/CanvasExtras';
 import { FloorContextMenu } from './extras/FloorContextMenu';
 import { useExtrasStore } from '../store/extrasStore';
 import { useViewStore } from '../store/viewStore';
-import { MinimapToggle, ZoomLevelClass, selectedConnectionScope } from './readability';
+import { CanvasControls, MinimapToggle, ZoomLevelClass } from './readability';
+import { visibleConnections } from './zoomLevel';
 import { EmptyCanvasGuide } from '../onboarding/EmptyCanvasGuide';
 
 /** Encuadre: deja libre arriba la altura de la barra del lienzo para que no tape nodos. */
@@ -284,12 +284,7 @@ export function Canvas() {
   const boxSelecting = useRef(false);
 
   const edges = useMemo<ProtocolEdge[]>(() => {
-    if (connectionsLayer === 'none') return [];
-    const onFloor = new Set(project.devices.filter((d) => d.floorId === floorId).map((d) => d.id));
-    const focus = connectionsLayer === 'selected' ? selectedConnectionScope(selection) : null;
-    return project.connections
-      .filter((c) => onFloor.has(c.sourceId) && onFloor.has(c.targetId))
-      .filter((c) => !focus || focus.has(c.sourceId) || focus.has(c.targetId) || focus.has(c.id))
+    return visibleConnections(project, floorId, connectionsLayer, selection)
       .map((c) => ({
         id: c.id,
         source: c.sourceId,
@@ -514,7 +509,7 @@ export function Canvas() {
         <Background gap={20} size={1} color="#cbd5e1" />
         <NightMode containerId="ha-canvas" />
         {showCoverage && floor && <CoverageLayer devices={floorDevices} floor={floor} />}
-        <Controls showInteractive={false} fitViewOptions={FIT_VIEW_OPTIONS} />
+        <CanvasControls fitViewOptions={FIT_VIEW_OPTIONS} />
         {showMinimap && <MiniMap pannable zoomable className="!hidden md:!block" ariaLabel="Minimapa del plano" />}
         <MinimapToggle />
         <ZoomLevelClass containerId="ha-canvas" />

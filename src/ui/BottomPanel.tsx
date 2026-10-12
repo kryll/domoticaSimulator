@@ -12,6 +12,7 @@ import { EXTRA_TABS, TAB_GROUPS, groupOfTab, type TabGroup } from './extraTabs';
 import { cx } from './cx';
 import { ExtraTabPanel } from './ExtraTabPanel';
 import { hasFailures } from './failures';
+import { useAutomationsWorkspaceOpen, useViewStore } from '../store/viewStore';
 
 const PREFIX = 'bottom';
 
@@ -86,6 +87,18 @@ function ResizeHandle() {
   );
 }
 
+/** Marcador del panel inferior mientras el editor de automatizaciones está abierto en grande. */
+function AutomationsInWorkspace() {
+  return (
+    <div className="flex flex-col items-center gap-2 px-3 py-6 text-center text-sm text-slate-600">
+      <p>El editor de automatizaciones está abierto en grande.</p>
+      <Button size="sm" onClick={() => useViewStore.getState().setAutomationsModal(true)}>
+        Volver al editor
+      </Button>
+    </div>
+  );
+}
+
 /** Panel inferior plegable y redimensionable con validación, automatizaciones, escenas y logbook. */
 export function BottomPanel() {
   const tab = useUiStore((s) => s.bottomTab);
@@ -96,6 +109,7 @@ export function BottomPanel() {
   const setOpen = useUiStore((s) => s.setBottomOpen);
   const setMaximized = useUiStore((s) => s.setBottomMaximized);
   const project = useProjectStore((s) => s.project);
+  const automationsModal = useAutomationsWorkspaceOpen();
   const logCount = useSimulationStore((s) => s.sim.log.length);
   const failing = useSimulationStore((s) => hasFailures(s.sim.failures));
   const issues = analyzeProject(project).issues;
@@ -138,6 +152,9 @@ export function BottomPanel() {
       }
       style={open && !maximized ? { height } : undefined}
       aria-label="Panel inferior"
+      id="panel-inferior"
+      data-tour="bottom"
+      tabIndex={-1}
     >
       {open && !maximized && <ResizeHandle />}
       <div className="flex items-center justify-between gap-2 px-2 pt-1">
@@ -195,7 +212,7 @@ export function BottomPanel() {
         >
           {tab === 'validation' && <ValidationPanel issues={issues} />}
           <Suspense fallback={<Loading />}>
-            {tab === 'automations' && <AutomationsPanel />}
+            {tab === 'automations' && (automationsModal ? <AutomationsInWorkspace /> : <AutomationsPanel />)}
             {tab === 'scenes' && <ScenesPanel />}
             {tab === 'impact' && <ImpactPanel />}
             {tab === 'budget' && <BudgetPanel />}

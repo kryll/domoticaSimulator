@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { Id } from '../types';
 import { useSimulationStore } from '../store/simulationStore';
 import { primarySelection, selectedDeviceIds, useUiStore, type CanvasMode } from '../store/uiStore';
+import { useViewStore } from '../store/viewStore';
 import { copyPayloadText, copySelection, deleteSelection, duplicateSelection, pasteText, selectAllOnFloor } from './selectionActions';
 
 /** Dispositivo bajo el puntero (lo actualiza el lienzo). */
@@ -115,8 +116,9 @@ export function useCanvasKeyboard(): void {
       if (e.defaultPrevented) return;
       if (isTypingTarget(e.target)) return;
       if (modalOpen()) return;
+      const presenting = useViewStore.getState().presentation;
       if (e.ctrlKey || e.metaKey) {
-        onModifierKey(e, clip);
+        if (!presenting) onModifierKey(e, clip);
         return;
       }
       if (e.altKey) return;
@@ -129,8 +131,11 @@ export function useCanvasKeyboard(): void {
         if (ui.contextMenu) ui.openContextMenu(null);
         else if (ui.popoverDeviceId) ui.openPopover(null);
         else if (ui.connectFromId) ui.setConnectFrom(null);
-        else if (ui.canvasMode === 'room' || ui.canvasMode === 'connect' || ui.canvasMode === 'wall') ui.setCanvasMode('select');
+        else if (!presenting && (ui.canvasMode === 'room' || ui.canvasMode === 'connect' || ui.canvasMode === 'wall')) ui.setCanvasMode('select');
         else if (ui.selection.length > 0) ui.select(null);
+        else return;
+        // Ya se ha usado (p. ej. para cerrar un control): el modo presentación no debe cerrarse también.
+        e.preventDefault();
         return;
       }
       if (inMenuOrDialog(e.target)) return;
@@ -140,6 +145,8 @@ export function useCanvasKeyboard(): void {
         return;
       }
       if (isInteractive(e.target) && (key === ' ' || key === 'Enter' || key.startsWith('Arrow'))) return;
+      // En el modo presentación solo se usan los dispositivos y la simulación (P), nada de edición.
+      if (presenting && key !== ' ' && key !== 'Enter' && !key.startsWith('Arrow') && !/^[0-9]$/.test(key) && lower !== 'p') return;
       if ((key === 'Delete' || key === 'Backspace') && ui.canvasMode !== 'interact') {
         if (ui.selection.length === 0) return;
         void deleteSelection();

@@ -11,6 +11,7 @@ import type {
   Point,
   Project,
   ProjectSettings,
+  QuoteSettings,
   Room,
   Scene,
   Script,
@@ -409,7 +410,39 @@ function settings(v: unknown, path: string): ProjectSettings {
     if (acc < 0) fail(`${path}.batteryAcceleration`, 'no puede ser negativo');
     s.batteryAcceleration = acc;
   }
+  if (o.quote !== undefined) s.quote = quoteSettings(o.quote, `${path}.quote`);
   return s;
+}
+
+/** Tanda 2: rangos válidos de los números del presupuesto. */
+const QUOTE_RANGES = {
+  laborHours: [0, 1000],
+  laborRateEurH: [0, 1000],
+  perDeviceInstallMinutes: [0, 600],
+  marginPct: [0, 100],
+  discountPct: [0, 100],
+  vatPct: [0, 100],
+  validityDays: [1, 365],
+} as const;
+
+const QUOTE_TEXTS = ['clientName', 'clientAddress', 'installerName', 'notes'] as const;
+
+function quoteSettings(v: unknown, path: string): QuoteSettings {
+  const o = obj(v, path);
+  const q: QuoteSettings = {};
+  for (const key of QUOTE_TEXTS) {
+    const t = optStr(o, key, path);
+    if (t !== undefined) q[key] = t;
+  }
+  for (const [key, [min, max]] of Object.entries(QUOTE_RANGES) as [keyof typeof QUOTE_RANGES, readonly [number, number]][]) {
+    const n = optNum(o, key, path);
+    if (n === undefined) continue;
+    if (n < min || n > max) fail(`${path}.${key}`, `debe estar entre ${min} y ${max}`);
+    if (key === 'validityDays' && !Number.isInteger(n)) fail(`${path}.${key}`, 'debe ser un número entero de días');
+    q[key] = n;
+  }
+  if (o.hidePrices !== undefined) q.hidePrices = bool(o, 'hidePrices', path);
+  return q;
 }
 
 function list<T>(o: Obj, key: string, parse: (v: unknown, path: string) => T): T[] {

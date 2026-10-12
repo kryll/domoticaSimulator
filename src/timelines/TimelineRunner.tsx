@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { countLabel } from '../ui/plural';
 import type { Timeline, TimelineStep } from '../types';
 import { useProjectStore } from '../store/projectStore';
 import { useSimulationStore } from '../store/simulationStore';
@@ -44,14 +45,14 @@ export function TimelineRunner({ timeline, onRecorded }: { timeline: Timeline; o
       timeline.steps.length > 0 &&
       !(await confirmDialog({
         title: `¿Sustituir los pasos de «${timeline.name}»?`,
-        message: `Los ${timeline.steps.length} pasos actuales se sustituirán por los ${steps.length} grabados.`,
+        message: `Se sustituirán ${countLabel(timeline.steps.length, 'paso actual', 'pasos actuales').toLowerCase()} por ${countLabel(steps.length, 'paso grabado', 'pasos grabados').toLowerCase()}.`,
         confirmLabel: 'Sustituir',
       }))
     )
       return;
     // La prueba grabada empieza el día de la primera entrada del registro.
     onRecorded(steps, startOfDay(log[0]?.timestamp ?? now));
-    useUiStore.getState().notify(`Grabados ${steps.length} pasos desde el registro`, 'success');
+    useUiStore.getState().notify(`${countLabel(steps.length, 'paso grabado', 'pasos grabados')} desde el registro`, 'success');
   };
 
   const asserts = run?.results.filter((r) => r.step.kind === 'assert') ?? [];
@@ -71,7 +72,7 @@ export function TimelineRunner({ timeline, onRecorded }: { timeline: Timeline; o
             role="status"
             className={cx('rounded-full px-2 py-0.5 text-xs font-semibold', run.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800')}
           >
-            {run.passed ? `✓ Superada (${asserts.length} comprobaciones)` : `✗ ${failed.length} ${failed.length === 1 ? 'fallo' : 'fallos'}`}
+            {run.passed ? `✓ Superada (${countLabel(asserts.length, 'comprobación', 'comprobaciones')})` : `✗ ${failed.length} ${failed.length === 1 ? 'fallo' : 'fallos'}`}
           </span>
         )}
       </div>

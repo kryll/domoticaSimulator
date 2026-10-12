@@ -17,7 +17,12 @@ import { useSimulationStore } from '../store/simulationStore';
 import { hasFailures } from './failures';
 // Estático: yaml.ts ya va en el bundle principal (lo usa el motor a través de yamlLogic.ts).
 import { automationsToYaml, scenesToYaml, scriptsToYaml } from '../export/yaml';
+// También estáticos: los arreglos rápidos y el presupuesto ya los llevan al bundle principal.
+import { billOfMaterials, bomToCsv } from '../export/bom';
+import { devicesToCsv } from '../export/csv';
 import { confirmDialog } from './confirm';
+import { useViewStore } from '../store/viewStore';
+import { enterPresentation } from '../presentation/presentationMode';
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -214,6 +219,7 @@ export function TopBar() {
       <MenuItem onClick={() => safely(() => openAsNewProject(createDemoProject()).then(() => undefined))}>Cargar proyecto de demo</MenuItem>
       <MenuItem onClick={() => fileRef.current?.click()}>Importar JSON…</MenuItem>
       <MenuItem onClick={() => useExtrasStore.getState().openDialog('share')}>Compartir enlace…</MenuItem>
+      <MenuItem onClick={() => enterPresentation()}>Modo presentación</MenuItem>
     </>
   );
   const exportItems = (
@@ -230,15 +236,12 @@ export function TopBar() {
       <MenuItem onClick={() => safely(() => downloadText(scriptsToYaml(project()), 'scripts.yaml', 'text/yaml'))}>
         scripts.yaml
       </MenuItem>
-      <MenuItem onClick={() => safely(async () => downloadText((await import('../export/csv')).devicesToCsv(project(), catalog), `${base()}-dispositivos.csv`, 'text/csv'))}>
+      <MenuItem onClick={() => safely(() => downloadText(devicesToCsv(project(), catalog), `${base()}-dispositivos.csv`, 'text/csv'))}>
         Inventario (CSV)
       </MenuItem>
       <MenuItem
         onClick={() =>
-          safely(async () => {
-            const bom = await import('../export/bom');
-            downloadText(bom.bomToCsv(bom.billOfMaterials(project(), catalog)), `${base()}-presupuesto.csv`, 'text/csv');
-          })
+          safely(() => downloadText(bomToCsv(billOfMaterials(project(), catalog)), `${base()}-presupuesto.csv`, 'text/csv'))
         }
       >
         Presupuesto (CSV)
@@ -246,6 +249,7 @@ export function TopBar() {
       <MenuItem onClick={() => safely(async () => (await import('../export/png')).exportCanvasPng(`${base()}-plano.png`), 'Imagen exportada')}>
         Imagen del plano (PNG)
       </MenuItem>
+      <MenuItem onClick={() => useViewStore.getState().setProposalOpen(true)}>Propuesta (PDF)…</MenuItem>
       <MenuItem onClick={() => useExtrasStore.getState().openDialog('packages')}>Configuración HA (packages .zip)…</MenuItem>
     </>
   );
