@@ -1,6 +1,6 @@
 # Hoja de ruta
 
-**Estado:** las fases 1-3 y las tandas 1-2 están publicadas en `main`. La tanda 3 y la emulación E1 están en curso.
+**Estado:** las fases 1-3, las tandas 1-3 y la base del laboratorio (E1) están publicadas en `main`, revisadas y con la prueba de extremo a extremo con Home Assistant real superada en GitHub Actions. Siguiente: E2 (ESPHome `host` y Z-Wave).
 
 ## Visión (octubre 2026): laboratorio domótico tipo GNS3
 
