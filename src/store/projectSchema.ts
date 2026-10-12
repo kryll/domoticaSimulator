@@ -33,6 +33,7 @@ import type {
   ServiceTargets,
 } from '../types';
 import { INTEGRATIONS, PROTOCOLS } from '../devices/labels';
+import { parseEmulationFields } from '../bridge/schema';
 
 type Obj = Record<string, unknown>;
 
@@ -645,5 +646,7 @@ export function parseProject(raw: unknown): Project {
   checkUniqueIds('scripts', project.scripts);
   checkReferences(project);
   parseFase3(o, project);
+  // ---- Emulación (E1) ---- ajustes del puente con el lab y perfiles de radio (src/bridge/schema.ts).
+  parseEmulationFields(o, project);
   return project;
 }

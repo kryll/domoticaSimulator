@@ -151,6 +151,12 @@ export function selectedDeviceIds(s: Pick<UiState, 'selection' | 'selectionKind'
 }
 let focusCounter = 0;
 
+/** En el móvil (< 768 px) el panel inferior ocupa toda la pantalla: se empieza plegado. */
+function initialBottomOpen(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+  return window.matchMedia('(min-width: 768px)').matches;
+}
+
 const initial = {
   activeFloorId: null,
   selection: [] as Id[],
@@ -180,6 +186,7 @@ const initial = {
 
 export const useUiStore = create<UiState>()((set) => ({
   ...initial,
+  bottomOpen: initialBottomOpen(),
   setActiveFloor: (id) => set({ activeFloorId: id, selection: [], selectionKind: null, popoverDeviceId: null, contextMenu: null }),
   select: (selection) =>
     set((s) => {
@@ -238,5 +245,5 @@ export const useUiStore = create<UiState>()((set) => ({
   setVersionsOpen: (open) => set({ versionsOpen: open }),
   showAutomation: (id, view) =>
     set((s) => ({ selectedAutomationId: id, bottomTab: 'automations', bottomOpen: true, automationView: view ?? s.automationView })),
-  reset: () => set({ ...initial }),
+  reset: () => set({ ...initial, bottomOpen: initialBottomOpen() }),
 }));

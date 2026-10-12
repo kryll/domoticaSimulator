@@ -23,6 +23,7 @@ import type {
   RecordedEvent,
   WaitForTriggerAction,
   PendingStep,
+  ParallelJoin,
   ServiceAction,
 } from '../types';
 import { catalog } from '../devices/catalog';
@@ -366,7 +367,7 @@ export function isNight(sim: Pick<SimulationState, 'now'>, project: Pick<Project
 // ---------- Automatizaciones ----------
 
 function isRunning(sim: SimulationState, automationId: Id): boolean {
-  return sim.pending.some((p) => p.automationId === automationId);
+  return sim.pending.some((p) => p.automationId === automationId) || Object.values(sim.joins ?? {}).some((j) => j.cont.automationId === automationId);
 }
 
 function traceCtx(trace: AutomationTrace | undefined, offset = 0): RunCtx['trace'] {
@@ -414,9 +415,11 @@ interface RunOpts {
 /** Quita las esperas de una automatización (modo restart) y marca sus pasos como no ejecutados. */
 function cancelWhere(sim: SimulationState, match: (p: PendingAction) => boolean, detail: string): SimulationState {
   const dropped = [...sim.pending.filter((p) => !isTimer(p) && match(p)), ...(sim.queue ?? []).filter(match)];
-  if (dropped.length === 0) return sim;
+  if (dropped.length === 0 && !Object.values(sim.joins ?? {}).some((j) => match(j.cont))) return sim;
   let result: SimulationState = { ...sim, pending: sim.pending.filter((p) => isTimer(p) || !match(p)) };
   if (sim.queue) result.queue = sim.queue.filter((p) => !match(p));
+  // Tanda 3: las continuaciones de los `parallel` de esas ejecuciones tampoco siguen.
+  if (sim.joins) result.joins = Object.fromEntries(Object.entries(sim.joins).filter(([, j]) => !match(j.cont)));
   for (const p of dropped) {
     if (p.traceId === undefined) continue;
     result = updateTrace(result, p.traceId, (t) => ({
@@ -1109,6 +1112,7 @@ function schedule(sim: SimulationState, rest: Step[], seconds: number, ctx: RunC
   const pending: PendingAction = { id: `pending-${last?.id ?? logged.pending.length}`, dueAt: sim.now + seconds * 1000, actions: rest.map((s) => s.action) };
   if (ctx.automationId !== undefined) pending.automationId = ctx.automationId;
   if (ctx.scriptId !== undefined) pending.scriptId = ctx.scriptId;
+  if (ctx.join !== undefined) pending.join = ctx.join;
   setPendingSteps(pending, rest);
   setPendingTrace(pending, ctx);
   return { ...logged, pending: [...logged.pending, pending] };
@@ -1151,6 +1155,7 @@ function scheduleWait(sim: SimulationState, project: Project, rest: Step[], a: W
   };
   if (ctx.automationId !== undefined) pending.automationId = ctx.automationId;
   if (ctx.scriptId !== undefined) pending.scriptId = ctx.scriptId;
+  if (ctx.join !== undefined) pending.join = ctx.join;
   setPendingSteps(pending, rest);
   setPendingTrace(pending, ctx);
   return { ...logged, pending: [...logged.pending, pending] };
@@ -1239,6 +1244,13 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
   };
   const markWaiting = (s: SimulationState, step: Step): SimulationState =>
     traceId === undefined || step.trace === undefined ? s : setTraceAction(s, traceId, step.trace, { status: 'waiting', at: s.now });
+  /** Tanda 3: termina la ejecución con error (stop con error o fallo sin continue_on_error). */
+  const abortRun = (r: Outcome, step: Step, message?: string): SimulationState => {
+    let s = traceStep({ ...r, ok: false }, { ...step, nested: false });
+    if (traceId !== undefined) s = updateTrace(s, traceId, (t) => ({ ...t, result: 'error' }));
+    if (message !== undefined) s = addLog(s, 'error', message, extra);
+    return abortJoin(s, ctx.join);
+  };
   for (let steps = 0; queue.length > 0; steps++) {
     const [step, ...rest] = queue;
     queue = rest;
@@ -1250,18 +1262,60 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
     const action = step.action;
     const vars = step.scope;
     const c: RunCtx = Object.keys(vars).length > 0 ? { ...plainCtx, variables: vars } : plainCtx;
+    if (action.enabled === false) {
+      // Tanda 3: acción desactivada (enabled: false): se salta.
+      result = traceStep(outcome(addLog(result, 'info', 'Acción desactivada: se salta', extra), true, 'desactivada'), step);
+      continue;
+    }
+    /** Tanda 3: un error detiene la secuencia salvo con continue_on_error. */
+    const checked = (r: Outcome): Outcome | undefined => (r.fatal && !action.continueOnError ? r : undefined);
     switch (action.type) {
       case 'delay':
         return schedule(markWaiting(result, step), rest, Math.max(0, action.seconds), waitCtx(c, step, rest));
-      case 'service':
-        result = traceStep(callServiceAction(result, project, action, renderData(action.data, vars, result), c, exec), step);
+      case 'service': {
+        const r = callServiceAction(result, project, action, renderData(action.data, vars, result), c, exec);
+        if (checked(r)) return abortRun(r, step, `Acciones detenidas por un error: ${r.detail ?? 'error'} (continue_on_error permite seguir)`);
+        result = traceStep(r, step);
         break;
+      }
       case 'scene':
         result = traceStep(activateSceneInternal(result, project, action.sceneId, exec), step);
         break;
       case 'script':
         result = traceStep(runScriptInternal(result, project, action.scriptId, c, exec), step);
         break;
+      case 'stop': {
+        const detail = action.message.trim() === '' ? 'sin motivo' : action.message;
+        const logged = addLog(result, action.error ? 'error' : 'info', `Secuencia detenida${action.error ? ' con error' : ''}: ${detail}`, extra);
+        if (action.error) return abortRun(outcome(logged, false, detail), step);
+        return abortJoin(traceStep(outcome(logged, true, `detenida: ${detail}`), { ...step, nested: false }), ctx.join);
+      }
+      case 'parallel': {
+        const seq = nextSeq(result.log);
+        const logged = addLog(result, 'info', `parallel: ${countLabel(action.branches.length, 'rama', 'ramas')} a la vez`, extra);
+        const joinId = `join-${seq}`;
+        const cont: PendingAction = { id: `${joinId}-cont`, dueAt: WAIT_FOREVER, actions: queue.map((q) => q.action) };
+        if (ctx.automationId !== undefined) cont.automationId = ctx.automationId;
+        if (ctx.scriptId !== undefined) cont.scriptId = ctx.scriptId;
+        if (ctx.join !== undefined) cont.join = ctx.join;
+        setPendingSteps(cont, queue);
+        setPendingTrace(cont, waitCtx(c, step, queue));
+        let joined: SimulationState = { ...logged, joins: { ...logged.joins, [joinId]: { remaining: action.branches.length + 1, cont } } };
+        for (const branch of action.branches) {
+          const bctx: RunCtx = { ...plainCtx, join: joinId };
+          if (Object.keys(vars).length > 0) bctx.variables = vars;
+          if (traceId !== undefined && step.trace !== undefined) bctx.trace = { id: traceId, offset: step.trace, indexes: branch.map(() => step.trace ?? 0), nestedIndex: step.trace };
+          joined = runActionsInternal(joined, project, branch, bctx, exec);
+          if (!joined.joins?.[joinId]) return joined; // una rama se detuvo (stop o error)
+        }
+        const j = joined.joins?.[joinId];
+        if (!j) return joined;
+        if (j.remaining <= 1) {
+          result = traceStep(outcome(removeJoin(joined, joinId), true, `${countLabel(action.branches.length, 'rama terminada', 'ramas terminadas')}`), step);
+          break;
+        }
+        return markWaiting({ ...joined, joins: { ...joined.joins, [joinId]: { ...j, remaining: j.remaining - 1 } } }, step);
+      }
       case 'choose': {
         const index = action.choices.findIndex((o) => allConditions(o.conditions, result, project, vars));
         const chosen = index === -1 ? action.default ?? [] : (action.choices[index]?.sequence ?? []);
@@ -1300,7 +1354,9 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
           title: renderTemplate(action.title ?? DEFAULT_NOTIFICATION_TITLE, vars, result),
           message: renderTemplate(action.message, vars, result),
         };
-        result = traceStep(notifyOffline(result, project, action.service ?? 'notify.notify', extra) ?? sendNotification(result, content, extra), step);
+        const r = notifyOffline(result, project, action.service ?? 'notify.notify', extra) ?? sendNotification(result, content, extra);
+        if (checked(r)) return abortRun(r, step, `Acciones detenidas por un error: ${r.detail ?? 'error'}`);
+        result = traceStep(r, step);
         break;
       }
       case 'variables': {
@@ -1312,6 +1368,34 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
         break;
       }
     }
+  }
+  return finishBranch(result, project, ctx.join);
+}
+
+/** Tanda 3: quita una unión de ramas `parallel`. */
+function removeJoin(sim: SimulationState, joinId: Id): SimulationState {
+  if (!sim.joins?.[joinId]) return sim;
+  const joins = { ...sim.joins };
+  delete joins[joinId];
+  return { ...sim, joins };
+}
+
+/** Tanda 3: una rama de `parallel` termina; con la última, sigue la secuencia que esperaba. */
+function finishBranch(sim: SimulationState, project: Project, joinId: Id | undefined): SimulationState {
+  const j = joinId === undefined ? undefined : sim.joins?.[joinId];
+  if (!j || joinId === undefined) return sim;
+  if (j.remaining > 1) return { ...sim, joins: { ...sim.joins, [joinId]: { ...j, remaining: j.remaining - 1 } } };
+  return continuePending(removeJoin(sim, joinId), project, j.cont, ROOT);
+}
+
+/** Tanda 3: `stop` o un error dentro de un `parallel`: se cancelan las demás ramas y lo que seguía. */
+function abortJoin(sim: SimulationState, joinId: Id | undefined): SimulationState {
+  let result = sim;
+  for (let id = joinId; id !== undefined; ) {
+    const j: ParallelJoin | undefined = result.joins?.[id];
+    const current: Id = id;
+    result = removeJoin({ ...result, pending: result.pending.filter((p) => p.join !== current) }, current);
+    id = j?.cont.join;
   }
   return result;
 }
@@ -1487,6 +1571,7 @@ function continuePending(sim: SimulationState, project: Project, p: PendingActio
   if (p.scriptId !== undefined) ctx.scriptId = p.scriptId;
   if (p.variables !== undefined) ctx.variables = p.variables;
   if (p.steps !== undefined) ctx.steps = p.steps;
+  if (p.join !== undefined) ctx.join = p.join;
   let ready: SimulationState = sim;
   if (p.traceId !== undefined && p.traceOffset !== undefined) {
     // El paso que esperaba (traceOffset - 1) queda hecho; `at` sigue siendo el inicio de la espera.

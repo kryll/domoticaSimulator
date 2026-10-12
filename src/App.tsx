@@ -22,7 +22,7 @@ import { WelcomeDialog } from './onboarding/WelcomeDialog';
 import { PresentationView } from './presentation/PresentationView';
 import { hasSharedPresentation, openSharedPresentation } from './presentation/sharedPresentation';
 import { SkipLinks } from './ui/SkipLinks';
-import { TABLET_QUERY, useIsDesktop } from './ui/breakpoints';
+import { useIsDesktop } from './ui/breakpoints';
 import { useLayoutStore } from './store/layoutStore';
 import { MobileDrawers } from './ui/MobileDrawers';
 import { UpdatePrompt } from './pwa/UpdatePrompt';
@@ -130,8 +130,6 @@ export function App({ autoLoad = true }: AppProps) {
           useUiStore.getState().notify('Modo Uso: la simulación se ha puesto en marcha para que avancen los temporizadores', 'info');
       },
     );
-    // En el móvil el panel inferior ocupa toda la pantalla: se empieza plegado para ver el plano.
-    if (typeof window.matchMedia === 'function' && !window.matchMedia(TABLET_QUERY).matches) useUiStore.getState().setBottomOpen(false);
     let stopAutosave: (() => void) | undefined;
     let cancelled = false;
     const boot = autoLoad ? loadInitialProject() : Promise.resolve({ firstRun: false });
