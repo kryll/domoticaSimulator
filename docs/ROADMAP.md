@@ -1,7 +1,7 @@
 # Hoja de ruta
 
-
 **Estado:** las tres fases están implementadas, revisadas y publicadas en `main`.
+
 Resultado de la revisión de producto (recorrido real de la app en navegador). Las referencias `B#` y `C#` se usan en commits y en los informes de los agentes.
 
 ## Fase 1: interacción directa y coherencia
