@@ -3,6 +3,7 @@ import { deleteProject, listProjects, loadProject } from '../store/persistence';
 import { useProjectStore } from '../store/projectStore';
 import { openProject } from '../store/bootstrap';
 import { useUiStore } from '../store/uiStore';
+import { deleteProjectVersions } from '../store/versions';
 import { Button } from './Button';
 import { Modal } from './Modal';
 import { EmptyState } from './Panel';
@@ -67,6 +68,7 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }) {
                   });
                   if (!ok) return;
                   await deleteProject(p.id);
+                  await deleteProjectVersions(p.id).catch((err: unknown) => console.error('No se pudo borrar el historial de versiones', err));
                   refresh();
                 }}
               >
