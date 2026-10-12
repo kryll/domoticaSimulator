@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@xyflow/react": "^12.12.0",

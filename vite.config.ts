@@ -1,9 +1,10 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { pwaServiceWorker } from './scripts/vite-pwa';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), pwaServiceWorker()],
   build: {
     rollupOptions: {
       output: {

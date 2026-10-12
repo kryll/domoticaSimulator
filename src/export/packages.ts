@@ -238,6 +238,15 @@ export const PAIRING_STEPS: Record<Integration, string[]> = {
   samsungtv: ['Enciende el televisor en la misma red.', 'Acepta la integración Samsung Smart TV y autoriza la conexión en la pantalla del televisor.'],
   webostv: ['Enciende el televisor en la misma red.', 'Acepta la integración LG webOS TV y autoriza la conexión en la pantalla del televisor.'],
   tplink: ['Configura el enchufe con la app Tapo / Kasa.', 'Añade la integración TP-Link Smart Home con la IP del enchufe y tus credenciales de TP-Link.'],
+  esphome: [
+    'Flashea el ESP32 con ESPHome (ESPHome Builder o web.esphome.io) y define sus sensores en el YAML del nodo.',
+    'Home Assistant lo descubre en la red local: acepta la integración ESPHome e introduce la clave de cifrado de la API.',
+  ],
+  daikin_onecta: ['Configura el aire acondicionado con la app Daikin Onecta.', 'Instala la integración Daikin Onecta (HACS) e inicia sesión con tu cuenta de Daikin (depende de la nube).'],
+  sensibo: ['Configura el mando Sensibo con su app y asígnale el aparato de aire.', 'Añade la integración Sensibo con la clave de API de tu cuenta (depende de la nube).'],
+  meross_lan: ['Configura el dispositivo con la app Meross.', 'Instala Meross LAN (HACS): lo descubre en la red local y lo controla sin la nube.'],
+  roborock: ['Configura el robot con la app Roborock.', 'Añade la integración Roborock e inicia sesión con tu cuenta (código por correo).'],
+  ecovacs: ['Configura el robot con la app Ecovacs Home.', 'Añade la integración Ecovacs e inicia sesión con tu cuenta (depende de la nube).'],
 };
 
 function phase(def: DeviceDefinition): number {

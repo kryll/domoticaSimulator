@@ -43,6 +43,12 @@ export const INTEGRATION_LABELS: Record<Integration, string> = {
   webostv: 'LG webOS TV',
   tplink: 'TP-Link Smart Home',
   homeassistant: 'Home Assistant',
+  esphome: 'ESPHome',
+  daikin_onecta: 'Daikin Onecta',
+  sensibo: 'Sensibo',
+  meross_lan: 'Meross LAN',
+  roborock: 'Roborock',
+  ecovacs: 'Ecovacs',
 };
 
 export const CATEGORY_LABELS: Record<DeviceCategory, string> = {
@@ -103,6 +109,18 @@ const BRAND_SET: Record<Brand, true> = {
   Samsung: true,
   LG: true,
   'Home Assistant': true,
+  Eve: true,
+  Nanoleaf: true,
+  Heiman: true,
+  Daikin: true,
+  Sensibo: true,
+  Meross: true,
+  Roborock: true,
+  Ecovacs: true,
+  Aeotec: true,
+  Fibaro: true,
+  Zooz: true,
+  ESPHome: true,
 };
 
 const DOMAIN_SET: Record<EntityDomain, true> = {
@@ -118,6 +136,8 @@ const DOMAIN_SET: Record<EntityDomain, true> = {
   fan: true,
   vacuum: true,
   button: true,
+  alarm_control_panel: true,
+  valve: true,
 };
 
 function keysOf<K extends string>(record: Record<K, unknown>): K[] {
@@ -155,6 +175,12 @@ export const INTEGRATION_IOT_CLASS: Record<Integration, IotClass> = {
   webostv: 'local_push',
   tplink: 'local_polling',
   homeassistant: 'local_push',
+  esphome: 'local_push',
+  daikin_onecta: 'cloud_polling',
+  sensibo: 'cloud_polling',
+  meross_lan: 'local_polling',
+  roborock: 'cloud_polling',
+  ecovacs: 'cloud_push',
 };
 
 /** hvac_action de un termostato (acción HVAC en curso, como HA en español). */
@@ -215,6 +241,27 @@ export const BUTTON_ACTION_LABELS: Record<string, string> = {
   arrow_right: 'Derecha',
   toggle: 'Alternar',
   none: 'En espera',
+};
+
+/** Tanda 3: estados de una alarma (alarm_control_panel). */
+export const ALARM_STATE_LABELS: Record<string, string> = {
+  disarmed: 'Desarmada',
+  armed_home: 'Armada en casa',
+  armed_away: 'Armada fuera',
+  armed_night: 'Armada noche',
+  armed_vacation: 'Armada vacaciones',
+  armed_custom_bypass: 'Armada personalizada',
+  arming: 'Armando',
+  pending: 'Pendiente',
+  triggered: 'Disparada',
+};
+
+/** Tanda 3: estados de una válvula (valve). */
+export const VALVE_STATE_LABELS: Record<string, string> = {
+  open: 'Abierta',
+  closed: 'Cerrada',
+  opening: 'Abriendo',
+  closing: 'Cerrando',
 };
 
 /** Etiqueta de un valor con su tabla, o el propio valor si no está. */
