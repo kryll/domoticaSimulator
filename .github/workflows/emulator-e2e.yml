@@ -57,6 +57,9 @@ jobs:
               *) echo "Perfil desconocido: $p" >&2; exit 2 ;;
             esac
           done
+          # Como en un PC real: primero el laboratorio de E1 y después setup.sh otra vez, con los
+          # perfiles, sobre un HA que ya tiene hecho el onboarding.
+          emulator/scripts/setup.sh
           emulator/scripts/setup.sh "${FLAGS[@]}"
           grep '^COMPOSE_PROFILES=' emulator/.env || echo 'Sin perfiles: solo MQTT'
       - name: Viaje completo (proyecto demo → HA → comando → estado; vías reales con sus perfiles)

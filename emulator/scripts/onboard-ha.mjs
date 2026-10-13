@@ -58,12 +58,17 @@ async function http(method, path, { token, json, form } = {}) {
   return { status: res.status, data };
 }
 
+/** Pasos del onboarding cuando ya está terminado (HA ya configurado al volver a lanzar setup.sh). */
+const ONBOARDED = ['user', 'core_config', 'analytics', 'integration'].map((step) => ({ step, done: true }));
+
 async function waitForHa(timeoutMs = 600_000) {
   const start = Date.now();
   for (;;) {
     try {
       const r = await http('GET', '/api/onboarding');
       if (r.status === 200) return r.data;
+      // Con el onboarding ya hecho, HA deja de servir /api/onboarding (404): está en marcha.
+      if (r.status === 404) return ONBOARDED;
     } catch {
       // todavía arrancando
     }

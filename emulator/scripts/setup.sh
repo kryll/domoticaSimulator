@@ -141,11 +141,19 @@ say "Arrancando Home Assistant, Mosquitto, Caddy y el orquestador${COMPOSE_PROFI
 docker compose up -d --build --remove-orphans
 
 say "Esperando a Home Assistant (la primera vez tarda unos minutos)"
+# /api/onboarding responde 200 mientras falta el onboarding y 404 cuando ya está hecho (HA ya
+# configurado al volver a lanzar setup.sh): las dos respuestas quieren decir que HA está en marcha.
+ha_up() {
+  case "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/onboarding 2>/dev/null)" in
+    200 | 404) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 for _ in $(seq 1 180); do
-  if curl -fsS -o /dev/null http://127.0.0.1:8123/api/onboarding 2>/dev/null; then break; fi
+  if ha_up; then break; fi
   sleep 2
 done
-curl -fsS -o /dev/null http://127.0.0.1:8123/api/onboarding || fail "Home Assistant no responde en http://localhost:8123 (mira: docker compose logs homeassistant)"
+ha_up || fail "Home Assistant no responde en http://localhost:8123 (mira: docker compose logs homeassistant)"
 
 # 4. Onboarding automático (usuario, token de larga duración, MQTT y, con el perfil zwave, Z-Wave JS).
 say "Configurando Home Assistant"
