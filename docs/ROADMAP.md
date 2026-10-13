@@ -1,6 +1,6 @@
 # Hoja de ruta
 
-**Estado:** las fases 1-3, las tandas 1-3 y la base del laboratorio (E1) están publicadas en `main`, revisadas y con la prueba de extremo a extremo con Home Assistant real superada en GitHub Actions. E2 (Z-Wave JS con el mock de zwave-js y ESPHome con la API nativa emulada, perfiles `zwave` y `esphome`) está hecho y ensayado en local con HA 2026.10; falta la prueba en GitHub Actions (`emulator-e2e.yml`, entrada `perfiles`). Siguiente: E3 (Matter y Shelly).
+**Estado:** las fases 1-3, las tandas 1-3 y la base del laboratorio (E1) están publicadas en `main`, revisadas y con la prueba de extremo a extremo con Home Assistant real superada en GitHub Actions. E2 (Z-Wave JS con el mock de zwave-js y ESPHome con la API nativa emulada, perfiles `zwave` y `esphome`) también está publicado y con la prueba de extremo a extremo superada en GitHub Actions (`emulator-e2e.yml`, perfiles `zwave,esphome`); las pruebas manuales están en `docs/PRUEBAS_E2.md`. Siguiente: E3 (Matter y Shelly).
 
 ## Visión (octubre 2026): laboratorio domótico tipo GNS3
 
