@@ -319,4 +319,36 @@ describe('Matter: comisionado automático en matterjs-server', () => {
     const st = await waitFor('esperando al servidor', () => (backend.status().state === 'connecting' && backend.status().detail.includes('matterjs-server') ? backend.status() : undefined), 20_000);
     expect(st.nodes['demo-luz-matter']).toMatchObject({ state: 'starting' });
   });
+
+  it('un comisionado que termina después de restaurar un snapshot no marca como comisionado el bridge nuevo', { timeout: 60_000 }, async () => {
+    const sim = new NetworkSimulator();
+    const dir = await mkdtemp(join(tmpdir(), 'hasim-matter-'));
+    const secretsFile = join(dir, 'matter.json');
+    const project = { ...createDemoProject(), id: 'test' };
+    // matterjs-server falso que no contesta a commission_with_code hasta que se le diga.
+    const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    await new Promise<void>((r) => wss.once('listening', () => r()));
+    cleanups.push(() => new Promise<void>((r) => wss.close(() => r())));
+    let answer: (() => void) | undefined;
+    wss.on('connection', (ws) => {
+      ws.send(JSON.stringify({ fabric_id: 1, compressed_fabric_id: 1234, schema_version: 14, sdk_version: 'falso' }));
+      ws.on('message', (raw) => {
+        const msg = JSON.parse(String(raw)) as { message_id: string; command: string };
+        if (msg.command === 'get_nodes') ws.send(JSON.stringify({ message_id: msg.message_id, result: [] }));
+        else if (msg.command === 'commission_with_code') answer = () => ws.send(JSON.stringify({ message_id: msg.message_id, result: { node_id: 5, available: true } }));
+      });
+    });
+    const url = `ws://127.0.0.1:${(wss.address() as { port: number }).port}/ws`;
+    const backend = new MatterBackend({ environment: mockEnv(sim, 'bridge', 1), secretsFile, matterLogLevel: 'error', serverUrl: url });
+    cleanups.push(() => backend.close());
+    await backend.start(recorder().events);
+    await backend.sync(context(project, createSimulationState(project, catalog, Date.now()).entities));
+    const reply = await waitFor('commission_with_code pedido', () => answer, 20_000);
+    // Se restaura un snapshot mientras tanto: el bridge se cierra y se vuelven a leer sus datos.
+    await backend.reset();
+    reply();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(backend.status().detail).not.toMatch(/comisionado en matterjs-server/);
+    expect(JSON.parse(await readFile(secretsFile, 'utf8'))).not.toHaveProperty('nodeId');
+  });
 });

@@ -230,7 +230,10 @@ export class MatterBackend implements NativeBackend {
     const bridge = this.bridge;
     const secrets = this.secrets;
     if (!server || !bridge || !secrets || this.closed) return;
+    // Si mientras tanto se cerró el bridge (restaurar un snapshot, cerrar el lab), este intento ya no vale.
+    const stale = (): boolean => this.closed || this.bridge !== bridge || this.server !== server;
     if (!(await server.ready(10_000))) {
+      if (stale()) return;
       this.commission = 'waiting_server';
       this.commissionError = `matterjs-server no responde en ${server.url}`;
       this.changed();
@@ -241,6 +244,7 @@ export class MatterBackend implements NativeBackend {
     this.changed();
     try {
       const nodes = await server.nodes();
+      if (stale()) return;
       const known = nodes.find((n) => n.uniqueId === secrets.uniqueId);
       if (known && bridge.commissioned) {
         if (secrets.nodeId !== known.nodeId) this.secrets = await this.store.update({ nodeId: known.nodeId });
@@ -261,6 +265,7 @@ export class MatterBackend implements NativeBackend {
         this.log('comisionando el bridge en matterjs-server (commission_with_code, solo red)…');
         this.events?.traffic({ dir: 'out', topic: 'matter/bridge', payload: 'commission_with_code (network_only)', via: 'matter' });
         const nodeId = await server.commissionWithCode(bridge.manualPairingCode);
+        if (stale()) return;
         this.secrets = await this.store.update({ nodeId });
         this.serverSeesBridge = true;
         this.commission = 'done';
@@ -268,6 +273,7 @@ export class MatterBackend implements NativeBackend {
         this.log(`bridge comisionado en matterjs-server (nodo ${nodeId}); HA lo verá por la integración matter`);
       }
     } catch (err) {
+      if (stale()) return;
       this.commission = 'error';
       this.commissionError = `Comisionado: ${err instanceof Error ? err.message : String(err)}`;
       this.log(this.commissionError);
