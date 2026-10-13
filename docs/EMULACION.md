@@ -20,7 +20,7 @@ Diseño para que los dispositivos del simulador aparezcan en un Home Assistant r
    | Z-Wave JS (mock de zwave-js + Z-Wave JS UI) | Z-Wave | **Real** (E2, perfil `zwave`) |
    | ESPHome (API nativa emulada, cifrado Noise) | Nodos ESPHome | **Real** (E2, perfil `esphome`) |
    | Matter (matter.js) | Matter y Thread por IP | Pendiente (E3) |
-   | Emulador Shelly RPC | Shelly | Pendiente (E3) |
+   | Shelly (API RPC Gen2+ emulada) | Shelly Plus, Pro, Gen3 y Gen4 | **Real** (E3, perfil `shelly`) |
    | MQTT con el formato exacto de Zigbee2MQTT | Zigbee | Formato real de Z2M, sin radio (E1) |
    | MQTT discovery genérico | El resto (Tuya, eWeLink, Hue, Cast, Alexa…) y lo que no se puede emular | E1 |
 
@@ -37,7 +37,7 @@ Diseño para que los dispositivos del simulador aparezcan en un Home Assistant r
 | Z-Wave | **Sí, hecho en E2** | Controlador y nodos mock de `zwave-js` (TCP) → Z-Wave JS UI (`tcp://zwave-mock:5555`) → integración `zwave_js` (`ws://127.0.0.1:3000`). Command classes: Binary Switch, Multilevel Switch, Meter, Multilevel Sensor, Notification, Binary Sensor, Door Lock, Battery y Wake Up. Probado con el driver real de zwave-js (tests) y con HA 2026.10 + zwave-js-server (ensayo local). |
 | Matter sobre IP | Sí | matter.js (bridge con `AggregatorEndpoint` + `BridgedDeviceBasicInformation`, o nodos sueltos) → matterjs-server (`ghcr.io/matter-js/matterjs-server`, API WS 5580) → integración Matter. Comisionado automático con el comando WS de HA `matter/commission`. Requiere IPv6, mDNS y red `host`. |
 | ESPHome | **Sí, hecho en E2** | Emulador de la API nativa (protobuf + Noise) en el orquestador, un servidor por nodo en `127.0.0.1:16053+n`; el orquestador lo añade a HA con el flujo de `esphome` (host, puerto y clave). Se descartó compilar la plataforma `host` (minutos y cientos de MB por nodo, PlatformIO, y canales extra para fijar valores y recibir comandos). Probado con `aioesphomeapi` y HA 2026.10. |
-| Shelly Gen2 | Sí, con un emulador propio | HTTP `/shelly`, `/rpc` (`Shelly.GetDeviceInfo`, `GetStatus`, `GetConfig`, `Switch.Set`) y WebSocket `NotifyStatus`. |
+| Shelly Gen2+ | **Sí, hecho en E3** | Emulador de la API RPC en el orquestador, un servidor por Shelly en `127.0.0.1:18181+n`: `GET /shelly` y WebSocket `/rpc` con JSON-RPC (`Shelly.GetDeviceInfo`, `GetConfig`, `GetStatus`, `GetComponents`, `ListMethods`, `Switch.Set/Toggle`, `Cover.Open/Close/Stop/GoToPosition`, `Light.Set`) y notificaciones `NotifyStatus`/`NotifyEvent`. El orquestador lo añade a HA con el flujo de `shelly` (host y puerto; el unique_id es su MAC). Componentes `switch`, `cover`, `light`, `em`/`emdata`, `temperature`, `humidity` y `devicepower`. Probado con `aioshelly` 13.34.1 y HA 2026.10. Los Gen1 (CoIoT) siguen por MQTT. |
 | Zigbee | Parcial | No hay coordinador emulado usable. Se usa un «Z2M emulado» que publica el formato exacto de Zigbee2MQTT: `bridge/state`, `bridge/info`, `bridge/devices` con exposes de zigbee-herdsman-converters, `availability`, `last_seen` y `linkquality`; los comandos llegan por `/set`. Base topic propio (`hasim-z2m`). |
 | ZHA | No viable | zigpy no tiene radio virtual. Se representa por MQTT genérico, con un aviso. |
 | Thread + OTBR | Experimental (perfil opcional) | OTBR con RCP simulado de OpenThread. Solo como demostración del border router. |
@@ -60,7 +60,7 @@ Navegador (app)  ──WS──►  hasim-orchestrator (Node, red host)
                             ├─ (WS 5556) zwave-mock ─(TCP 5555)─► Z-Wave JS UI ─(WS 3000)─► HA (zwave_js)
                             ├─ API nativa ESPHome por nodo (127.0.0.1:16053+n, Noise) ─► HA (esphome)
                             ├─ bridge matter.js ─► matterjs-server ─► HA (matter)        [E3]
-                            └─ emuladores Shelly ─► HA (shelly)                           [E3]
+                            └─ Shelly Gen2+ emulados (127.0.0.1:18181+n, /shelly + WS /rpc) ─► HA (shelly)
 Caddy sirve la app y hace de proxy de /orchestrator y /mqtt en el mismo origen (sin contenido mixto).
 Caddy escucha solo en 127.0.0.1 (LAB_BIND=0.0.0.0 para la LAN) y el orquestador exige el token.
 ```
@@ -79,7 +79,7 @@ Los perfiles se ajustan por protocolo en el proyecto (`radioProfiles`, sobre est
 | Thread | 10 ms | 0,5 % | 6 | 10 | 15 | timeout de hijo 240 s |
 | Matter (Wi-Fi) | 20 ms | 0,2 % | — | — | — | suscripción ≥60 s |
 | Z-Wave | 30 ms | 1 % | 4 (LR: 1) | — | 868,4 MHz | «dead» tras 3 fallos; wake up 3600 s |
-| Wi-Fi / ESPHome / Shelly | 20 ms | 0,5 % | — | ~30 por AP | 1/6/11 | ping de la API 60 s |
+| Wi-Fi / ESPHome / Shelly | 20 ms | 0,5 % | — | ~30 por AP | 1/6/11 | ping de la API 60 s (Shelly: reconexión cada 60 s) |
 | BLE | anuncio cada 1-10 s | 5 % | — | — | 37/38/39 | ~15 min sin anuncios |
 | RF 433 | 50 ms | 10 % (sin acuse) | — | — | — | nunca (sin estado) |
 
@@ -102,9 +102,9 @@ Interferencia: el canal Wi-Fi 1 solapa con los Zigbee/Thread 11-14, el 6 con los
   - perfiles de radio en el motor;
   - CI con HA en Docker (job manual o nocturno).
 - **E2 (hecho, pendiente de verificar en GitHub Actions):** Z-Wave con el mock de zwave-js + Z-Wave JS UI (integración `zwave_js`) y nodos ESPHome con la API nativa emulada (integración `esphome`), perfiles `zwave` y `esphome` de `setup.sh`, alineación de entity_id en HA, estado de las vías en el panel y tráfico Z-Wave/ESPHome en el inspector. Los satélites de voz llegan por ESPHome sin `assist_satellite` (sin micrófono). Queda como candidato: satélite Wyoming real en contenedor.
-- **E3:** bridge Matter con matter.js (comisionado automático) y emulador Shelly; inyección de fallos con Docker y `tc netem`.
+- **E3:** bridge Matter con matter.js (comisionado automático) y emulador Shelly (hecho: perfil `shelly`, integración `shelly` real, probado con HA 2026.10; pruebas manuales en `docs/PRUEBAS_E3.md`); inyección de fallos con Docker y `tc netem`.
 
-(Alineado con docs/ROADMAP.md en octubre de 2026: E2 = Z-Wave y ESPHome reales con sus perfiles (`PROFILE_TRANSPORTS` en src/types.ts); E3 = Matter y Shelly (`PENDING_TRANSPORTS`).)
+(Alineado con docs/ROADMAP.md en octubre de 2026: E2 = Z-Wave y ESPHome reales con sus perfiles (`PROFILE_TRANSPORTS` en src/types.ts); E3 = Matter (`PENDING_TRANSPORTS`) y Shelly, ya real con el perfil `shelly`.)
 - **E4 (opcional):** BLE con proxy falso y OTBR con RCP simulado.
 
 ## Limitaciones conocidas
@@ -119,3 +119,4 @@ Interferencia: el canal Wi-Fi 1 solapa con los Zigbee/Thread 11-14, el 6 con los
 - En este contenedor de desarrollo no se pueden descargar imágenes Docker. La verificación de extremo a extremo se hace en GitHub Actions.
 - Z-Wave: HA no pone «No disponible» las entidades de un nodo dead (lo dice su sensor «Estado del nodo»); solo el fallo del controlador las deja no disponibles. Añadir o quitar dispositivos Z-Wave reinicia el driver de Z-Wave JS UI (~20-60 s sin Z-Wave): el mock no simula la inclusión. Fabricante y modelo genéricos (no se aplican los ficheros de configuración de los modelos reales). Sin endpoints: un dispositivo con dos relés o con termostato sigue por MQTT.
 - ESPHome: es un emulador del protocolo, no el firmware; no hay logs, OTA, Bluetooth proxy, `voice_assistant` ni servicios de usuario. Los dominios cover, climate, fan, lock… siguen por MQTT.
+- Shelly: emulador de la API RPC, no el firmware. Sin autenticación (como un Shelly recién instalado), sin scripts, proxy BLE, webhooks, MQTT del Shelly, reinicio ni OTA (HA muestra error si se piden). El H&T Gen3 va siempre despierto (un H&T real duerme y se conecta él a HA por WebSocket saliente). Tensión nominal de 230 V e intensidad derivada (potencia / tensión) cuando el simulador no las mide; en los 2PM de dos canales la medida del dispositivo se reparte entre los canales. Los Gen1 (CoIoT, p. ej. Shelly EM) y el Shelly 1 de puerta de garaje siguen por MQTT. HA no recibe el área del Shelly (un Shelly real tampoco la da).

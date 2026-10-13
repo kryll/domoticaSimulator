@@ -1,5 +1,5 @@
 // Textos de la interfaz del laboratorio.
-import type { NativeServiceState, NodeState, ServiceStatus } from './protocol';
+import type { NativeServiceState, NodeState, ServiceStatus, TrafficVia } from './protocol';
 import type { Connection } from './bridgeStore';
 
 export const NODE_STATE_LABELS: Record<NodeState, string> = {
@@ -46,4 +46,12 @@ export const NATIVE_STATE_LABELS: Record<NativeServiceState, string> = {
   connecting: 'Conectando…',
   connected: 'Conectada',
   error: 'Error',
+};
+
+/** Etiqueta de la vía de un mensaje en el inspector de tráfico. */
+export const TRAFFIC_VIA_LABELS: Record<TrafficVia, string> = {
+  mqtt: 'MQTT',
+  zwave: 'Z-Wave',
+  esphome: 'ESPHome',
+  shelly: 'Shelly',
 };

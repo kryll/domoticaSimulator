@@ -4,6 +4,7 @@ import { useLocalLab } from './localLab';
 import { RADIO_LABEL, viaInfo } from './via';
 import { NODE_STATE_LABELS } from './labels';
 import { useActiveNative } from './useBridge';
+import { isNativeTransport } from './native';
 
 /** Línea «Vía hacia HA» de las propiedades del dispositivo (solo con el laboratorio activado). */
 export function DeviceBridgeLine({ device, def }: { device: Device; def: DeviceDefinition | undefined }) {
@@ -13,7 +14,7 @@ export function DeviceBridgeLine({ device, def }: { device: Device; def: DeviceD
   const active = useActiveNative();
   if (!enabled || !def) return null;
   const via = viaInfo(device, def, active);
-  const real = (via.transport === 'zwave_js' || via.transport === 'esphome') && !via.pending ? native?.[via.transport]?.nodes[device.id] : undefined;
+  const real = isNativeTransport(via.transport) && !via.pending ? native?.[via.transport]?.nodes[device.id] : undefined;
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700" aria-label="Laboratorio">
       <p>

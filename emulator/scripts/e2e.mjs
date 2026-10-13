@@ -6,7 +6,9 @@
 // Con los perfiles de E2 (E2E_PROFILES o COMPOSE_PROFILES de .env: zwave, esphome) comprueba además
 // las vías reales: el enchufe Z-Wave de la demo con la integración zwave_js y el sensor ESPHome con
 // la integración esphome (registro de dispositivos de HA), un comando de HA al enchufe Z-Wave, un
-// cambio del sensor ESPHome desde la app, y que al parar un nodo queda no disponible.
+// cambio del sensor ESPHome desde la app, y que al parar un nodo queda no disponible. Con el perfil
+// shelly (E3), la luz de la cocina (Shelly 1PM Gen3 emulado) con la integración shelly: comando de
+// HA, cambio de potencia desde la app, y parada y arranque del Shelly.
 // Variables: ORCHESTRATOR_WS, HA_URL, SECRETS_DIR, E2E_TIMEOUT_S, LAB_TOKEN (si no, se lee de emulator/.env), E2E_PROFILES.
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -189,10 +191,11 @@ try {
     sim = { ...sim, entities: { ...sim.entities, [id]: { ...sim.entities[id], state } } };
     send({ type: 'state', entities: { [id]: sim.entities[id] } });
   };
-  if (PROFILES.has('zwave') || PROFILES.has('esphome')) {
+  if (PROFILES.has('zwave') || PROFILES.has('esphome') || PROFILES.has('shelly')) {
     const caps = await until('capacidades de las vías reales en status', async () => statuses.at(-1)?.capabilities, 30_000);
     if (PROFILES.has('zwave') && caps.zwave !== true) throw new Error('El orquestador no anuncia el perfil zwave');
     if (PROFILES.has('esphome') && caps.esphome !== true) throw new Error('El orquestador no anuncia el perfil esphome');
+    if (PROFILES.has('shelly') && caps.shelly !== true) throw new Error('El orquestador no anuncia el perfil shelly');
     log(`Perfiles activos: ${[...PROFILES].join(', ')}`);
   }
   if (PROFILES.has('zwave')) {
@@ -243,6 +246,38 @@ try {
     send({ type: 'node', action: 'start', deviceIds: ['demo-esp32'] });
     await until(`${temp} disponible de nuevo`, async () => near(await haState(temp), 23.4), 180_000);
     log('OK nodo ESPHome arrancado (HA se vuelve a conectar)');
+  }
+  if (PROFILES.has('shelly')) {
+    const relay = 'switch.luz_cocina_switch';
+    const power = 'sensor.luz_cocina_power';
+    const dev = await until('«Luz cocina» con la integración shelly en el registro de dispositivos', () => haDeviceOf('shelly', 'Luz cocina'), Math.max(TIMEOUT, 240_000));
+    log(`OK Shelly: dispositivo ${dev.id} (${dev.manufacturer ?? '?'} ${dev.model ?? ''} ${dev.model_id ?? ''}) en shelly`);
+    const mqttDup = (await haWs({ type: 'config/device_registry/list' })).some((d) => d.identifiers.some(([dom, id]) => dom === 'mqtt' && String(id).includes('demo-luz-cocina')));
+    if (mqttDup) throw new Error('La luz Shelly sigue también por MQTT');
+    for (const id of [relay, power]) {
+      await until(`${id} (alineado) en /api/states`, async () => {
+        const st = await haState(id);
+        return st && st.state !== 'unavailable' && st.state !== 'unknown' ? st : undefined;
+      }, 180_000);
+      log(`OK ${id}`);
+    }
+    await haCall('switch', 'turn_on', { entity_id: relay });
+    await until('comando switch.turn_on del Shelly en la app', async () => commands.find((c) => c.entityId === relay && c.service === 'switch.turn_on'), 60_000);
+    log('OK comando de HA por la API RPC del Shelly recibido por la app');
+    await until(`${relay} encendido en HA (NotifyStatus)`, async () => (await haState(relay))?.state === 'on', 60_000);
+    log('OK estado de vuelta por Shelly');
+    setEntity(power, 42.5);
+    await until(`${power} = 42.5 en HA`, async () => Number((await haState(power))?.state) === 42.5, 60_000);
+    log('OK cambio de potencia desde la app visto en HA');
+    const cover = await until('«Persiana dormitorio» con la integración shelly', () => haDeviceOf('shelly', 'Persiana dormitorio'), 120_000);
+    log(`OK Shelly en modo persiana: dispositivo ${cover.id}`);
+    send({ type: 'node', action: 'stop', deviceIds: ['demo-luz-cocina'] });
+    await until(`${relay} no disponible (Shelly parado)`, async () => (await haState(relay))?.state === 'unavailable', 90_000);
+    log('OK Shelly parado → no disponible');
+    send({ type: 'node', action: 'start', deviceIds: ['demo-luz-cocina'] });
+    // La integración shelly reintenta la conexión cada 60 s.
+    await until(`${relay} disponible de nuevo`, async () => (await haState(relay))?.state === 'on', 180_000);
+    log('OK Shelly arrancado (HA se vuelve a conectar)');
   }
   log('Todo correcto');
   ws.close();

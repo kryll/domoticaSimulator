@@ -5,6 +5,7 @@ import { useProjectStore } from '../store/projectStore';
 import { Button } from '../ui/Button';
 import { inputClass } from '../ui/Field';
 import { downloadText } from '../ui/download';
+import { TRAFFIC_VIA_LABELS } from './labels';
 
 const MAX_ROWS = 500;
 
@@ -48,7 +49,7 @@ export function TrafficView() {
           </select>
         </label>
         <label className="flex flex-1 flex-col text-xs text-slate-600">
-          Topic o vía (texto o patrón con + y #; «zwave», «esphome»)
+          Topic o vía (texto o patrón con + y #; «zwave», «esphome», «shelly»)
           <input className={inputClass} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="p. ej. hasim-z2m/+/set" />
         </label>
         <Button size="sm" onClick={() => useBridgeStore.getState().setTrafficPaused(!paused)} aria-pressed={paused}>
@@ -85,7 +86,7 @@ export function TrafficView() {
                 </td>
                 <td className="truncate px-1 py-0.5">{e.deviceId ? (names.get(e.deviceId) ?? e.deviceId) : '—'}</td>
                 <td className="break-all px-1 py-0.5">
-                  {e.via && e.via !== 'mqtt' && <span className="mr-1 rounded bg-violet-50 px-1 text-violet-800">{e.via === 'zwave' ? 'Z-Wave' : 'ESPHome'}</span>}
+                  {e.via && e.via !== 'mqtt' && <span className="mr-1 rounded bg-violet-50 px-1 text-violet-800">{TRAFFIC_VIA_LABELS[e.via]}</span>}
                   {e.topic}
                   {e.retain && <span className="ml-1 text-amber-700">(retenido)</span>}
                 </td>

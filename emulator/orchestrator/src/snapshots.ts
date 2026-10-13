@@ -8,7 +8,8 @@
 //   - con «Excluir credenciales», .storage/auth* (usuarios, contraseñas y tokens de HA).
 // Junto a la copia se guardan project.json (el proyecto del simulador) y meta.json. Con los perfiles
 // de E2 también van los datos de las vías reales («extras»): la carpeta de Z-Wave JS UI y del mock
-// (emulator/zwave/) y los puertos y claves de los nodos ESPHome (.secrets/esphome-nodes.json).
+// (emulator/zwave/), los puertos y claves de los nodos ESPHome (.secrets/esphome-nodes.json) y los
+// puertos de los Shelly emulados (.secrets/shelly-nodes.json).
 //
 // SECRETOS: un snapshot contiene usuarios y tokens de HA (.storage/auth*) y las credenciales de
 // las integraciones (.storage/core.config_entries, p. ej. la contraseña MQTT). Por eso la carpeta

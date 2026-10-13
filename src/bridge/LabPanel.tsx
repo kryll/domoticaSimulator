@@ -3,6 +3,7 @@ import { useBridgeStore, type BridgeStoreState } from './bridgeStore';
 import { couple, labAction, nodeAction } from './runtime';
 import { useActiveNative, useBridgeSettings } from './useBridge';
 import { NativeStatusList } from './NativeStatus';
+import { isNativeTransport } from './native';
 import { useLocalLab } from './localLab';
 import { useProjectStore } from '../store/projectStore';
 import { allDefinitions, catalog } from '../devices/catalog';
@@ -143,7 +144,7 @@ function NodesTab() {
         {rows.map(({ device, def }) => {
           const state = nodes[device.id];
           const via = def ? viaInfo(device, def, active) : undefined;
-          const real = via && (via.transport === 'zwave_js' || via.transport === 'esphome') && !via.pending ? native?.[via.transport]?.nodes[device.id] : undefined;
+          const real = via && isNativeTransport(via.transport) && !via.pending ? native?.[via.transport]?.nodes[device.id] : undefined;
           return (
             <li key={device.id} className="flex items-center gap-2 px-2 py-1.5 text-xs">
               <div className="min-w-0 flex-1">

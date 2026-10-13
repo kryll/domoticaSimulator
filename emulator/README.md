@@ -2,7 +2,7 @@
 
 Entorno de pruebas tipo GNS3 en tu PC: un **Home Assistant real** (de pruebas, nunca el de tu casa) al que se conectan los dispositivos del proyecto a través de sus integraciones. La app hace de cliente gráfico y de «mundo físico»; el orquestador (`hasim-orchestrator`) hace de servidor del laboratorio.
 
-Desde E2, los dispositivos **Z-Wave** llegan a HA por la integración real **Z-Wave JS** (controlador emulado con el mock de zwave-js + Z-Wave JS UI) y los **ESPHome** por la integración real **ESPHome** (API nativa emulada por el orquestador, con cifrado Noise). Ver [Vías reales (E2)](#vías-reales-e2-z-wave-js-y-esphome).
+Desde E2, los dispositivos **Z-Wave** llegan a HA por la integración real **Z-Wave JS** (controlador emulado con el mock de zwave-js + Z-Wave JS UI) y los **ESPHome** por la integración real **ESPHome** (API nativa emulada por el orquestador, con cifrado Noise). Desde E3, los **Shelly Gen2+** llegan por la integración real **Shelly** (API RPC emulada por el orquestador). Ver [Vías reales (E2)](#vías-reales-e2-z-wave-js-y-esphome) y [Shelly (E3)](#shelly-perfil-shelly-e3).
 
 - 100 % gratuito y libre: Docker Engine, Home Assistant, Mosquitto, Caddy, Node.js y paquetes npm libres. Sin cuentas, claves ni servicios de terceros.
 - Sin Internet en funcionamiento: solo hace falta para descargar las imágenes la primera vez.
@@ -27,23 +27,23 @@ Diseño completo y límites: [docs/EMULACION.md](../docs/EMULACION.md).
    ```
 3. Arranca el laboratorio:
    ```bash
-   emulator/scripts/setup.sh --all      # opciones: --no-build, --zwave, --esphome, --all, --matter, --docker
+   emulator/scripts/setup.sh --all      # opciones: --no-build, --zwave, --esphome, --shelly, --all, --matter, --docker
    ```
    El script:
    - crea `emulator/.env` (modo 0600) con contraseñas aleatorias (MQTT y usuario de HA) y el **token del laboratorio** (`LAB_TOKEN`) si no existe; a un `.env` antiguo le añade el token;
    - compila la app con base `/` en `dist/`;
    - levanta Home Assistant, Mosquitto, Caddy y el orquestador (`docker compose up -d --build`);
-   - con `--zwave`, `--esphome` o `--all` activa las vías reales de E2 y lo recuerda en `.env` (`COMPOSE_PROFILES`); con `--zwave` deja los ajustes iniciales de Z-Wave JS UI en `emulator/zwave/ui/settings.json` (antena `tcp://zwave-mock:5555`, servidor en el 3000, claves de seguridad aleatorias, sin MQTT ni estadísticas);
+   - con `--zwave`, `--esphome`, `--shelly` o `--all` activa las vías reales (E2 y Shelly de E3) y lo recuerda en `.env` (`COMPOSE_PROFILES`); con `--zwave` deja los ajustes iniciales de Z-Wave JS UI en `emulator/zwave/ui/settings.json` (antena `tcp://zwave-mock:5555`, servidor en el 3000, claves de seguridad aleatorias, sin MQTT ni estadísticas);
    - hace el onboarding de HA por su API (`scripts/onboard-ha.mjs`): crea el usuario, guarda un token de larga duración en `emulator/.secrets/ha-token` (a nombre de tu usuario, modo 0600), añade la integración MQTT y, con `--zwave`, la integración Z-Wave JS (`ws://127.0.0.1:3000`, espera a que Z-Wave JS UI arranque);
    - muestra el token del laboratorio.
 4. Abre **la app en http://localhost:8080** → *Ajustes → Laboratorio*: marca «Conectar con el laboratorio» y pega el token (`LAB_TOKEN` de `emulator/.env`). Se guarda solo en ese navegador (localStorage), nunca en el proyecto.
 5. Abre **Home Assistant en http://localhost:8123**. Usuario y contraseña: los de `emulator/.env` (`HA_USERNAME` / `HA_PASSWORD`; por defecto, en `.env.example`, `hasim` / `hasim-cambiame`). Cámbialos si quieres.
 
-Parar: `emulator/scripts/stop.sh` (conserva todo). Volver a arrancar: `emulator/scripts/setup.sh --no-build` (recuerda los perfiles). Quitar un perfil: `--no-zwave`, `--no-esphome`. Borrar y empezar de cero: `emulator/scripts/reset.sh` (también los datos de Z-Wave JS UI y las claves de ESPHome; `--all` borra además `.env` y los snapshots).
+Parar: `emulator/scripts/stop.sh` (conserva todo). Volver a arrancar: `emulator/scripts/setup.sh --no-build` (recuerda los perfiles). Quitar un perfil: `--no-zwave`, `--no-esphome`, `--no-shelly`. Borrar y empezar de cero: `emulator/scripts/reset.sh` (también los datos de Z-Wave JS UI, las claves de ESPHome y los puertos de los Shelly; `--all` borra además `.env` y los snapshots).
 
 Los contenedores llevan `restart: "no"`: el laboratorio se arranca y se para a voluntad y no vuelve solo al reiniciar el PC.
 
-Listas de pruebas manuales: [docs/PRUEBAS_E1.md](../docs/PRUEBAS_E1.md) (base) y [docs/PRUEBAS_E2.md](../docs/PRUEBAS_E2.md) (Z-Wave y ESPHome reales).
+Listas de pruebas manuales: [docs/PRUEBAS_E1.md](../docs/PRUEBAS_E1.md) (base) y [docs/PRUEBAS_E2.md](../docs/PRUEBAS_E2.md) (Z-Wave y ESPHome reales) y [docs/PRUEBAS_E3.md](../docs/PRUEBAS_E3.md) (Shelly real).
 
 ## Servicios y puertos (`docker-compose.yml`)
 
@@ -56,6 +56,7 @@ Listas de pruebas manuales: [docs/PRUEBAS_E1.md](../docs/PRUEBAS_E1.md) (base) y
 | zwave-mock (perfil `zwave`) | la imagen del orquestador (`orchestrator/src/zwave/mockMain.ts`) | bridge | puerto serie emulado 5555 **solo en la red interna de Docker**; 127.0.0.1:5556 (control, exige el token) |
 | Z-Wave JS UI (perfil `zwave`) | `zwavejs/zwave-js-ui` | bridge | 127.0.0.1:8091 (web, sin contraseña: solo este PC) y 127.0.0.1:3000 (servidor Z-Wave JS para HA) |
 | Nodos ESPHome (perfil `esphome`) | dentro del orquestador | host | 127.0.0.1:16054, 16055… (API nativa de cada nodo, cifrada con Noise) |
+| Shelly emulados (perfil `shelly`, E3) | dentro del orquestador | host | 127.0.0.1:18181, 18182… (HTTP `/shelly` y WebSocket `/rpc` de cada Shelly, sin contraseña, como un Shelly sin autenticación) |
 | matterjs-server (perfil `matter`, E3) | `ghcr.io/matter-js/matterjs-server` | host (mDNS, IPv6) | 5580 en **todas** las interfaces y **sin autenticación**: actívalo solo en una red de confianza o bloquea el 5580 con el cortafuegos |
 
 **Seguridad del laboratorio:**
@@ -65,7 +66,7 @@ Listas de pruebas manuales: [docs/PRUEBAS_E1.md](../docs/PRUEBAS_E1.md) (base) y
 - **Una sola app controla el lab**: en el mismo navegador, un candado entre pestañas (Web Locks o BroadcastChannel) deja controlar solo a una; las demás muestran «El laboratorio está controlado desde otra pestaña». Desde otro navegador u otro PC, el orquestador deja la segunda app en solo lectura (estado y tráfico) hasta que la primera se desconecte.
 - **Docker**: el socket de Docker **no** se monta por defecto (equivale a acceso de administrador al PC). Restaurar un snapshot lo necesita para parar HA antes de copiar la configuración: actívalo con `setup.sh --docker` (usa `docker-compose.docker.yml` y lo recuerda en `.env` con `COMPOSE_FILE`); `setup.sh --no-docker` lo quita. Sin él, «Restaurar» está desactivado.
 
-- **Vías reales (E2)**: no abren nada a la LAN. Z-Wave JS UI y el control del mock se publican en 127.0.0.1; el puerto serie emulado (5555) solo existe en la red interna de Docker; los nodos ESPHome escuchan en 127.0.0.1 (el orquestador va en red `host`, igual que HA). La interfaz de Z-Wave JS UI no tiene contraseña: no la publiques fuera de 127.0.0.1. Aunque pongas `LAB_BIND=0.0.0.0`, estos puertos siguen en local.
+- **Vías reales (E2)**: no abren nada a la LAN. Z-Wave JS UI y el control del mock se publican en 127.0.0.1; el puerto serie emulado (5555) solo existe en la red interna de Docker; los nodos ESPHome y los Shelly emulados escuchan en 127.0.0.1 (el orquestador va en red `host`, igual que HA). La interfaz de Z-Wave JS UI no tiene contraseña: no la publiques fuera de 127.0.0.1. Aunque pongas `LAB_BIND=0.0.0.0`, estos puertos siguen en local.
 
 Usuarios de Mosquitto: `hasim` (orquestador: `hasim/#`, `hasim-z2m/#`, `homeassistant/#`) y `homeassistant` (todo). El entrypoint crea `passwd` y copia la ACL a `/mosquitto/auth/` dentro del contenedor con propietario `mosquitto` y modo 0600 (sin avisos de permisos).
 
@@ -74,8 +75,9 @@ Usuarios de Mosquitto: `hasim` (orquestador: `hasim/#`, `hasim-z2m/#`, `homeassi
 - `emulator/.secrets/ha-token` (0600, a nombre de tu usuario): token de larga duración de HA.
 - En el navegador (localStorage, clave `hasim.lab.local`): si el lab está activado en esa máquina, la URL del orquestador y el token del laboratorio.
 - `emulator/.secrets/esphome-nodes.json` (0600): puerto y clave de cifrado (Noise, 32 bytes en base64) de cada nodo ESPHome. HA guarda la misma clave en su entrada `esphome`.
+- `emulator/.secrets/shelly-nodes.json` (0600): puerto de cada Shelly emulado (18181 + n, estable). No tiene secretos, pero va junto a los demás datos locales; HA guarda host y puerto en su entrada `shelly`.
 - `emulator/zwave/ui/settings.json`: claves de seguridad S0/S2 de Z-Wave JS UI (aleatorias; los nodos mock no usan seguridad).
-- `emulator/snapshots/` (0700/0600): copias de `ha-config`, de `zwave/` y de `esphome-nodes.json`, que **incluyen** secretos (ver Snapshots).
+- `emulator/snapshots/` (0700/0600): copias de `ha-config`, de `zwave/`, de `esphome-nodes.json` y de `shelly-nodes.json`, que **incluyen** secretos (ver Snapshots).
 
 ## Cómo llegan los dispositivos a HA
 
@@ -85,7 +87,8 @@ Usuarios de Mosquitto: `hasim` (orquestador: `hasim/#`, `hasim-z2m/#`, `homeassi
 | MQTT discovery genérico (`hasim/…`) | El resto (Tuya, eWeLink, Cast, Alexa, Netatmo…), ZHA y Hue (sin radio virtual) | `homeassistant/device/<id>/config` con `dev`, `o`, `cmps`, `default_entity_id` = entity_id del simulador, `unique_id` `hasim_<proyecto>_<dispositivo>_<clave>`, `suggested_area` = sala, `via_device` = hub simulado |
 | **Z-Wave JS (mock)** | Z-Wave (protocolo Z-Wave o integración zwave_js) | **Real con el perfil `zwave`**: nodo mock de zwave-js → Z-Wave JS UI → integración `zwave_js`. Sin el perfil, MQTT genérico con el aviso |
 | **ESPHome (API nativa emulada)** | Integración esphome (ESPHome genérico, HA Voice PE, ESP32-S3-BOX-3…) | **Real con el perfil `esphome`**: API nativa (Noise) → integración `esphome`. Sin el perfil, MQTT genérico con el aviso |
-| Matter, Shelly | Matter, Thread y Shelly | **pendiente de E3**: ahora por MQTT genérico |
+| **Shelly (API RPC emulada)** | Integración shelly (Shelly Gen2+: Plus, Pro, Gen3, Gen4) | **Real con el perfil `shelly`** (E3): HTTP `/shelly` + WebSocket `/rpc` → integración `shelly`. Los Gen1 (p. ej. Shelly EM) y el Shelly 1 de puerta de garaje siguen por MQTT genérico con el aviso |
+| Matter | Matter y Thread | **pendiente de E3**: ahora por MQTT genérico |
 
 En HA, `origin` dice «HA Simulator», `sw_version` dice «simulado» y `hw_version` dice «Radio: modelada, no real». Ninguna radio es real: la malla y la pérdida se modelan en el motor. Perfiles de radio (`radioProfiles` del proyecto, sobre los valores de `src/types.ts`): de momento se usan la latencia por protocolo (si el proyecto la ajusta, el motor la usa en lugar de su tabla) y el canal Zigbee, que el Z2M emulado publica en `bridge/info`; el resto de campos se guardan pero aún no influyen.
 
@@ -97,9 +100,9 @@ Notas del mapeo (`src/bridge/mqtt/`):
 
 ## Vías reales (E2): Z-Wave JS y ESPHome
 
-Se activan con los perfiles de `setup.sh` (`--zwave`, `--esphome` o `--all`). El orquestador anuncia en `status.capabilities` (`zwave`, `esphome`) qué vías tiene, y la app cambia la «Vía hacia HA» de esos dispositivos. Un dispositivo que no se puede emular (p. ej. un Z-Wave con termostato o dos relés) sigue por MQTT genérico y la app explica por qué.
+Se activan con los perfiles de `setup.sh` (`--zwave`, `--esphome`, `--shelly` o `--all`). El orquestador anuncia en `status.capabilities` (`zwave`, `esphome`, `shelly`) qué vías tiene, y la app cambia la «Vía hacia HA» de esos dispositivos. Un dispositivo que no se puede emular (p. ej. un Z-Wave con termostato o dos relés) sigue por MQTT genérico y la app explica por qué.
 
-**Alineación de entity_id**: zwave_js y esphome ponen sus propios entity_id (`switch.despacho_enchufe_despacho`…). El orquestador los renombra en el registro de entidades de HA al del simulador (`switch.enchufe_despacho_switch`), así las automatizaciones exportadas como packages siguen funcionando. Si el entity_id ya está ocupado (p. ej. una entidad MQTT que aún no se ha borrado), lo reintenta cada 15 s.
+**Alineación de entity_id**: zwave_js, esphome y shelly ponen sus propios entity_id (`switch.despacho_enchufe_despacho`…). El orquestador los renombra en el registro de entidades de HA al del simulador (`switch.enchufe_despacho_switch`), así las automatizaciones exportadas como packages siguen funcionando. Si el entity_id ya está ocupado (p. ej. una entidad MQTT que aún no se ha borrado), lo reintenta cada 15 s.
 
 ### Z-Wave (perfil `zwave`)
 
@@ -145,6 +148,22 @@ Por qué no la plataforma `host` compilada: compilar un binario por nodo con la 
 - Sin cifrado: `ESPHOME_ENCRYPTION=0` en `.env` (no recomendado; los puertos son locales igualmente).
 - Los sensores van como float32, como en el firmware: en la API de HA, 23,4 puede verse como `23.399999618530273`.
 
+### Shelly (perfil `shelly`, E3)
+
+**Vía elegida: emulador de la API RPC de los Shelly Gen2+ en el orquestador** (`orchestrator/src/shelly/`, lógica pura en `src/bridge/shelly/plan.ts`). Cada Shelly del proyecto es un servidor HTTP + WebSocket en `127.0.0.1:18181+n` (puertos estables en `.secrets/shelly-nodes.json`; lejos de 8123, 8080, 8081, 8091, 3000, 16053+ de ESPHome y 5540/5580 de Matter). Habla lo mismo que el firmware y lo que usa `aioshelly` (`RpcDevice`, la biblioteca de la integración de HA):
+- `GET /shelly` (id `shelly1pmg3-<mac>`, MAC, modelo real del catálogo, `gen`, `fw_id`, `auth_en: false`, `profile` en el 2PM);
+- WebSocket `/rpc` con tramas JSON-RPC (`{id, src, method, params}` → `{id, src, dst, result|error}`): `Shelly.GetDeviceInfo`, `Shelly.GetConfig`, `Shelly.GetStatus`, `Shelly.GetComponents` (sin componentes dinámicos), `Shelly.ListMethods` (sin scripts, así HA no intenta el proxy BLE), `Sys.GetStatus`, `Switch.Set/Toggle/GetStatus`, `Cover.Open/Close/Stop/GoToPosition/GetStatus`, `Light.Set/Toggle`, y los `GetStatus` de `EM`, `EMData`, `Temperature`, `Humidity` y `DevicePower`; los métodos desconocidos responden `404 No handler for …` como el firmware;
+- notificaciones `NotifyStatus` (solo los componentes que cambian) cuando cambia el simulador y `NotifyEvent` `config_changed` si cambian los componentes (HA recarga la entrada);
+- también `GET /rpc/<Método>?id=0` y `POST /rpc` para probar con curl: `curl http://127.0.0.1:18181/rpc/Switch.GetStatus?id=0`.
+
+HA lo añade con su integración **`shelly` real**: el orquestador hace el flujo de configuración (paso manual con host `127.0.0.1` y el puerto; si HA ofrece Shellys descubiertos en la red, elige «manual»). El `unique_id` de la entrada es la MAC del Shelly, estable y única por proyecto y dispositivo. Si el dispositivo sale del proyecto, se borra su entrada.
+
+- **Componentes**: cada `switch` del simulador es un `switch:N` (con `apower`, `voltage` y `current` derivada, y `aenergy.total` en Wh si el dispositivo mide potencia y energía); una persiana es `cover:0` (posición, `opening`/`closing`/`stopped`); una luz regulable, `light:N`; un medidor sin salidas (Pro 3EM), `em:0` (fases A/B/C) + `emdata:0`; el H&T, `temperature:0`, `humidity:0` y `devicepower:0`. Con dos canales (2PM), la potencia se reparte entre los canales encendidos y la energía entre los dos (el simulador mide el dispositivo entero).
+- **Alineación de entity_id**: HA crea `switch.luz_cocina`, `sensor.luz_cocina_potencia`…; el orquestador los renombra al del simulador por su unique_id (`<MAC>-switch:0`, `<MAC>-switch:0-power`, `<MAC>-em:0-total_act_power`…). En los dispositivos de dos canales solo se alinean los interruptores (la potencia de cada canal no es una entidad del simulador).
+- **Comandos de HA** (`Switch.Set`, `Cover.GoToPosition`, `Light.Set`…) → `command` a la app; la respuesta es la del firmware (`was_on`).
+- **Ciclo de vida**: parar el Shelly cierra su servidor y sus WebSocket (HA lo ve «No disponible» enseguida); arrancarlo lo abre y HA se reconecta solo (la integración reintenta cada 60 s). Sin app en vivo, se paran.
+- **Lo que HA crea además** (como con un Shelly real): sensores de diagnóstico (tensión e intensidad, desactivados por defecto; tiempo en marcha), avisos de sobretemperatura/sobrepotencia (siempre «no»), «En la nube» (no), botón Reiniciar y actualización de firmware (no hay ninguna). El botón Reiniciar y las actualizaciones no hacen nada (el método no existe y HA muestra el error).
+
 ## Automatizaciones
 
 Con «Automatizaciones en el HA del lab» (por defecto), el simulador no las dispara y el orquestador escribe `ha-config/packages/hasim/<área>.yaml` con el exportador de la app y llama a `homeassistant.reload_all`. Para forzarlo a mano:
@@ -163,8 +182,8 @@ Botón «Lab» de la barra superior (siempre visible; también desde Ctrl+K: «L
   - **Contienen secretos**: los usuarios, las contraseñas (hash) y los tokens de HA (`.storage/auth*`) y las credenciales de las integraciones (`.storage/core.config_entries`, p. ej. la contraseña MQTT). Por eso la carpeta y cada snapshot son 0700 y los archivos 0600. No los compartas. La opción «Excluir credenciales (auth*)» no copia `.storage/auth*`; al restaurar uno así se conservan los usuarios y tokens actuales. Las credenciales de las integraciones siguen dentro.
   - **Restaurar** necesita el perfil con Docker (`setup.sh --docker`): el orquestador para HA, copia la configuración y vuelve a arrancarlo (aunque la copia falle). El proyecto del snapshot se valida y se fusiona con el actual (se conservan el id, las variantes y las imágenes del plano), sin reiniciar la simulación, y el lab vuelve a acoplarse.
   - Los ids se validan (`[A-Za-z0-9._-]`, nunca `.` ni `..`) y deben ser de un snapshot existente.
-- **Tráfico**: inspector de los mensajes del lab (topic, payload, sentido, hora y dispositivo): MQTT, tramas Z-Wave resumidas (nodo, CC, comando y valor) y mensajes de la API nativa de ESPHome, marcados con su vía. Filtros (escribe `zwave` o `esphome` en el filtro de topic), pausa y exportación a JSON.
-- **Vías reales**: el panel muestra el estado de Z-Wave JS UI (conectado, esperando a la antena…) con el enlace a http://localhost:8091, y el de los nodos ESPHome (en marcha, esperando a HA, error), con el detalle de cada nodo.
+- **Tráfico**: inspector de los mensajes del lab (topic, payload, sentido, hora y dispositivo): MQTT, tramas Z-Wave resumidas (nodo, CC, comando y valor) mensajes de la API nativa de ESPHome y llamadas RPC / notificaciones de los Shelly, marcados con su vía. Filtros (escribe `zwave`, `esphome` o `shelly` en el filtro de topic), pausa y exportación a JSON.
+- **Vías reales**: el panel muestra el estado de Z-Wave JS UI (conectado, esperando a la antena…) con el enlace a http://localhost:8091, y el de los nodos ESPHome y los Shelly (en marcha, esperando a HA, error), con el detalle de cada nodo.
 - **Modo en vivo**: con el lab conectado, la simulación va a 1x con la hora real; «Ir a…» y el selector de velocidad se desactivan (HA no se puede acelerar). Pausar pregunta «¿Parar todos los nodos?»: si aceptas, se paran todos los nodos y el lab se desacopla (HA ve los dispositivos como no disponibles, sus comandos se ignoran y las automatizaciones vuelven al simulador) hasta pulsar «Volver a acoplar», que arranca de nuevo los nodos.
 - **Automatizaciones**: si pasas «Automatizaciones» a «en el simulador» o desactivas el lab, el orquestador borra `packages/hasim` y recarga HA (`reload_all`).
 
@@ -185,9 +204,9 @@ App → orquestador:
 Orquestador → app:
 - `hello` `{ server: 'hasim-orchestrator', version, protocol, readOnly }`: token aceptado; `readOnly: true` si otra app controla el lab (si esa se va, la siguiente recibe otro `hello` con `readOnly: false`)
 - `command` `{ id, entityId, service, data, topic }`: comando de HA; la app lo aplica con `callService` y manda el estado resultante
-- `status` `{ mqtt, ha, transports, nodes, snapshots, capabilities, native?, lastError? }`: `capabilities.zwave` y `capabilities.esphome` dicen qué vías reales hay; `native.zwave_js` y `native.esphome` llevan su estado (`state`, `detail`, `url`, `nodes`)
+- `status` `{ mqtt, ha, transports, nodes, snapshots, capabilities, native?, lastError? }`: `capabilities.zwave`, `capabilities.esphome` y `capabilities.shelly` dicen qué vías reales hay; `native.zwave_js`, `native.esphome` y `native.shelly` llevan su estado (`state`, `detail`, `url`, `nodes`)
 - `lab_result` `{ requestId, action, ok, message, snapshots?, project? }`
-- `traffic` `{ entries }` (cada entrada con `via`: sin valor = MQTT; `zwave` o `esphome`)
+- `traffic` `{ entries }` (cada entrada con `via`: sin valor = MQTT; `zwave`, `esphome` o `shelly`)
 - `error` `{ message, code?: 'auth' | 'readonly' | 'invalid' }`
 
 El orquestador valida todo lo que recibe antes de aplicarlo: el proyecto (también el resultado de un parche) con `parseProject`, los ajustes con `parseHaBridge` (un topic con `#` o `+` no es válido) y las definiciones con `parseDefinition`; si algo falla responde `error` con `code: 'invalid'` y no cambia nada. Tamaño máximo de mensaje: 4 MB. La app, a su vez, valida con `parseProject` el proyecto de un snapshot y solo acepta `lab_result` de peticiones suyas pendientes.
@@ -204,7 +223,7 @@ npm ci
 npm run typecheck
 npm test            # orquestador con aedes, el mock de Z-Wave con el driver real de zwave-js y la API de ESPHome con un cliente independiente
 LAB_TOKEN=$(openssl rand -hex 32) npm start   # orquestador local (también MQTT_URL, MQTT_USERNAME, MQTT_PASSWORD, PORT…)
-npm run e2e         # con el laboratorio arrancado: proyecto demo → HA → comando → estado y, con perfiles, Z-Wave y ESPHome (lee LAB_TOKEN y COMPOSE_PROFILES de .env)
+npm run e2e         # con el laboratorio arrancado: proyecto demo → HA → comando → estado y, con perfiles, Z-Wave, ESPHome y Shelly (lee LAB_TOKEN y COMPOSE_PROFILES de .env)
 ```
 
-El workflow `.github/workflows/emulator-e2e.yml` hace lo mismo en GitHub Actions; es solo manual (`workflow_dispatch`), con la entrada `perfiles` (por defecto `zwave,esphome`; vacía = solo MQTT), y pasa a `npm run e2e` el `LAB_TOKEN` y los perfiles que deja `setup.sh` en `.env`. Con perfiles comprueba en el registro de dispositivos de HA que «Enchufe despacho» llega con `zwave_js` y «Sensor despacho» con `esphome`, enciende el enchufe desde HA, cambia el sensor desde la app y para y arranca los dos nodos. El CI normal (`ci.yml`) ejecuta el typecheck y los tests del orquestador con aedes.
+El workflow `.github/workflows/emulator-e2e.yml` hace lo mismo en GitHub Actions; es solo manual (`workflow_dispatch`), con la entrada `perfiles` (por defecto `zwave,esphome`; vacía = solo MQTT), y pasa a `npm run e2e` el `LAB_TOKEN` y los perfiles que deja `setup.sh` en `.env`. Con perfiles comprueba en el registro de dispositivos de HA que «Enchufe despacho» llega con `zwave_js` y «Sensor despacho» con `esphome`, enciende el enchufe desde HA, cambia el sensor desde la app y para y arranca los dos nodos. Con `shelly` (añádelo a `perfiles`), comprueba que «Luz cocina» llega con la integración `shelly`, la enciende desde HA, cambia su potencia desde la app, ve la persiana Shelly y para y arranca el Shelly. El CI normal (`ci.yml`) ejecuta el typecheck y los tests del orquestador con aedes.

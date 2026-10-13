@@ -158,24 +158,54 @@ export async function ensureEsphomeEntry(api: HaApi, node: EsphomeNodeEntry): Pr
 
 /** Borra de HA la entrada esphome del nodo con esa MAC (si existe). */
 export async function removeEsphomeEntry(api: HaApi, mac: string): Promise<boolean> {
-  const esphome = await entryIds(api, 'esphome');
+  return removeEntriesByMac(api, 'esphome', mac);
+}
+
+/** Borra las entradas de una integración cuyo dispositivo tiene esa MAC. */
+export async function removeEntriesByMac(api: HaApi, domain: string, mac: string): Promise<boolean> {
+  const entries = await entryIds(api, domain);
   const target = normMac(mac);
   let removed = false;
   for (const d of await listDevices(api)) {
     if (!d.connections.some(([kind, value]) => kind === 'mac' && normMac(value) === target)) continue;
     for (const id of d.config_entries) {
-      if (!esphome.has(id)) continue;
+      if (!entries.has(id)) continue;
       await api.rest('DELETE', `/api/config/config_entries/entry/${id}`);
+      entries.delete(id);
       removed = true;
     }
   }
   return removed;
 }
 
+// ---------- Shelly: una entrada por Shelly emulado ----------
+
+/**
+ * Añade el Shelly a HA con la integración shelly (paso manual: host y puerto; «manual» si HA ofrece
+ * antes una lista de Shellys descubiertos en la red). Idempotente: el unique_id es su MAC.
+ */
+export async function ensureShellyEntry(api: HaApi, node: { host: string; port: number }): Promise<FlowOutcome> {
+  return runConfigFlow(api, 'shelly', { device: 'manual', host: node.host, port: node.port, verify_ssl: false });
+}
+
+/** Borra de HA la entrada shelly del Shelly con esa MAC (si existe). */
+export async function removeShellyEntry(api: HaApi, mac: string): Promise<boolean> {
+  return removeEntriesByMac(api, 'shelly', mac);
+}
+
+/** unique_id de una entidad de la integración shelly: «<MAC>-<componente>[-<atributo>]». */
+export function shellyUniqueIdMatcher(mac: string, suffix: string): (uid: string) => boolean {
+  const want = `${normMac(mac)}-${suffix}`.toLowerCase();
+  return (uid) => {
+    const dash = uid.indexOf('-');
+    return dash > 0 && `${normMac(uid.slice(0, dash))}${uid.slice(dash)}`.toLowerCase() === want;
+  };
+}
+
 // ---------- Alineación de entity_id ----------
 
 export interface AlignTarget {
-  platform: 'zwave_js' | 'esphome';
+  platform: 'zwave_js' | 'esphome' | 'shelly';
   /** entity_id deseado (el del simulador). */
   entityId: string;
   match: (uniqueId: string) => boolean;

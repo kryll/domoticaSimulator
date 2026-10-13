@@ -10,6 +10,8 @@ import type { NativeBackend } from './native';
 import { ZwaveBackend, wsMockLink } from './zwave/backend';
 import { EsphomeBackend } from './esphome/backend';
 import { ESPHOME_PORT_BASE } from './esphome/store';
+import { ShellyBackend } from './shelly/backend';
+import { SHELLY_PORT_BASE } from './shelly/store';
 import type { SnapshotExtra } from './snapshots';
 
 const env = process.env;
@@ -19,7 +21,7 @@ const haUrl = env.HA_URL ?? 'http://127.0.0.1:8123';
 const log = (msg: string): void => console.log(`[orquestador] ${msg}`);
 const token = (env.LAB_TOKEN ?? '').trim();
 
-// Perfiles del laboratorio (setup.sh --zwave / --esphome los guarda en .env como COMPOSE_PROFILES).
+// Perfiles del laboratorio (setup.sh --zwave / --esphome / --shelly los guarda en .env como COMPOSE_PROFILES).
 const profiles = new Set((env.HASIM_PROFILES ?? env.COMPOSE_PROFILES ?? '').split(',').map((p) => p.trim()).filter(Boolean));
 const containers = dockerSocketControl(env.DOCKER_SOCKET ?? '/var/run/docker.sock');
 const ha = haApi(haUrl, () => readToken(secretsDir));
@@ -47,9 +49,20 @@ if (profiles.has('esphome')) {
     }),
   );
 }
+if (profiles.has('shelly')) {
+  native.push(
+    new ShellyBackend({
+      host: env.SHELLY_HOST ?? '127.0.0.1',
+      portBase: Number(env.SHELLY_PORT_BASE ?? SHELLY_PORT_BASE),
+      storeFile: join(secretsDir, 'shelly-nodes.json'),
+      ha,
+    }),
+  );
+}
 const extras: SnapshotExtra[] = [];
 if (env.ZWAVE_DATA_DIR) extras.push({ name: 'zwave', path: env.ZWAVE_DATA_DIR, kind: 'dir' });
 extras.push({ name: 'esphome-nodes.json', path: join(secretsDir, 'esphome-nodes.json'), kind: 'file' });
+extras.push({ name: 'shelly-nodes.json', path: join(secretsDir, 'shelly-nodes.json'), kind: 'file' });
 
 const lab = new Lab({
   mqttUrl: env.MQTT_URL ?? 'mqtt://127.0.0.1:1883',

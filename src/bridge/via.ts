@@ -8,7 +8,7 @@ export const TRANSPORT_LABELS: Record<DeviceTransport, string> = {
   zwave_js: 'Z-Wave JS (mock)',
   matter: 'Matter (matter.js)',
   esphome: 'ESPHome (API nativa emulada)',
-  shelly: 'Emulador Shelly RPC',
+  shelly: 'Shelly (API RPC emulada)',
 };
 
 /** Aviso fijo: ninguna radio es real (Zigbee, Thread, Z-Wave... se modelan en el motor). */
@@ -43,8 +43,8 @@ function voiceNote(device: Pick<Device, 'integration'>, def: Partial<Pick<Device
 }
 
 /**
- * Vía hacia HA de un dispositivo. `active`: vías reales activas en el orquestador (perfiles zwave y
- * esphome, de `status.capabilities`); sin ellas, Z-Wave y ESPHome siguen por MQTT con el aviso.
+ * Vía hacia HA de un dispositivo. `active`: vías reales activas en el orquestador (perfiles zwave,
+ * esphome y shelly, de `status.capabilities`); sin ellas, esos dispositivos siguen por MQTT con el aviso.
  */
 export function viaInfo(device: Device, def: DeviceDefinition, active: ReadonlySet<NativeTransport> = new Set()): ViaInfo {
   if (def.role === 'ha_server') return { transport: 'mqtt_discovery', label: 'Es el propio Home Assistant del lab', pending: false };
