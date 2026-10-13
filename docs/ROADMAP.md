@@ -1,6 +1,6 @@
 # Hoja de ruta
 
-**Estado:** las fases 1-3, las tandas 1-3 y la base del laboratorio (E1) están publicadas en `main`, revisadas y con la prueba de extremo a extremo con Home Assistant real superada en GitHub Actions. E2 (Z-Wave JS con el mock de zwave-js y ESPHome con la API nativa emulada, perfiles `zwave` y `esphome`) también está publicado y con la prueba de extremo a extremo superada en GitHub Actions (`emulator-e2e.yml`, perfiles `zwave,esphome`); las pruebas manuales están en `docs/PRUEBAS_E2.md`. Siguiente: E3 (Matter y Shelly).
+**Estado:** las fases 1-3, las tandas 1-3 y la base del laboratorio (E1) están publicadas en `main`, revisadas y con la prueba de extremo a extremo con Home Assistant real superada en GitHub Actions. E2 (Z-Wave JS con el mock de zwave-js y ESPHome con la API nativa emulada, perfiles `zwave` y `esphome`) también está publicado y con la prueba de extremo a extremo superada en GitHub Actions (`emulator-e2e.yml`, perfiles `zwave,esphome`); las pruebas manuales están en `docs/PRUEBAS_E2.md`. E3: Shelly ya es real (perfil `shelly`: Shelly Gen2+ con la API RPC emulada → integración `shelly`, probado con HA 2026.10 en local; pruebas manuales en `docs/PRUEBAS_E3.md`); falta Matter.
 
 ## Visión (octubre 2026): laboratorio domótico tipo GNS3
 
@@ -18,7 +18,7 @@ El producto se reorienta: es un **laboratorio en casa para hacer pruebas, nunca 
 **Prioridades a partir de ahora:**
 1. **E1, base del laboratorio:** orquestador, HA real, MQTT al estilo de Zigbee2MQTT, ciclo de vida de los dispositivos, resetear el lab, snapshots e inspector de tráfico.
 2. **E2:** Z-Wave con el mock de zwave-js + Z-Wave JS UI (integración `zwave_js`) y ESPHome con la API nativa emulada (integración `esphome`; se descartó compilar la plataforma `host`).
-3. **E3:** Matter con matter.js y emulador Shelly.
+3. **E3:** Matter con matter.js y emulador Shelly (Shelly hecho: perfil `shelly`).
 4. **E4:** inyección de fallos real (red, coordinador, Internet, latencia con `tc netem`).
 5. **E5:** el mundo físico alimenta el laboratorio: día típico, personas, clima y consumo, que generan la vida de la casa a la que reacciona el HA real.
 
