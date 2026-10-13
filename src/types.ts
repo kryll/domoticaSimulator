@@ -51,7 +51,10 @@ export type Integration =
   | 'roomba'
   | 'eufy_robovac'
   | 'wyoming'
-  | 'apple_tv';
+  | 'apple_tv'
+  // Routers de las operadoras: UPnP/IGD (oficial, estado de la WAN) y Orange Livebox (HACS).
+  | 'upnp'
+  | 'livebox';
 
 export type Brand =
   | 'IKEA'
@@ -90,7 +93,13 @@ export type Brand =
   | 'Eufy'
   | 'Apple'
   | 'Espressif'
-  | 'Raspberry Pi';
+  | 'Raspberry Pi'
+  // Operadoras de fibra en España (routers cedidos) y la salida a Internet genérica.
+  | 'Movistar'
+  | 'Vodafone'
+  | 'Orange'
+  | 'Digi'
+  | 'Operadora';
 
 /** Forma en que Home Assistant habla con la integración. */
 export type IotClass = 'local_push' | 'local_polling' | 'cloud_push' | 'cloud_polling';
@@ -125,7 +134,8 @@ export type NetworkRole =
   | 'hub' // hub o puente propietario (Hue Bridge, Aqara Hub, DIRIGERA)
   | 'border_router' // border router Thread (HomePod, Nest Hub, Echo 4...)
   | 'access_point' // router Wi-Fi / punto de acceso
-  | 'ha_server'; // servidor de Home Assistant
+  | 'ha_server' // servidor de Home Assistant
+  | 'internet'; // salida a Internet de la operadora (fibra): se conecta al router
 
 export type PowerSource = 'mains' | 'battery' | 'usb' | 'poe';
 

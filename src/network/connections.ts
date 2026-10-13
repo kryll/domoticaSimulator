@@ -4,6 +4,8 @@ import { INTEGRATION_LABELS, PROTOCOL_LABELS } from '../devices/labels';
 import {
   isBleProxy,
   isInfra,
+  isInternetNode,
+  isOperatorRouter,
   isRfBridge,
   isThreadBorderRouter,
   isZigbeeCoordinator,
@@ -47,6 +49,13 @@ function connectEndpoints(a: Node, b: Node): ConnectResult {
 }
 
 function connectInfraPair(a: Node, b: Node): ConnectResult {
+  if (isInternetNode(a.def) || isInternetNode(b.def)) {
+    const other = isInternetNode(a.def) ? b : a;
+    if (isInternetNode(other.def)) return no('Dos salidas a Internet no se conectan entre sí');
+    return other.def.role === 'access_point'
+      ? ok('ethernet')
+      : no('La salida a Internet (fibra) solo se conecta al router de la operadora o a un router');
+  }
   const server = a.def.role === 'ha_server' ? a : b.def.role === 'ha_server' ? b : undefined;
   const other = server === a ? b : a;
   if (server && other.def.role === 'coordinator') {
@@ -163,14 +172,21 @@ function bestCandidate(candidates: Candidate[]): Candidate | undefined {
 /** Enlace de subida de un equipo de infraestructura (coordinador → servidor; hub/AP → AP o servidor). */
 function infraUplink(device: Device, def: DeviceDefinition, project: Project, defs: DeviceDefinition[]): Candidate | undefined {
   if (def.role === 'ha_server') return undefined;
-  const targets = def.role === 'coordinator' ? ['ha_server'] : def.role === 'access_point' ? ['ha_server'] : ['access_point', 'ha_server'];
+  // Con router de operadora: la salida a Internet y los demás routers (malla, AP) cuelgan de él.
+  const operator = (d: DeviceDefinition): boolean => isOperatorRouter(d) && !isOperatorRouter(def);
+  const accepts = (d: DeviceDefinition): boolean => {
+    if (def.role === 'internet') return d.role === 'access_point';
+    if (def.role === 'coordinator') return d.role === 'ha_server';
+    if (def.role === 'access_point') return d.role === 'ha_server' || operator(d);
+    return d.role === 'access_point' || d.role === 'ha_server';
+  };
   const candidates: (Candidate & { rank: number })[] = [];
   for (const other of project.devices) {
     const od = defs.find((d) => d.id === other.definitionId);
-    if (!od || other.id === device.id || !targets.includes(od.role)) continue;
+    if (!od || other.id === device.id || !accepts(od)) continue;
     const r = canConnect(device, other, defs);
     if (!r.ok) continue;
-    const rank = od.role === 'access_point' ? 0 : 1;
+    const rank = operator(od) || (def.role === 'internet' && isOperatorRouter(od)) ? -1 : od.role === 'access_point' ? 0 : 1;
     candidates.push({ parent: other, protocol: r.protocol, distance: distanceOf(device, other, project.floors), infra: true, rank });
   }
   return candidates.sort((x, y) => x.rank - y.rank || x.distance - y.distance)[0];
@@ -261,6 +277,7 @@ export interface UnconnectedReason {
 function missingParentReason(device: Device, def: DeviceDefinition, present: DeviceDefinition[]): string | undefined {
   const has = (pred: (d: DeviceDefinition) => boolean): boolean => present.some(pred);
   if (def.role === 'coordinator') return has((d) => d.role === 'ha_server') ? undefined : 'no hay servidor Home Assistant al que enchufar el coordinador';
+  if (isInternetNode(def)) return has((d) => d.role === 'access_point') ? undefined : 'no hay router de la operadora (ni otro router) al que conectar la salida a Internet';
   if (isInfra(def)) {
     return has((d) => d.role === 'access_point' || d.role === 'ha_server') ? undefined : 'no hay router Wi-Fi ni servidor Home Assistant al que conectarlo';
   }

@@ -11,7 +11,7 @@ import {
   PROTOCOL_LABELS,
 } from './catalog';
 import { BRANDS, INTEGRATIONS, PROTOCOLS } from './labels';
-import { effectiveIotClass, isBleProxy, isThreadBorderRouter, isZigbeeCoordinator, requiredHubBrand, zigbeeNetworkOf } from './roles';
+import { effectiveIotClass, isBleProxy, isOperatorEquipment, isThreadBorderRouter, isZigbeeCoordinator, requiredHubBrand, zigbeeNetworkOf } from './roles';
 import { def, dev } from './testUtils';
 
 const valid = {
@@ -29,9 +29,9 @@ const valid = {
 };
 
 describe('catálogo', () => {
-  it('carga entre 100 y 140 (Tanda 3: catálogo ampliado) definiciones válidas con ids únicos', () => {
+  it('carga entre 100 y 220 (catálogo ampliado con operadoras, relés y pulsadores) definiciones válidas con ids únicos', () => {
     expect(catalog.length).toBeGreaterThanOrEqual(100);
-    expect(catalog.length).toBeLessThanOrEqual(140);
+    expect(catalog.length).toBeLessThanOrEqual(220);
     expect(new Set(catalog.map((d) => d.id)).size).toBe(catalog.length);
   });
 
@@ -62,12 +62,17 @@ describe('catálogo', () => {
   });
 
   it('los dispositivos que no son infraestructura tienen entidades', () => {
-    const infra = ['coordinator', 'hub', 'access_point', 'ha_server'];
+    const infra = ['coordinator', 'hub', 'access_point', 'ha_server', 'internet'];
     for (const d of catalog.filter((x) => !infra.includes(x.role))) expect(d.entities.length, d.id).toBeGreaterThan(0);
   });
 
   it('todas las definiciones tienen un precio orientativo razonable (B8)', () => {
     for (const d of catalog) {
+      // El router de la operadora y la salida a Internet vienen con el contrato de fibra: 0 €.
+      if (isOperatorEquipment(d)) {
+        expect(d.priceEur, d.id).toBe(0);
+        continue;
+      }
       expect(d.priceEur, d.id).toBeGreaterThan(3);
       expect(d.priceEur, d.id).toBeLessThan(2000);
     }
@@ -162,7 +167,7 @@ describe('filterCatalog', () => {
   });
 
   it('busca sin distinguir mayúsculas ni acentos y por varias palabras', () => {
-    expect(filterCatalog(catalog, { query: 'tradfri GU10' }).map((d) => d.id)).toEqual(['ikea-tradfri-gu10']);
+    expect(filterCatalog(catalog, { query: 'tradfri GU10 color' }).map((d) => d.id)).toEqual(['ikea-tradfri-gu10-cws']);
     expect(filterCatalog(catalog, { query: 'ESTACION netatmo' }).map((d) => d.id)).toEqual(['netatmo-weather-station']);
     expect(filterCatalog(catalog, { query: 'nada-que-exista' })).toEqual([]);
   });

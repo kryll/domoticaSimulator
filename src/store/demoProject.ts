@@ -65,6 +65,10 @@ const SPECS: Spec[] = [
   { id: 'demo-puerta', def: 'aqara-door-window', name: 'Puerta entrada', floor: PB, room: 'demo-entrada', at: { x: 20, y: 420 }, integration: 'zha' },
   { id: 'demo-cerradura', def: 'aqara-u200', name: 'Cerradura entrada', floor: PB, room: 'demo-entrada', at: { x: 220, y: 420 } },
   { id: 'demo-camara', def: 'reolink-rlc-810a', name: 'Cámara entrada', floor: PB, room: 'demo-entrada', at: { x: 20, y: 520 } },
+  // La fibra entra por la entrada: router de la operadora (con la ONT) y la salida a Internet.
+  // El Deco del salón cuelga del router por cable; HA llega a Internet a través de él.
+  { id: 'demo-router-operadora', def: 'movistar-smart-wifi-6', name: 'Router Movistar', floor: PB, room: 'demo-entrada', at: { x: 220, y: 520 } },
+  { id: 'demo-internet', def: 'internet-fibra', name: 'Fibra (Internet)', floor: PB, room: 'demo-pasillo', at: { x: 440, y: 520 } },
   { id: 'demo-movimiento', def: 'aqara-motion-p1', name: 'Movimiento pasillo', floor: PB, room: 'demo-pasillo', at: { x: 440, y: 420 }, integration: 'zha' },
   { id: 'demo-luz-pasillo', def: 'ikea-tradfri-e27-ws', name: 'Luz pasillo', floor: PB, room: 'demo-pasillo', at: { x: 640, y: 420 }, integration: 'zha' },
   { id: 'demo-clima-dormitorio', def: 'aqara-temp-hum', name: 'Clima dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 20, y: 20 }, integration: 'zha' },

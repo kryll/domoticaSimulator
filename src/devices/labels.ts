@@ -54,10 +54,12 @@ export const INTEGRATION_LABELS: Record<Integration, string> = {
   eufy_robovac: 'Eufy RoboVac (HACS)',
   wyoming: 'Wyoming Protocol',
   apple_tv: 'Apple TV (AirPlay)',
+  upnp: 'UPnP/IGD',
+  livebox: 'Orange Livebox (HACS)',
 };
 
 /** Integraciones que no son oficiales: se instalan con HACS (repositorios de la comunidad). */
-export const HACS_INTEGRATIONS: ReadonlySet<Integration> = new Set<Integration>(['alexa_media_player', 'dreame_vacuum', 'eufy_robovac']);
+export const HACS_INTEGRATIONS: ReadonlySet<Integration> = new Set<Integration>(['alexa_media_player', 'dreame_vacuum', 'eufy_robovac', 'livebox']);
 
 export const CATEGORY_LABELS: Record<DeviceCategory, string> = {
   light: 'Iluminación',
@@ -84,6 +86,7 @@ export const ROLE_LABELS: Record<NetworkRole, string> = {
   border_router: 'Border router Thread',
   access_point: 'Punto de acceso',
   ha_server: 'Servidor Home Assistant',
+  internet: 'Salida a Internet',
 };
 
 export const IOT_CLASS_LABELS: Record<IotClass, string> = {
@@ -135,6 +138,11 @@ const BRAND_SET: Record<Brand, true> = {
   Apple: true,
   Espressif: true,
   'Raspberry Pi': true,
+  Movistar: true,
+  Vodafone: true,
+  Orange: true,
+  Digi: true,
+  Operadora: true,
 };
 
 const DOMAIN_SET: Record<EntityDomain, true> = {
@@ -203,6 +211,8 @@ export const INTEGRATION_IOT_CLASS: Record<Integration, IotClass> = {
   eufy_robovac: 'local_polling',
   wyoming: 'local_push',
   apple_tv: 'local_push',
+  upnp: 'local_polling',
+  livebox: 'local_polling',
 };
 
 /** hvac_action de un termostato (acción HVAC en curso, como HA en español). */
@@ -263,6 +273,26 @@ export const BUTTON_ACTION_LABELS: Record<string, string> = {
   arrow_right: 'Derecha',
   toggle: 'Alternar',
   none: 'En espera',
+  // Pulsadores dobles (Aqara H1), Hue Tap Dial e IKEA SOMRIG.
+  single_left: 'Pulsación izquierda',
+  double_left: 'Doble izquierda',
+  hold_left: 'Mantener izquierda',
+  single_right: 'Pulsación derecha',
+  double_right: 'Doble derecha',
+  hold_right: 'Mantener derecha',
+  single_both: 'Pulsación de ambos',
+  button_1_press: 'Botón 1',
+  button_2_press: 'Botón 2',
+  button_3_press: 'Botón 3',
+  button_4_press: 'Botón 4',
+  dial_rotate_left: 'Girar a la izquierda',
+  dial_rotate_right: 'Girar a la derecha',
+  '1_short_release': 'Botón 1: pulsación',
+  '1_double_press': 'Botón 1: doble',
+  '1_long_press': 'Botón 1: mantener',
+  '2_short_release': 'Botón 2: pulsación',
+  '2_double_press': 'Botón 2: doble',
+  '2_long_press': 'Botón 2: mantener',
 };
 
 /** Tanda 3: estados de una alarma (alarm_control_panel). */

@@ -607,6 +607,7 @@ export function deviceIcon(def: DeviceDefinition, entityDeviceClass?: string): s
   if (def.assistant && def.category === 'display') return '🖥️';
   if (def.assistant) return '🗣️';
   if (def.role === 'coordinator') return '📡';
+  if (def.role === 'internet') return '🌐';
   if (def.category === 'cover') return '🪟';
   if (def.category === 'switch' && def.entities.some((e) => e.domain === 'switch')) return '🎚️';
   return CATEGORY_ICONS[def.category];

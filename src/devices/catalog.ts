@@ -327,7 +327,7 @@ export function validateDefinition(def: DeviceDefinition, base: DeviceDefinition
   }
   if (!isCustomDefinitionId(def.id)) errors.push(`El id «${def.id}» debe empezar por «${CUSTOM_PREFIX}»`);
   if (base.some((d) => d.id === def.id)) errors.push(`El id «${def.id}» ya existe en el catálogo`);
-  const infra = ['coordinator', 'hub', 'border_router', 'access_point', 'ha_server'];
+  const infra = ['coordinator', 'hub', 'border_router', 'access_point', 'ha_server', 'internet'];
   if (def.entities.length === 0 && !infra.includes(def.role)) errors.push('El dispositivo necesita al menos una entidad');
   if (def.integrations.length > 0 && def.protocols.length === 0) errors.push('Indica al menos un protocolo');
   for (const e of def.entities) {

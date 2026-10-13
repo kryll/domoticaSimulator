@@ -5,11 +5,29 @@ import { INTEGRATION_IOT_CLASS } from './labels';
 /** Equipo propuesto para cada hub propietario. */
 export const HUB_FOR_BRAND: Partial<Record<Brand, Id>> = { Aqara: 'aqara-hub-m2', IKEA: 'ikea-dirigera', 'Philips Hue': 'hue-bridge-v2' };
 
-const INFRA_ROLES: readonly NetworkRole[] = ['coordinator', 'hub', 'border_router', 'access_point', 'ha_server'];
+const INFRA_ROLES: readonly NetworkRole[] = ['coordinator', 'hub', 'border_router', 'access_point', 'ha_server', 'internet'];
 
-/** Infraestructura: coordinadores, hubs, border routers, puntos de acceso y servidor HA. */
+/** Infraestructura: coordinadores, hubs, border routers, puntos de acceso, servidor HA y salida a Internet. */
 export function isInfra(def: DeviceDefinition): boolean {
   return INFRA_ROLES.includes(def.role);
+}
+
+/** Operadoras de fibra cuyos routers vienen con el contrato. */
+export const OPERATOR_BRANDS: readonly Brand[] = ['Movistar', 'Vodafone', 'Orange', 'Digi', 'Operadora'];
+
+/** Salida a Internet de la operadora (fibra): el nodo al que se conecta el router. */
+export function isInternetNode(def: Pick<DeviceDefinition, 'role'>): boolean {
+  return def.role === 'internet';
+}
+
+/** Router de una operadora (cedido con el contrato de fibra): puerta de enlace hacia Internet. */
+export function isOperatorRouter(def: Pick<DeviceDefinition, 'role' | 'brand'>): boolean {
+  return def.role === 'access_point' && OPERATOR_BRANDS.includes(def.brand);
+}
+
+/** Equipo que la operadora incluye con el contrato (router o salida a Internet): puede costar 0 €. */
+export function isOperatorEquipment(def: Pick<DeviceDefinition, 'role' | 'brand'>): boolean {
+  return isInternetNode(def) || isOperatorRouter(def);
 }
 
 export const MESH_PROTOCOLS: readonly Protocol[] = ['zigbee', 'thread', 'zwave'];

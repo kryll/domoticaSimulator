@@ -64,7 +64,7 @@ import {
   type SunConfig,
   type SunLocation,
 } from './clock';
-import { internetAvailable, isCloudDevice, isHaRestarting } from './connectivity';
+import { failuresMayCutInternet, internetAvailable, isCloudDevice, isHaRestarting } from './connectivity';
 import { energyStep, initialBatteryLevel, LOW_BATTERY_LEVEL, loadWatts, type EnergyStep } from './energy';
 import { friendlyName, inNumericRange, normalizeState, sameState, toNumber } from './stateUtils';
 import { addTrace, describeTrigger, explainCondition, newTrace, setTraceAction, updateTrace, type SunSource } from './trace';
@@ -684,7 +684,7 @@ export function runScript(sim: SimulationState, project: Project, scriptId: Id):
 /** ¿La entidad es de una integración de nube y no hay Internet? */
 function cloudBlocked(sim: SimulationState, project: Project, entityId: string): boolean {
   const f = sim.failures;
-  if (!f || (!f.internet && !f.powerOutage)) return false;
+  if (!f || !failuresMayCutInternet(f)) return false;
   const owner = findEntityOwner(project, entityId);
   return owner !== undefined && isCloudDevice(owner.device, owner.def) && !internetAvailable(project, catalog, f);
 }
@@ -832,7 +832,7 @@ function ttsSpeak(sim: SimulationState, project: Project, ttsEntity: string, dat
   if (message.trim() === '') return outcome(addLog(sim, 'warning', 'Servicio tts.speak: falta el mensaje ("message")', extra), false, 'falta el mensaje');
   const engineInfo = TTS_ENTITIES[ttsEntity];
   const f = sim.failures;
-  if (engineInfo?.cloud && f && (f.internet || f.powerOutage) && !internetAvailable(project, catalog, f)) {
+  if (engineInfo?.cloud && f && failuresMayCutInternet(f) && !internetAvailable(project, catalog, f)) {
     return fatalOutcome(addLog(sim, 'error', `tts.speak con ${engineInfo.name}: sin Internet no se genera el audio`, extra), 'TTS en la nube sin Internet');
   }
   const targets = ttsTargets(data);
@@ -993,7 +993,7 @@ function alexaAnnounce(sim: SimulationState, project: Project, service: string, 
 /** Las notificaciones a la app (notify.* salvo la persistente) necesitan Internet. */
 function notifyOffline(sim: SimulationState, project: Project, service: string, extra: LogExtra): Outcome | undefined {
   const f = sim.failures;
-  if (!f || (!f.internet && !f.powerOutage) || !isCloudNotifyService(service) || internetAvailable(project, catalog, f)) return undefined;
+  if (!f || !failuresMayCutInternet(f) || !isCloudNotifyService(service) || internetAvailable(project, catalog, f)) return undefined;
   return outcome(addLog(sim, 'error', `Notificación ${service} no enviada: necesita Internet`, extra), false, 'notificación en la nube sin Internet');
 }
 

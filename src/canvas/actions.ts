@@ -51,6 +51,8 @@ const ROLE_RANK: Record<NetworkRole, number> = {
   hub: 3,
   coordinator: 3,
   ha_server: 4,
+  // La salida a Internet es hija del router: un enlace router–salida va de la salida al router.
+  internet: 0,
 };
 
 /** Ordena el par para que sourceId sea el hijo y targetId el padre (infraestructura). */

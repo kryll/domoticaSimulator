@@ -12,7 +12,7 @@ import { stateLabel } from '../devices/stateLabels';
 import { normalizeUtterance } from './conversation';
 import { activateScene, callService, findScene, fireConversation, scheduleTimer, setEntityState } from './engine';
 import { addLog } from './simLog';
-import { internetAvailable, isHaRestarting } from './connectivity';
+import { failuresMayCutInternet, internetAvailable, isHaRestarting } from './connectivity';
 import { entityTimerKey } from './timers';
 import { ASSISTANT_LABELS, OFFLINE_REPLY, isExposed, speechSeconds, withSpeech } from './voice';
 
@@ -401,7 +401,7 @@ export function sayToAssistant(sim: SimulationState, project: Project, deviceId:
   if (said === '') return { sim, response: '', ok: false };
   const failures = sim.failures;
   const powerless = failures?.powerOutage === true && device.ups !== true;
-  const noInternet = failures !== undefined && (failures.internet || failures.powerOutage) && !internetAvailable(project, defs, failures);
+  const noInternet = failures !== undefined && failuresMayCutInternet(failures) && !internetAvailable(project, defs, failures);
   // Sin Internet el Echo o el Nest siguen encendidos (HA los ve no disponibles), pero no entienden.
   const cloudDown = info.pipeline === 'cloud' && noInternet && !powerless && !failures?.devicesDown.includes(device.id);
   if (!cloudDown && (powerless || sim.offline?.[device.id] || (main && sim.entities[main]?.state === 'unavailable'))) {
