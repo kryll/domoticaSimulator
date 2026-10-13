@@ -11,6 +11,7 @@ Tiempo estimado: 30-40 minutos. La primera vez se descarga la imagen de Z-Wave J
 - [ ] **0.1** `git pull` y `emulator/scripts/setup.sh --all`. Al terminar, el resumen dice «Perfiles (vías reales): esphome,zwave» y muestra Z-Wave JS UI en http://localhost:8091.
 - [ ] **0.2** `grep COMPOSE_PROFILES emulator/.env` → `COMPOSE_PROFILES=esphome,zwave`. `docker ps` muestra además `hasim-zwave-mock` y `hasim-zwave-js-ui`.
 - [ ] **0.3** `ss -ltn | grep -E ':(3000|5556|8091|605[4-9])'`: todos en `127.0.0.1` (nada en `0.0.0.0`). El 5555 no aparece (solo existe dentro de Docker).
+- [ ] **0.3b** Carga la demo nueva: **Archivo → Cargar proyecto de demo** (se abre como proyecto nuevo y no borra el tuyo). La demo que guardaste en E1 no trae los dispositivos de E2: el Despacho debe tener 4 (Aspiradora, Antena Z-Wave, Enchufe despacho y Sensor despacho). Si solo ves la aspiradora, es la demo antigua.
 - [ ] **0.4** `ls -l emulator/.secrets/`: `esphome-nodes.json` aparece cuando la app manda el proyecto, a tu nombre y con `-rw-------`.
 
 ## 1. Z-Wave por Z-Wave JS
