@@ -1,9 +1,12 @@
-// Datos de los nodos ESPHome del laboratorio: puerto de su API (6053 + n, estable) y clave de
+// Datos de los nodos ESPHome del laboratorio: puerto de su API (16053 + n, estable) y clave de
 // cifrado Noise (32 bytes aleatorios por nodo, en base64). Se guardan en emulator/.secrets/
 // esphome-nodes.json (0600): HA guarda la misma clave en su entrada esphome.
 import { randomBytes } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+
+/** Puerto base por defecto: lejos de 6053 (ESPHome) y de 6054, que HA (aioesphomeapi) usa para escuchar. */
+export const ESPHOME_PORT_BASE = 16053;
 
 export interface EspNodeRecord {
   port: number;
@@ -22,7 +25,7 @@ export class EspNodeStore {
 
   constructor(
     private readonly file: string | undefined,
-    private readonly portBase = 6053,
+    private readonly portBase = ESPHOME_PORT_BASE,
   ) {}
 
   async load(): Promise<void> {
@@ -61,15 +64,23 @@ export class EspNodeStore {
     return this.data.nodes[id];
   }
 
-  /** Puerto y clave del nodo (los crea la primera vez: el primer puerto libre desde 6053 + 1). */
+  /**
+   * Puerto y clave del nodo (los crea la primera vez: el primer puerto libre desde la base + 1).
+   * Un nodo guardado con un puerto por debajo de la base (instalaciones anteriores, que usaban 6054,
+   * el puerto en el que escucha HA) pasa a uno nuevo y conserva su clave; HA actualiza el puerto de
+   * su entrada al volver a añadirlo.
+   */
   async ensure(id: string, encryption: boolean): Promise<EspNodeRecord> {
     await this.load();
     const existing = this.data.nodes[id];
-    if (existing && (existing.key !== undefined) === encryption) return existing;
+    const portOk = existing !== undefined && existing.port > this.portBase;
+    const keyOk = existing !== undefined && (existing.key !== undefined) === encryption;
+    if (existing && portOk && keyOk) return existing;
     const used = new Set(Object.entries(this.data.nodes).filter(([k]) => k !== id).map(([, r]) => r.port));
-    let port = existing?.port ?? this.portBase + 1;
+    let port = portOk && existing ? existing.port : this.portBase + 1;
     while (used.has(port)) port += 1;
-    const rec: EspNodeRecord = { port, ...(encryption ? { key: randomBytes(32).toString('base64') } : {}) };
+    const key = keyOk && existing ? existing.key : encryption ? randomBytes(32).toString('base64') : undefined;
+    const rec: EspNodeRecord = { port, ...(key !== undefined ? { key } : {}) };
     this.data.nodes[id] = rec;
     await this.save();
     return rec;

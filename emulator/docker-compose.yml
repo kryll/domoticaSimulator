@@ -11,7 +11,7 @@
 # Perfiles de E2 (setup.sh --zwave / --esphome / --all; se recuerdan en .env con COMPOSE_PROFILES):
 #   zwave:   zwave-mock (controlador Z-Wave emulado con zwave-js) + Z-Wave JS UI → integración zwave_js.
 #   esphome: sin contenedores nuevos; el orquestador emula la API nativa de cada nodo ESPHome en
-#            127.0.0.1:6053+n → integración esphome.
+#            127.0.0.1:16053+n → integración esphome.
 name: hasim-lab
 
 services:
@@ -93,7 +93,7 @@ services:
       ZWAVE_JS_URL: ws://127.0.0.1:3000
       ZWAVE_DATA_DIR: /zwave
       ESPHOME_HOST: 127.0.0.1
-      ESPHOME_PORT_BASE: "6053"
+      ESPHOME_PORT_BASE: "16053"
       # LAB_TOKEN llega de .env (env_file): el orquestador lo exige a la app y en /project.
       # Si sirves la app en la LAN con un nombre (p. ej. http://mipc.local:8080), añádelo aquí.
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}

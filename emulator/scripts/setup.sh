@@ -3,7 +3,7 @@
 #   emulator/scripts/setup.sh [--no-build] [--zwave] [--esphome] [--all] [--matter] [--docker|--no-docker]
 #   --no-build    no vuelve a compilar la app (usa dist/ tal cual)
 #   --zwave       Z-Wave real: controlador mock (zwave-js) + Z-Wave JS UI → integración zwave_js
-#   --esphome     ESPHome real: API nativa emulada por nodo (127.0.0.1:6053+n) → integración esphome
+#   --esphome     ESPHome real: API nativa emulada por nodo (127.0.0.1:16053+n) → integración esphome
 #   --all         --zwave y --esphome
 #   --no-zwave / --no-esphome / --no-matter   quita ese perfil
 #   --matter      arranca también matterjs-server (experimental, E3)
@@ -176,7 +176,7 @@ if has_profile zwave; then
   echo "  Z-Wave JS UI:           http://localhost:8091   (antena = mock de zwave-js; HA usa ws://127.0.0.1:3000)"
 fi
 if has_profile esphome; then
-  echo "  ESPHome:                cada nodo escucha en 127.0.0.1:6054, 6055… (claves en emulator/.secrets/esphome-nodes.json)"
+  echo "  ESPHome:                cada nodo escucha en 127.0.0.1:16054, 16055… (claves en emulator/.secrets/esphome-nodes.json)"
 fi
 cat <<MSG
   Snapshots:              restaurar necesita setup.sh --docker (control de Docker para parar HA)

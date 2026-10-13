@@ -1,5 +1,5 @@
 // Vía ESPHome real (perfil «esphome»): un servidor de la API nativa por cada dispositivo ESPHome
-// del proyecto, en 127.0.0.1:6053+n (HA va en red host y lo alcanza; nada queda abierto a la LAN).
+// del proyecto, en 127.0.0.1:16053+n (HA va en red host y lo alcanza; nada queda abierto a la LAN).
 // Arrancar o parar el nodo es abrir o cerrar su servidor. Cada nodo se añade a HA con el flujo de
 // la integración esphome (host 127.0.0.1, su puerto y su clave de cifrado).
 import type { Id } from '../../../../src/types';
@@ -7,7 +7,7 @@ import { buildEsphomePlan, espCommandToService, espNodeStates, type EspNodePlan,
 import type { NativeStatus } from '../../../../src/bridge/protocol';
 import type { NativeBackend, NativeContext, NativeEvents } from '../native';
 import { EspNodeServer } from './node';
-import { EspNodeStore } from './store';
+import { ESPHOME_PORT_BASE, EspNodeStore } from './store';
 import { decodePsk } from './noise';
 import { ensureEsphomeEntry, esphomeUniqueIdMatcher, flowOk, removeEsphomeEntry, type AlignTarget, type HaApi } from '../haNative';
 
@@ -47,7 +47,7 @@ export class EsphomeBackend implements NativeBackend {
   private projectId = '';
 
   constructor(private readonly opts: EsphomeBackendOptions = {}) {
-    this.store = new EspNodeStore(opts.storeFile, opts.portBase ?? 6053);
+    this.store = new EspNodeStore(opts.storeFile, opts.portBase ?? ESPHOME_PORT_BASE);
   }
 
   async start(events: NativeEvents): Promise<void> {

@@ -55,7 +55,7 @@ Listas de pruebas manuales: [docs/PRUEBAS_E1.md](../docs/PRUEBAS_E1.md) (base) y
 | Caddy | `caddy:2` | host | **127.0.0.1:8080** por defecto: sirve `../dist` y hace de proxy de `/orchestrator` y `/mqtt` |
 | zwave-mock (perfil `zwave`) | la imagen del orquestador (`orchestrator/src/zwave/mockMain.ts`) | bridge | puerto serie emulado 5555 **solo en la red interna de Docker**; 127.0.0.1:5556 (control, exige el token) |
 | Z-Wave JS UI (perfil `zwave`) | `zwavejs/zwave-js-ui` | bridge | 127.0.0.1:8091 (web, sin contraseña: solo este PC) y 127.0.0.1:3000 (servidor Z-Wave JS para HA) |
-| Nodos ESPHome (perfil `esphome`) | dentro del orquestador | host | 127.0.0.1:6054, 6055… (API nativa de cada nodo, cifrada con Noise) |
+| Nodos ESPHome (perfil `esphome`) | dentro del orquestador | host | 127.0.0.1:16054, 16055… (API nativa de cada nodo, cifrada con Noise) |
 | matterjs-server (perfil `matter`, E3) | `ghcr.io/matter-js/matterjs-server` | host (mDNS, IPv6) | 5580 en **todas** las interfaces y **sin autenticación**: actívalo solo en una red de confianza o bloquea el 5580 con el cortafuegos |
 
 **Seguridad del laboratorio:**
@@ -134,7 +134,7 @@ simulador ⇄ orquestador ⇄ (WS 127.0.0.1:5556) zwave-mock ⇄ (TCP 5555, red 
 
 ### ESPHome (perfil `esphome`)
 
-**Vía elegida: emulador de la API nativa en el orquestador**, no firmware compilado. Cada dispositivo ESPHome del proyecto es un servidor TCP en `127.0.0.1:6053+n` que habla la API nativa (protobuf, el mismo protocolo que el firmware) con **cifrado Noise** (`Noise_NNpsk0_25519_ChaChaPoly_SHA256`, clave aleatoria por nodo en `.secrets/esphome-nodes.json`). HA lo añade con su integración `esphome` real: el orquestador hace el flujo de configuración (host `127.0.0.1`, puerto y clave) en cuanto el nodo arranca, y borra la entrada si el dispositivo sale del proyecto.
+**Vía elegida: emulador de la API nativa en el orquestador**, no firmware compilado. Cada dispositivo ESPHome del proyecto es un servidor TCP en `127.0.0.1:16053+n` (lejos de 6054, donde escucha HA) que habla la API nativa (protobuf, el mismo protocolo que el firmware) con **cifrado Noise** (`Noise_NNpsk0_25519_ChaChaPoly_SHA256`, clave aleatoria por nodo en `.secrets/esphome-nodes.json`). HA lo añade con su integración `esphome` real: el orquestador hace el flujo de configuración (host `127.0.0.1`, puerto y clave) en cuanto el nodo arranca, y borra la entrada si el dispositivo sale del proyecto.
 
 Por qué no la plataforma `host` compilada: compilar un binario por nodo con la imagen de ESPHome tarda minutos y ocupa cientos de MB por nodo, necesita PlatformIO/toolchain en el contenedor, y para fijar los valores desde el simulador haría falta un canal extra (servidor web REST o acciones de API) y otro de vuelta para los comandos (`http_request`). El emulador arranca al instante, no compila nada, publica los valores directamente y recibe los comandos de HA tal cual. Lo que ve HA es lo mismo: un dispositivo ESPHome con su API nativa cifrada. Se ha probado contra el cliente de HA (`aioesphomeapi`) y contra `@2colors/esphome-native-api` (tests).
 

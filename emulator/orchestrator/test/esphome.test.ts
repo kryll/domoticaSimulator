@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
@@ -12,6 +12,7 @@ import { ProtoWriter, readProto } from '../src/esphome/proto';
 import { decodePsk, initiateHandshake, respondHandshake } from '../src/esphome/noise';
 import { EspNodeServer } from '../src/esphome/node';
 import { EsphomeBackend } from '../src/esphome/backend';
+import { ESPHOME_PORT_BASE, EspNodeStore } from '../src/esphome/store';
 import { esphomeUniqueIdMatcher, fillForm, runConfigFlow, alignEntities, zwaveUniqueIdMatcher, type HaApi } from '../src/haNative';
 import { esphomeNodePlan, espNodeStates, type EspCommand } from '../../../src/bridge/esphome/plan';
 import { catalog } from '../../../src/devices/catalog';
@@ -287,5 +288,24 @@ describe('motivos de los flujos', () => {
     expect(flowOk({ result: 'aborted', reason: 'already_configured_updates' })).toBe(true);
     expect(flowOk({ result: 'aborted', reason: 'single_instance_allowed' })).toBe(true);
     expect(flowOk({ result: 'aborted', reason: 'cannot_connect' })).toBe(false);
+  });
+});
+
+describe('puertos de los nodos ESPHome', () => {
+  it('no usan 6054 (HA escucha ahí) y los guardados con un puerto antiguo cambian de puerto sin perder la clave', async () => {
+    expect(ESPHOME_PORT_BASE).toBeGreaterThan(6054);
+    const file = join(await mkdtemp(join(tmpdir(), 'hasim-espstore-')), 'esphome-nodes.json');
+    const key = randomBytes(32).toString('base64');
+    await writeFile(file, JSON.stringify({ version: 1, nodes: { 'p/viejo': { port: 6054, key }, 'p/nuevo': { port: ESPHOME_PORT_BASE + 1, key } } }));
+    const store = new EspNodeStore(file);
+    const nuevo = await store.ensure('p/nuevo', true);
+    expect(nuevo.port).toBe(ESPHOME_PORT_BASE + 1);
+    const viejo = await store.ensure('p/viejo', true);
+    expect(viejo.port).toBe(ESPHOME_PORT_BASE + 2);
+    expect(viejo.key).toBe(key);
+    const saved = JSON.parse(await readFile(file, 'utf8')) as { nodes: Record<string, { port: number; key?: string }> };
+    expect(saved.nodes['p/viejo']).toEqual({ port: ESPHOME_PORT_BASE + 2, key });
+    // Sin cifrado, el nodo pierde la clave pero conserva el puerto.
+    expect(await store.ensure('p/nuevo', false)).toEqual({ port: ESPHOME_PORT_BASE + 1 });
   });
 });

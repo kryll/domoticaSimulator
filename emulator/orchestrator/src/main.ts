@@ -9,6 +9,7 @@ import { haApi } from './haNative';
 import type { NativeBackend } from './native';
 import { ZwaveBackend, wsMockLink } from './zwave/backend';
 import { EsphomeBackend } from './esphome/backend';
+import { ESPHOME_PORT_BASE } from './esphome/store';
 import type { SnapshotExtra } from './snapshots';
 
 const env = process.env;
@@ -39,7 +40,7 @@ if (profiles.has('esphome')) {
   native.push(
     new EsphomeBackend({
       host: env.ESPHOME_HOST ?? '127.0.0.1',
-      portBase: Number(env.ESPHOME_PORT_BASE ?? 6053),
+      portBase: Number(env.ESPHOME_PORT_BASE ?? ESPHOME_PORT_BASE),
       encryption: env.ESPHOME_ENCRYPTION !== '0',
       storeFile: join(secretsDir, 'esphome-nodes.json'),
       ha,

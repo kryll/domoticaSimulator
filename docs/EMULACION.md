@@ -36,7 +36,7 @@ Diseño para que los dispositivos del simulador aparezcan en un Home Assistant r
 |---|---|---|
 | Z-Wave | **Sí, hecho en E2** | Controlador y nodos mock de `zwave-js` (TCP) → Z-Wave JS UI (`tcp://zwave-mock:5555`) → integración `zwave_js` (`ws://127.0.0.1:3000`). Command classes: Binary Switch, Multilevel Switch, Meter, Multilevel Sensor, Notification, Binary Sensor, Door Lock, Battery y Wake Up. Probado con el driver real de zwave-js (tests) y con HA 2026.10 + zwave-js-server (ensayo local). |
 | Matter sobre IP | Sí | matter.js (bridge con `AggregatorEndpoint` + `BridgedDeviceBasicInformation`, o nodos sueltos) → matterjs-server (`ghcr.io/matter-js/matterjs-server`, API WS 5580) → integración Matter. Comisionado automático con el comando WS de HA `matter/commission`. Requiere IPv6, mDNS y red `host`. |
-| ESPHome | **Sí, hecho en E2** | Emulador de la API nativa (protobuf + Noise) en el orquestador, un servidor por nodo en `127.0.0.1:6053+n`; el orquestador lo añade a HA con el flujo de `esphome` (host, puerto y clave). Se descartó compilar la plataforma `host` (minutos y cientos de MB por nodo, PlatformIO, y canales extra para fijar valores y recibir comandos). Probado con `aioesphomeapi` y HA 2026.10. |
+| ESPHome | **Sí, hecho en E2** | Emulador de la API nativa (protobuf + Noise) en el orquestador, un servidor por nodo en `127.0.0.1:16053+n`; el orquestador lo añade a HA con el flujo de `esphome` (host, puerto y clave). Se descartó compilar la plataforma `host` (minutos y cientos de MB por nodo, PlatformIO, y canales extra para fijar valores y recibir comandos). Probado con `aioesphomeapi` y HA 2026.10. |
 | Shelly Gen2 | Sí, con un emulador propio | HTTP `/shelly`, `/rpc` (`Shelly.GetDeviceInfo`, `GetStatus`, `GetConfig`, `Switch.Set`) y WebSocket `NotifyStatus`. |
 | Zigbee | Parcial | No hay coordinador emulado usable. Se usa un «Z2M emulado» que publica el formato exacto de Zigbee2MQTT: `bridge/state`, `bridge/info`, `bridge/devices` con exposes de zigbee-herdsman-converters, `availability`, `last_seen` y `linkquality`; los comandos llegan por `/set`. Base topic propio (`hasim-z2m`). |
 | ZHA | No viable | zigpy no tiene radio virtual. Se representa por MQTT genérico, con un aviso. |
@@ -58,7 +58,7 @@ Navegador (app)  ──WS──►  hasim-orchestrator (Node, red host)
                             ├─ Z2M emulado ─────────► Mosquitto ─► HA (MQTT)
                             ├─ MQTT discovery genérico ─► Mosquitto ─► HA (MQTT)
                             ├─ (WS 5556) zwave-mock ─(TCP 5555)─► Z-Wave JS UI ─(WS 3000)─► HA (zwave_js)
-                            ├─ API nativa ESPHome por nodo (127.0.0.1:6053+n, Noise) ─► HA (esphome)
+                            ├─ API nativa ESPHome por nodo (127.0.0.1:16053+n, Noise) ─► HA (esphome)
                             ├─ bridge matter.js ─► matterjs-server ─► HA (matter)        [E3]
                             └─ emuladores Shelly ─► HA (shelly)                           [E3]
 Caddy sirve la app y hace de proxy de /orchestrator y /mqtt en el mismo origen (sin contenido mixto).
