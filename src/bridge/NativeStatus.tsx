@@ -7,7 +7,7 @@ import type { NativeServiceState, NativeStatus as NativeStatusInfo } from './pro
 
 const TONE: Record<NativeServiceState, BadgeTone> = { disabled: 'slate', connecting: 'amber', connected: 'green', error: 'red' };
 
-const LINK_LABEL: Record<'zwave_js' | 'esphome' | 'matter', string> = { zwave_js: 'Abrir Z-Wave JS UI', esphome: '', matter: '' };
+const LINK_LABEL: Record<'zwave_js' | 'esphome' | 'matter', string> = { zwave_js: 'Abrir Z-Wave JS UI', esphome: '', matter: 'Abrir el panel de matterjs-server' };
 
 /** Una línea por vía real activa: nombre, estado, detalle y enlace a su interfaz. */
 export function NativeStatusList({ compact = false }: { compact?: boolean }) {

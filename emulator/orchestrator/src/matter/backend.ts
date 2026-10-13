@@ -31,6 +31,8 @@ export interface MatterBackendOptions {
   commissionRetryMs?: number[];
   /** Cada cuánto se mira en matterjs-server si ve el bridge disponible (ms). */
   checkIntervalMs?: number;
+  /** Panel web de matterjs-server (enlace en la app). */
+  dashboardUrl?: string;
   /** Nivel de log de matter.js (por defecto, avisos). */
   matterLogLevel?: 'notice' | 'warn' | 'error';
 }
@@ -341,7 +343,7 @@ export class MatterBackend implements NativeBackend {
       state = 'connecting';
       detail = total === 0 ? 'Sin dispositivos Matter en el proyecto' : 'Comisionando el bridge en matterjs-server…';
     }
-    return { state, detail, nodes };
+    return { state, detail, nodes, ...(this.opts.dashboardUrl ? { url: this.opts.dashboardUrl } : {}) };
   }
 
   /** Antes de restaurar un snapshot: cierra el bridge (no debe escribir en su carpeta mientras se copia). */

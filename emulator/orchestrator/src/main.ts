@@ -57,6 +57,7 @@ if (profiles.has('matter')) {
       port: Number(env.MATTER_BRIDGE_PORT ?? MATTER_BRIDGE_PORT),
       storagePath: matterDir,
       secretsFile: join(secretsDir, 'matter.json'),
+      dashboardUrl: env.MATTER_DASHBOARD_URL ?? 'http://localhost:5580',
     }),
   );
 }
