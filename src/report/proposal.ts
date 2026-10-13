@@ -263,6 +263,7 @@ function phaseOf(def: DeviceDefinition): number {
   switch (def.role) {
     case 'ha_server':
       return 0;
+    case 'internet':
     case 'access_point':
       return 1;
     case 'coordinator':

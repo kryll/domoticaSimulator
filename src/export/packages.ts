@@ -183,6 +183,10 @@ export const ROLE_STEPS: Partial<Record<DeviceDefinition['role'], string[]>> = {
     'Reserva una IP fija para el servidor de Home Assistant y, si puedes, para los dispositivos Wi-Fi.',
     'Comprueba que el servidor y los dispositivos están en la misma red local (sin aislamiento de clientes).',
   ],
+  internet: [
+    'Comprueba que la fibra de la operadora llega al router (luz PON/fibra encendida) y que hay conexión a Internet.',
+    'Si usas otro router o una malla Wi-Fi detrás del de la operadora, conéctalos por cable al router de la operadora.',
+  ],
 };
 
 /** areas.yaml: referencia de áreas con su planta, dispositivos y entidades (se crean en Ajustes → Áreas). */
@@ -276,12 +280,21 @@ export const PAIRING_STEPS: Record<Integration, string[]> = {
     'Configura el HomePod con la app Casa del iPhone.',
     'Home Assistant lo descubre: acepta la integración Apple TV (AirPlay) e introduce el PIN si lo pide. Solo da un reproductor: Siri no se controla desde HA (para usar Siri con HA, expón entidades con el puente HomeKit).',
   ],
+  upnp: [
+    'Activa UPnP en el router de la operadora (en muchos viene activado de serie).',
+    'Home Assistant lo descubre: acepta la integración UPnP/IGD para ver el estado de la conexión a Internet, la IP pública y el tráfico.',
+  ],
+  livebox: [
+    'Instala la integración Orange Livebox desde HACS (repositorio de la comunidad, no oficial).',
+    'Añádela con la IP del Livebox (192.168.1.1) y la contraseña de administración: da el estado de la conexión y los equipos conectados.',
+  ],
 };
 
 function phase(def: DeviceDefinition): number {
   switch (def.role) {
     case 'ha_server':
       return 0;
+    case 'internet':
     case 'access_point':
       return 1;
     case 'coordinator':
@@ -335,7 +348,8 @@ export function pairingGuide(project: Project, defs: DeviceDefinition[]): string
     if (i <= 1) {
       const role = i === 0 ? 'ha_server' : 'access_point';
       lines.push('', 'Pasos:', '');
-      (ROLE_STEPS[role] ?? []).forEach((step, n) => lines.push(`${n + 1}. ${step}`));
+      const extra = i === 1 && items.some((p) => p.def.role === 'internet') ? (ROLE_STEPS.internet ?? []) : [];
+      [...(ROLE_STEPS[role] ?? []), ...extra].forEach((step, n) => lines.push(`${n + 1}. ${step}`));
       lines.push('');
       return;
     }

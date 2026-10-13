@@ -8,6 +8,8 @@ import {
   effectiveIotClass,
   isBleProxy,
   isInfra,
+  isInternetNode,
+  isOperatorRouter,
   isRfBridge,
   isThreadBorderRouter,
   isZigbeeCoordinator,
@@ -24,6 +26,7 @@ import { missingRequiredFields } from '../simulation/serviceCatalog';
 import { actionConditions, flattenActions, serviceAreaIds, serviceEntityIds } from '../automations/walk';
 import { areaEntityIds } from '../devices/areas';
 import { canConnect } from './connections';
+import { internetPathExists } from './internet';
 import { parseAreaIds, unknownVacuumRooms } from '../simulation/vacuum';
 import { TTS_ENTITIES } from '../simulation/voice';
 import { isInRange } from './coverage';
@@ -79,6 +82,8 @@ export const ISSUE_TITLES: Record<string, string> = {
   'robot-sin-sala': 'Robot sin sala',
   'segmento-sala-desconocida': 'Sala del robot que no existe',
   'asistente-voz-nube': 'Asistente de voz en la nube',
+  'sin-camino-internet': 'La salida a Internet no llega a HA',
+  'sin-salida-internet': 'Falta la salida a Internet',
 };
 
 /** Título legible de una incidencia (el suyo o, si no lo tiene, el de su código). */
@@ -421,6 +426,38 @@ function cloudAssistantRule(ctx: Ctx): ValidationIssue[] {
   );
 }
 
+/** Dispositivos que necesitan Internet: integraciones en la nube y asistentes de voz en la nube. */
+function needsInternet(ctx: Ctx): Placed[] {
+  return ctx.placed.filter((p) => {
+    if (p.def.assistant?.pipeline === 'cloud') return true;
+    if (isInfra(p.def) && p.def.role !== 'hub' && p.def.role !== 'border_router') return false;
+    return isCloud(effectiveIotClass(p.device, p.def));
+  });
+}
+
+/**
+ * Salida a Internet: con dispositivos en la nube, avisa si la salida no llega a Home Assistant o
+ * si hay router de operadora pero falta la salida. Sin salida ni router de operadora (proyectos
+ * de siempre) no dice nada: se supone que hay Internet.
+ */
+function internetRule(ctx: Ctx): ValidationIssue[] {
+  const cloud = needsInternet(ctx);
+  if (cloud.length === 0) return [];
+  const exits = ctx.placed.filter((p) => isInternetNode(p.def));
+  const listed = cloud.length > 4 ? `${names(cloud.slice(0, 4))} y ${cloud.length - 4} más` : names(cloud);
+  if (exits.length > 0) {
+    if (internetPathExists(ctx.project, ctx.defs)) return [];
+    return [
+      issue('warning', 'sin-camino-internet', `${names(exits)} no llega${exits.length > 1 ? 'n' : ''} a Home Assistant: conecta la salida a Internet al router y el router al servidor (directamente o a través de otros routers). Sin ese camino no funcionarán ${listed}`, [...ids(exits), ...ids(cloud)]),
+    ];
+  }
+  const routers = ctx.placed.filter((p) => isOperatorRouter(p.def));
+  if (routers.length === 0) return [];
+  return [
+    issue('warning', 'sin-salida-internet', `Hay router de operadora (${names(routers)}) pero ninguna «Salida a Internet»: añádela y conéctala al router para simular la fibra. La necesitan ${listed}`, ids(routers)),
+  ];
+}
+
 function roomRule(ctx: Ctx): ValidationIssue[] {
   return ctx.project.devices
     .filter((d) => !d.roomId || !ctx.project.rooms.some((r) => r.id === d.roomId))
@@ -545,6 +582,7 @@ export function validateProject(project: Project, baseDefs: DeviceDefinition[]):
     ...isolatedInfraRule(ctx),
     ...cloudRule(ctx),
     ...cloudAssistantRule(ctx),
+    ...internetRule(ctx),
     ...vacuumRules(ctx),
     ...roomRule(ctx),
   );

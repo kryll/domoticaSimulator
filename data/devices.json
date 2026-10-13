@@ -6297,5 +6297,194 @@
       "pipeline": "local",
       "speaker": "básico"
     }
+  },
+  {
+    "id": "movistar-smart-wifi-6",
+    "brand": "Movistar",
+    "model": "RTF8225VW / GPT-2742GX4X5 v6",
+    "name": "Router Movistar Smart WiFi 6 (fibra)",
+    "category": "network",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "upnp"
+    ],
+    "iotClass": "local_polling",
+    "role": "access_point",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [],
+    "icon": "router",
+    "priceEur": 0
+  },
+  {
+    "id": "movistar-smart-wifi-7",
+    "brand": "Movistar",
+    "model": "RTF8316",
+    "name": "Router Movistar WiFi 7 (fibra)",
+    "category": "network",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "upnp"
+    ],
+    "iotClass": "local_polling",
+    "role": "access_point",
+    "power": "mains",
+    "rangeMeters": 35,
+    "entities": [],
+    "icon": "router",
+    "priceEur": 0
+  },
+  {
+    "id": "vodafone-wifi-6-station",
+    "brand": "Vodafone",
+    "model": "Sercomm RHG3006",
+    "name": "Router Vodafone Wi-Fi 6 Station (fibra)",
+    "category": "network",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "upnp"
+    ],
+    "iotClass": "local_polling",
+    "role": "access_point",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [],
+    "icon": "router",
+    "priceEur": 0
+  },
+  {
+    "id": "vodafone-h500s",
+    "brand": "Vodafone",
+    "model": "Sercomm H500-s",
+    "name": "Router Vodafone H500-s (Wi-Fi 5, ONT aparte)",
+    "category": "network",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "upnp"
+    ],
+    "iotClass": "local_polling",
+    "role": "access_point",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [],
+    "icon": "router",
+    "priceEur": 0
+  },
+  {
+    "id": "orange-livebox-6",
+    "brand": "Orange",
+    "model": "Livebox 6",
+    "name": "Router Orange Livebox 6 (fibra)",
+    "category": "network",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "upnp",
+      "livebox"
+    ],
+    "iotClass": "local_polling",
+    "role": "access_point",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [],
+    "icon": "router",
+    "priceEur": 0
+  },
+  {
+    "id": "orange-livebox-7",
+    "brand": "Orange",
+    "model": "Livebox 7",
+    "name": "Router Orange Livebox 7 (Wi-Fi 7, fibra)",
+    "category": "network",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "upnp",
+      "livebox"
+    ],
+    "iotClass": "local_polling",
+    "role": "access_point",
+    "power": "mains",
+    "rangeMeters": 35,
+    "entities": [],
+    "icon": "router",
+    "priceEur": 0
+  },
+  {
+    "id": "digi-zte-f6640",
+    "brand": "Digi",
+    "model": "ZTE ZXHN F6640",
+    "name": "Router Digi ZTE F6640 (Wi-Fi 6, fibra)",
+    "category": "network",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "upnp"
+    ],
+    "iotClass": "local_polling",
+    "role": "access_point",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [],
+    "icon": "router",
+    "priceEur": 0
+  },
+  {
+    "id": "digi-zte-f8648p",
+    "brand": "Digi",
+    "model": "ZTE ZXHN F8648P",
+    "name": "Router Digi ZTE F8648P (10 Gb, Wi-Fi 6)",
+    "category": "network",
+    "protocols": [
+      "wifi",
+      "ethernet"
+    ],
+    "integrations": [
+      "upnp"
+    ],
+    "iotClass": "local_polling",
+    "role": "access_point",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [],
+    "icon": "router",
+    "priceEur": 0
+  },
+  {
+    "id": "internet-fibra",
+    "brand": "Operadora",
+    "model": "FTTH (GPON / XGS-PON)",
+    "name": "Salida a Internet (fibra de la operadora)",
+    "category": "network",
+    "protocols": [
+      "ethernet"
+    ],
+    "integrations": [
+      "upnp"
+    ],
+    "iotClass": "local_polling",
+    "role": "internet",
+    "power": "mains",
+    "entities": [],
+    "icon": "internet",
+    "priceEur": 0
   }
 ]

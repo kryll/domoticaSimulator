@@ -54,10 +54,12 @@ export const INTEGRATION_LABELS: Record<Integration, string> = {
   eufy_robovac: 'Eufy RoboVac (HACS)',
   wyoming: 'Wyoming Protocol',
   apple_tv: 'Apple TV (AirPlay)',
+  upnp: 'UPnP/IGD',
+  livebox: 'Orange Livebox (HACS)',
 };
 
 /** Integraciones que no son oficiales: se instalan con HACS (repositorios de la comunidad). */
-export const HACS_INTEGRATIONS: ReadonlySet<Integration> = new Set<Integration>(['alexa_media_player', 'dreame_vacuum', 'eufy_robovac']);
+export const HACS_INTEGRATIONS: ReadonlySet<Integration> = new Set<Integration>(['alexa_media_player', 'dreame_vacuum', 'eufy_robovac', 'livebox']);
 
 export const CATEGORY_LABELS: Record<DeviceCategory, string> = {
   light: 'Iluminación',
@@ -84,6 +86,7 @@ export const ROLE_LABELS: Record<NetworkRole, string> = {
   border_router: 'Border router Thread',
   access_point: 'Punto de acceso',
   ha_server: 'Servidor Home Assistant',
+  internet: 'Salida a Internet',
 };
 
 export const IOT_CLASS_LABELS: Record<IotClass, string> = {
@@ -135,6 +138,11 @@ const BRAND_SET: Record<Brand, true> = {
   Apple: true,
   Espressif: true,
   'Raspberry Pi': true,
+  Movistar: true,
+  Vodafone: true,
+  Orange: true,
+  Digi: true,
+  Operadora: true,
 };
 
 const DOMAIN_SET: Record<EntityDomain, true> = {
@@ -203,6 +211,8 @@ export const INTEGRATION_IOT_CLASS: Record<Integration, IotClass> = {
   eufy_robovac: 'local_polling',
   wyoming: 'local_push',
   apple_tv: 'local_push',
+  upnp: 'local_polling',
+  livebox: 'local_polling',
 };
 
 /** hvac_action de un termostato (acción HVAC en curso, como HA en español). */

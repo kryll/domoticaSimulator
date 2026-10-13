@@ -9,7 +9,7 @@ import { isBleProxy, isInfra } from '../devices/roles';
 import { canConnect } from '../network/connections';
 import { appendLog, cancelAllRuns, fireHomeAssistantEvent } from './engine';
 import { setDeviceOfflineRaw } from './events';
-import { activeFailures, internetAvailable, isCloudDevice, needsMains } from './connectivity';
+import { activeFailures, cloudLossReason, failuresMayCutInternet, internetLoss, isCloudDevice, needsMains } from './connectivity';
 import { allDefinitions } from '../devices/catalog';
 
 export { activeFailures, hasFailures, internetAvailable, isCloudDevice, isHaRestarting, needsMains, NO_FAILURES } from './connectivity';
@@ -97,15 +97,15 @@ function directReasons(
   placed: Map<Id, Placed>,
 ): Map<Id, string> {
   const reasons = new Map<Id, string>(extra);
-  const online = internetAvailable(project, defs, failures);
+  const loss = failuresMayCutInternet(failures) ? internetLoss(project, defs, failures) : null;
   for (const id of failures.devicesDown) if (placed.has(id)) reasons.set(id, 'fallo simulado del dispositivo');
   for (const p of placed.values()) {
     const id = p.device.id;
     if (reasons.has(id)) continue;
     if (failures.powerOutage && needsMains(p.def) && p.device.ups !== true && !poweredByHost(p, project, placed)) {
       reasons.set(id, 'sin corriente por el corte de luz');
-    } else if (!online && isCloudDevice(p.device, p.def)) {
-      reasons.set(id, failures.internet ? 'integración en la nube sin Internet' : 'integración en la nube: el router está sin corriente y no hay Internet');
+    } else if (loss !== null && isCloudDevice(p.device, p.def)) {
+      reasons.set(id, cloudLossReason(loss));
     }
   }
   return reasons;

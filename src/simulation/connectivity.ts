@@ -1,7 +1,10 @@
 // Estado de la conectividad según los fallos simulados (sin dependencias del motor).
 import type { Device, DeviceDefinition, Failures, Project, SimulationState } from '../types';
-import { isCloud, allDefinitions } from '../devices/catalog';
+import { isCloud } from '../devices/catalog';
 import { effectiveIotClass } from '../devices/roles';
+import { failuresMayCutInternet, internetLoss } from '../network/internet';
+
+export { failuresMayCutInternet, internetLoss, cloudLossReason } from '../network/internet';
 
 export const NO_FAILURES: Failures = { internet: false, powerOutage: false, haRestarting: false, devicesDown: [] };
 
@@ -32,10 +35,12 @@ export function isCloudDevice(device: Device, def: DeviceDefinition): boolean {
   return isCloud(effectiveIotClass(device, def));
 }
 
-/** ¿Hay Internet? No si se ha cortado, o si hay corte de luz y ningún router tiene SAI. */
-export function internetAvailable(project: Pick<Project, 'devices' | 'customDefinitions'>, defs: DeviceDefinition[], failures: Failures): boolean {
-  defs = allDefinitions(project, defs);
-  if (failures.internet) return false;
-  if (!failures.powerOutage) return true;
-  return project.devices.some((d) => d.ups === true && defs.find((x) => x.id === d.definitionId)?.role === 'access_point');
+/**
+ * ¿Hay Internet? No si se ha cortado; sin salida a Internet en el proyecto, tampoco con corte de
+ * luz si ningún router tiene SAI; con salida a Internet, solo si hay camino desde HA hasta ella
+ * por routers que funcionen (ver network/internet.ts).
+ */
+export function internetAvailable(project: Pick<Project, 'devices' | 'connections' | 'customDefinitions'>, defs: DeviceDefinition[], failures: Failures): boolean {
+  if (!failuresMayCutInternet(failures)) return true;
+  return internetLoss(project, defs, failures) === null;
 }

@@ -10,7 +10,7 @@ import { NO_FAILURES, hasFailures } from '../ui/failures';
 import { Button } from '../ui/Button';
 
 /** Roles de infraestructura que se pueden «tirar» desde el menú. */
-const DOWNABLE_ROLES = new Set(['coordinator', 'hub', 'border_router', 'access_point']);
+const DOWNABLE_ROLES = new Set(['coordinator', 'hub', 'border_router', 'access_point', 'internet']);
 
 function Toggle({ checked, onChange, children, hint }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode; hint?: string }) {
   return (
