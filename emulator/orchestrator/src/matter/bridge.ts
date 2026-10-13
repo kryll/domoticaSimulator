@@ -351,7 +351,10 @@ export class MatterBridge {
 
   /** Valor de Reachable que el endpoint publica en la red (diagnóstico y tests). */
   reachableOf(endpointId: string): boolean | undefined {
-    return this.bridged.get(endpointId)?.endpoint.stateOf('bridgedDeviceBasicInformation').reachable;
+    const b = this.bridged.get(endpointId);
+    if (!b) return undefined;
+    const reachable: unknown = b.endpoint.stateOf('bridgedDeviceBasicInformation').reachable;
+    return typeof reachable === 'boolean' ? reachable : undefined;
   }
 
   /**
