@@ -35,11 +35,12 @@ export function useBridge() {
 }
 
 /**
- * Vías reales activas en el orquestador (perfiles zwave y esphome, de `status.capabilities`): con
- * ellas, los dispositivos Z-Wave y ESPHome llegan a HA por su integración real.
+ * Vías reales activas en el orquestador (perfiles zwave, esphome y matter, de `status.capabilities`):
+ * con ellas, los dispositivos Z-Wave, ESPHome y Matter llegan a HA por su integración real.
  */
 export function useActiveNative(): ReadonlySet<NativeTransport> {
   const zwave = useBridgeStore((s) => s.status?.capabilities?.zwave === true);
   const esphome = useBridgeStore((s) => s.status?.capabilities?.esphome === true);
-  return useMemo(() => activeNativeTransports({ zwave, esphome }), [zwave, esphome]);
+  const matter = useBridgeStore((s) => s.status?.capabilities?.matter === true);
+  return useMemo(() => activeNativeTransports({ zwave, esphome, matter }), [zwave, esphome, matter]);
 }

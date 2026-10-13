@@ -43,8 +43,8 @@ function voiceNote(device: Pick<Device, 'integration'>, def: Partial<Pick<Device
 }
 
 /**
- * Vía hacia HA de un dispositivo. `active`: vías reales activas en el orquestador (perfiles zwave y
- * esphome, de `status.capabilities`); sin ellas, Z-Wave y ESPHome siguen por MQTT con el aviso.
+ * Vía hacia HA de un dispositivo. `active`: vías reales activas en el orquestador (perfiles zwave,
+ * esphome y matter, de `status.capabilities`); sin ellas, siguen por MQTT con el aviso.
  */
 export function viaInfo(device: Device, def: DeviceDefinition, active: ReadonlySet<NativeTransport> = new Set()): ViaInfo {
   if (def.role === 'ha_server') return { transport: 'mqtt_discovery', label: 'Es el propio Home Assistant del lab', pending: false };

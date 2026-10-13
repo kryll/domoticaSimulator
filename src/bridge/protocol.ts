@@ -12,7 +12,7 @@ export type NodeState = 'stopped' | 'starting' | 'running' | 'error';
 export type TrafficDirection = 'out' | 'in';
 
 /** Vía del mensaje en el inspector de tráfico. */
-export type TrafficVia = 'mqtt' | 'zwave' | 'esphome';
+export type TrafficVia = 'mqtt' | 'zwave' | 'esphome' | 'matter';
 
 /**
  * Mensaje visto por el orquestador (inspector de tráfico): MQTT, o un resumen de una trama Z-Wave
@@ -96,11 +96,12 @@ export interface StatusMessage {
   snapshots?: SnapshotInfo[];
   /**
    * El orquestador tiene acceso a ha-config (snapshots) y a Docker (restaurar exige Docker); zwave y
-   * esphome: perfiles activos (sus dispositivos llegan a HA por Z-Wave JS y la API de ESPHome).
+   * esphome: perfiles activos (sus dispositivos llegan a HA por Z-Wave JS y la API de ESPHome); matter:
+   * bridge Matter (matter.js) comisionado en el servidor Matter de HA.
    */
-  capabilities?: { snapshots: boolean; docker: boolean; haToken: boolean; zwave?: boolean; esphome?: boolean };
+  capabilities?: { snapshots: boolean; docker: boolean; haToken: boolean; zwave?: boolean; esphome?: boolean; matter?: boolean };
   /** Estado de las vías reales activas. */
-  native?: Partial<Record<'zwave_js' | 'esphome', NativeStatus>>;
+  native?: Partial<Record<'zwave_js' | 'esphome' | 'matter', NativeStatus>>;
   lastError?: string;
 }
 

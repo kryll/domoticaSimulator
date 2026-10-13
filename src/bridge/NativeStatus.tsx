@@ -1,4 +1,4 @@
-// Estado de las vías reales del laboratorio (Z-Wave JS UI, nodos ESPHome) con su enlace.
+// Estado de las vías reales del laboratorio (Z-Wave JS UI, nodos ESPHome, bridge Matter) con su enlace.
 import { useBridgeStore } from './bridgeStore';
 import { NATIVE_STATE_LABELS } from './labels';
 import { TRANSPORT_LABELS } from './via';
@@ -7,12 +7,12 @@ import type { NativeServiceState, NativeStatus as NativeStatusInfo } from './pro
 
 const TONE: Record<NativeServiceState, BadgeTone> = { disabled: 'slate', connecting: 'amber', connected: 'green', error: 'red' };
 
-const LINK_LABEL: Record<'zwave_js' | 'esphome', string> = { zwave_js: 'Abrir Z-Wave JS UI', esphome: '' };
+const LINK_LABEL: Record<'zwave_js' | 'esphome' | 'matter', string> = { zwave_js: 'Abrir Z-Wave JS UI', esphome: '', matter: '' };
 
 /** Una línea por vía real activa: nombre, estado, detalle y enlace a su interfaz. */
 export function NativeStatusList({ compact = false }: { compact?: boolean }) {
   const native = useBridgeStore((s) => s.status?.native);
-  const entries = Object.entries(native ?? {}) as Array<['zwave_js' | 'esphome', NativeStatusInfo]>;
+  const entries = Object.entries(native ?? {}) as Array<['zwave_js' | 'esphome' | 'matter', NativeStatusInfo]>;
   if (entries.length === 0) return null;
   return (
     <ul className="flex flex-col gap-1" aria-label="Vías reales del laboratorio">

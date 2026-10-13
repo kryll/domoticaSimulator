@@ -251,9 +251,13 @@ describe('vía hacia HA', () => {
     const voice = dev('ha-voice-pe', 'wifi', 'esphome');
     expect(viaInfo(voice, defOf('ha-voice-pe'), new Set(['esphome'])).note).toMatch(/sin micrófono|no tiene micrófono/i);
   });
-  it('Matter y Shelly siguen pendientes; ZHA y Z2M como antes', () => {
-    const matter = catalog.find((d) => d.protocols.includes('matter'));
-    if (matter) expect(viaInfo(dev(matter.id, 'matter', 'matter'), matter).label).toMatch(/pendiente de E3/);
+  it('Matter: real con su perfil (si no, MQTT con el aviso); Shelly sigue pendiente; ZHA y Z2M como antes', () => {
+    const plug = dev('tapo-p110m', 'matter', 'matter');
+    expect(viaInfo(plug, defOf('tapo-p110m'))).toMatchObject({ transport: 'matter', pending: true });
+    expect(viaInfo(plug, defOf('tapo-p110m')).note).toMatch(/setup\.sh --matter/);
+    expect(viaInfo(plug, defOf('tapo-p110m'), new Set(['matter']))).toMatchObject({ transport: 'matter', pending: false, label: 'Matter (matter.js)' });
+    const shelly = catalog.find((d) => d.integrations.includes('shelly'));
+    if (shelly) expect(viaInfo(dev(shelly.id, 'wifi', 'shelly'), shelly).label).toMatch(/pendiente de E3/);
     const zha = catalog.find((d) => d.protocols.includes('zigbee') && d.entities.length > 0);
     if (!zha) throw new Error('sin zigbee');
     expect(viaInfo(dev(zha.id, 'zigbee', 'zha'), zha).note).toMatch(/ZHA/);

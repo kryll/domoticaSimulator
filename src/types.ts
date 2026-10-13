@@ -1389,18 +1389,18 @@ export type DeviceTransport = 'z2m_mqtt' | 'mqtt_discovery' | 'zwave_js' | 'matt
 
 /** Transportes que todavía se publican por MQTT discovery genérico hasta su tanda. */
 export const PENDING_TRANSPORTS: Readonly<Partial<Record<DeviceTransport, 'E2' | 'E3'>>> = {
-  // Alineado con docs/ROADMAP.md: E2 (Z-Wave y ESPHome) ya es real con su perfil; E3 = Matter y Shelly.
-  matter: 'E3',
+  // Alineado con docs/ROADMAP.md: E2 (Z-Wave y ESPHome) y Matter (E3) ya son reales con su perfil.
   shelly: 'E3',
 };
 
-/** Perfiles opcionales del laboratorio que activan una vía real (setup.sh --zwave / --esphome). */
-export type LabProfile = 'zwave' | 'esphome';
+/** Perfiles opcionales del laboratorio que activan una vía real (setup.sh --zwave / --esphome / --matter). */
+export type LabProfile = 'zwave' | 'esphome' | 'matter';
 
-/** Vías reales de E2: llegan a HA por su integración solo si el perfil está activo en el orquestador. */
+/** Vías reales: llegan a HA por su integración solo si el perfil está activo en el orquestador. */
 export const PROFILE_TRANSPORTS: Readonly<Partial<Record<DeviceTransport, LabProfile>>> = {
   zwave_js: 'zwave',
   esphome: 'esphome',
+  matter: 'matter',
 };
 
 /**

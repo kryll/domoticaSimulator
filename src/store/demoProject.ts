@@ -80,6 +80,9 @@ const SPECS: Spec[] = [
   { id: 'demo-antena-zwave', def: 'ha-connect-zwa-2', name: 'Antena Z-Wave', floor: P1, room: 'demo-despacho', at: { x: 840, y: 320 } },
   { id: 'demo-enchufe-zwave', def: 'fibaro-wall-plug', name: 'Enchufe despacho', floor: P1, room: 'demo-despacho', at: { x: 640, y: 420 }, loadWatts: 60 },
   { id: 'demo-esp32', def: 'esphome-esp32', name: 'Sensor despacho', floor: P1, room: 'demo-despacho', at: { x: 840, y: 420 } },
+  // E3: Matter real con el perfil matter (bridge matter.js). La cerradura Thread también va por Matter.
+  { id: 'demo-luz-matter', def: 'ikea-kajplats-e27', name: 'Luz Matter', floor: PB, room: 'demo-pasillo', at: { x: 840, y: 420 } },
+  { id: 'demo-enchufe-matter', def: 'tapo-p110m', name: 'Enchufe Matter', floor: PB, room: 'demo-pasillo', at: { x: 840, y: 520 }, loadWatts: 40 },
 ];
 
 function buildDevice(spec: Spec): Device {
