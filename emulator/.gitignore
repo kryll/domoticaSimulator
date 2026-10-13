@@ -2,7 +2,7 @@
 .env
 .secrets/
 snapshots/
-zwave/
+/zwave/
 ha-config/*
 !ha-config/configuration.yaml
 !ha-config/packages/
