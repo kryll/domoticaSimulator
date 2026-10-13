@@ -8011,5 +8011,294 @@
     ],
     "icon": "switch",
     "priceEur": 18
+  },
+  {
+    "id": "aqara-camera-hub-g3",
+    "brand": "Aqara",
+    "model": "CH-H03",
+    "name": "Aqara Camera Hub G3 (cámara y hub Zigbee)",
+    "category": "camera",
+    "protocols": [
+      "wifi",
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device"
+    ],
+    "iotClass": "local_push",
+    "role": "hub",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "camera",
+        "domain": "camera",
+        "name": "Cámara",
+        "initialState": "idle"
+      },
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
+      }
+    ],
+    "icon": "camera",
+    "priceEur": 99
+  },
+  {
+    "id": "aqara-camera-hub-g2h-pro",
+    "brand": "Aqara",
+    "model": "CH-C01",
+    "name": "Aqara Camera Hub G2H Pro (cámara y hub Zigbee)",
+    "category": "camera",
+    "protocols": [
+      "wifi",
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device"
+    ],
+    "iotClass": "local_push",
+    "role": "hub",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "camera",
+        "domain": "camera",
+        "name": "Cámara",
+        "initialState": "idle"
+      },
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
+      }
+    ],
+    "icon": "camera",
+    "priceEur": 69
+  },
+  {
+    "id": "aqara-camera-hub-g5-pro-poe",
+    "brand": "Aqara",
+    "model": "Camera Hub G5 Pro (PoE)",
+    "name": "Aqara Camera Hub G5 Pro PoE (exterior, hub Zigbee y Thread)",
+    "category": "camera",
+    "protocols": [
+      "ethernet",
+      "zigbee",
+      "thread"
+    ],
+    "integrations": [
+      "homekit_device"
+    ],
+    "iotClass": "local_push",
+    "role": "hub",
+    "power": "poe",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "camera",
+        "domain": "camera",
+        "name": "Cámara",
+        "initialState": "idle"
+      },
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
+      }
+    ],
+    "icon": "camera",
+    "priceEur": 199
+  },
+  {
+    "id": "aqara-doorbell-g4",
+    "brand": "Aqara",
+    "model": "SVD-C03",
+    "name": "Aqara Video Doorbell G4",
+    "category": "camera",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "homekit_device"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "camera",
+        "domain": "camera",
+        "name": "Cámara",
+        "initialState": "idle"
+      },
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
+      },
+      {
+        "key": "visitor",
+        "domain": "binary_sensor",
+        "name": "Timbre",
+        "deviceClass": "occupancy",
+        "initialState": "off"
+      }
+    ],
+    "icon": "camera",
+    "priceEur": 119
+  },
+  {
+    "id": "aqara-camera-e1",
+    "brand": "Aqara",
+    "model": "CH-C01E",
+    "name": "Aqara Camera E1",
+    "category": "camera",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "homekit_device"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "camera",
+        "domain": "camera",
+        "name": "Cámara",
+        "initialState": "idle"
+      },
+      {
+        "key": "motion",
+        "domain": "binary_sensor",
+        "name": "Movimiento",
+        "deviceClass": "motion",
+        "initialState": "off",
+        "capabilities": {
+          "motionTimeoutSeconds": 30
+        }
+      }
+    ],
+    "icon": "camera",
+    "priceEur": 40
+  },
+  {
+    "id": "aqara-power-plug-h2-eu",
+    "brand": "Aqara",
+    "model": "SP-P05D",
+    "name": "Aqara Power Plug H2 EU (Matter sobre Thread)",
+    "category": "plug",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug",
+    "priceEur": 35
+  },
+  {
+    "id": "tuya-zigbee-plug-ts011f",
+    "brand": "Tuya",
+    "model": "TS011F",
+    "name": "Enchufe Tuya Zigbee 16 A con medidor",
+    "category": "plug",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Enchufe",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "plug",
+    "priceEur": 10
   }
 ]

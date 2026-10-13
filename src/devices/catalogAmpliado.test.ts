@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { catalog } from './catalog';
 import { BUTTON_ACTION_LABELS } from './labels';
 import { isThreadBorderRouter, zigbeeNetworkOf } from './roles';
-import { def, dev } from './testUtils';
+import { def, dev, project } from './testUtils';
+import { canConnect, suggestConnections } from '../network/connections';
+import { validateProject } from '../network/validator';
 import { transportFor, type DeviceDefinition } from '../types';
 
 const ids = (prefix: string): DeviceDefinition[] => catalog.filter((d) => d.id.startsWith(prefix));
@@ -122,6 +124,52 @@ describe('interruptores de pared y pulsadores', () => {
   it('el mando Hue necesita el puente Hue (o ZHA/Z2M) y BILRESA va por Matter', () => {
     expect(def('hue-tap-dial-switch').requiresHub).toBe('Philips Hue');
     expect(transportFor(dev('b', 'ikea-bilresa-2b'), def('ikea-bilresa-2b'))).toBe('matter');
+  });
+});
+
+describe('cámaras Aqara', () => {
+  it('G3, G2H Pro y G5 Pro hacen de hub Zigbee de Aqara: sus sensores Aqara se conectan a ellas', () => {
+    for (const id of ['aqara-camera-hub-g3', 'aqara-camera-hub-g2h-pro', 'aqara-camera-hub-g5-pro-poe']) {
+      const d = def(id);
+      expect(d).toMatchObject({ category: 'camera', role: 'hub', brand: 'Aqara', iotClass: 'local_push' });
+      expect(d.protocols, id).toContain('zigbee');
+      expect(d.entities.map((e) => e.domain), id).toEqual(['camera', 'binary_sensor']);
+      const cam = dev('cam', id);
+      const sensor = dev('s', 'aqara-door-window');
+      expect(canConnect(sensor, cam, catalog), id).toEqual({ ok: true, protocol: 'zigbee' });
+      // Llega a HA por HomeKit (local), no como un dispositivo Zigbee.
+      expect(transportFor(cam, d), id).toBe('mqtt_discovery');
+    }
+    expect(def('aqara-camera-hub-g5-pro-poe').power).toBe('poe');
+    expect(isThreadBorderRouter(def('aqara-camera-hub-g5-pro-poe'))).toBe(true);
+    expect(isThreadBorderRouter(def('aqara-camera-hub-g3'))).toBe(false);
+  });
+
+  it('el validador da por bueno el hub Aqara si es una cámara G3', () => {
+    const p = project([dev('srv', 'ha-green'), dev('ap', 'tplink-deco-x50'), dev('g3', 'aqara-camera-hub-g3'), dev('s', 'aqara-door-window')]);
+    const codes = validateProject({ ...p, connections: suggestConnections(p, catalog) }, catalog).map((i) => i.code);
+    expect(codes).not.toContain('falta-hub-propietario');
+  });
+
+  it('timbre G4 y cámara E1: Wi-Fi por HomeKit Device (local)', () => {
+    expect(def('aqara-doorbell-g4').entities.map((e) => e.key)).toEqual(['camera', 'motion', 'visitor']);
+    for (const id of ['aqara-doorbell-g4', 'aqara-camera-e1']) expect(def(id)).toMatchObject({ protocols: ['wifi'], integrations: ['homekit_device'], role: 'end_device', iotClass: 'local_push' });
+  });
+});
+
+describe('enchufes Aqara y Tuya', () => {
+  it('Aqara Power Plug H2 (Matter sobre Thread) y Tuya TS011F (Zigbee) miden potencia y energía', () => {
+    for (const id of ['aqara-power-plug-h2-eu', 'tuya-zigbee-plug-ts011f']) {
+      const d = def(id);
+      expect(d.entities.map((e) => e.key), id).toEqual(['switch', 'power', 'energy']);
+      expect(d.role, id).toBe('router');
+      expectCoherent(d);
+    }
+    expect(transportFor(dev('h2', 'aqara-power-plug-h2-eu'), def('aqara-power-plug-h2-eu'))).toBe('matter');
+    expect(transportFor(dev('t', 'tuya-zigbee-plug-ts011f', undefined, { integration: 'zigbee2mqtt' }), def('tuya-zigbee-plug-ts011f'))).toBe('z2m_mqtt');
+    // El de Tuya Wi-Fi sigue en la nube; el Zigbee es local.
+    expect(def('tuya-wifi-plug').iotClass).toBe('cloud_push');
+    expect(def('tuya-zigbee-plug-ts011f').iotClass).toBe('local_push');
   });
 });
 
