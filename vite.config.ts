@@ -32,6 +32,6 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     css: false,
     // emulator/ (laboratorio, backend opcional) tiene sus propios tests: cd emulator && npm test.
-    exclude: [...configDefaults.exclude, 'emulator/**'],
+    exclude: [...configDefaults.exclude, 'emulator/**', '.claude/**'],
   },
 });
