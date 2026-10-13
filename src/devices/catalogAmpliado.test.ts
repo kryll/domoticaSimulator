@@ -1,6 +1,7 @@
 // Catálogo ampliado: bombillas IKEA, relés, pulsadores, cámaras Aqara, enchufes y routers de operadora.
 import { describe, expect, it } from 'vitest';
 import { catalog } from './catalog';
+import { BUTTON_ACTION_LABELS } from './labels';
 import { isThreadBorderRouter, zigbeeNetworkOf } from './roles';
 import { def, dev } from './testUtils';
 import { transportFor, type DeviceDefinition } from '../types';
@@ -90,6 +91,37 @@ describe('relés de Aqara, Shelly y SONOFF', () => {
       expect(transportFor(dev('s', id), def(id)), id).toBe('shelly');
       expect(def(id).protocols, id).toContain('ble');
     }
+  });
+});
+
+describe('interruptores de pared y pulsadores', () => {
+  it('los interruptores con relé exponen switch; los pulsadores inalámbricos, el sensor de acción y la batería', () => {
+    for (const id of ['aqara-h1-switch-no-neutral', 'aqara-h1-switch-neutral', 'aqara-h1-switch-neutral-double', 'sonoff-tx-ultimate-t5-2c', 'sonoff-m5-2c-80', 'sonoff-zbm5-2c-80', 'tuya-zigbee-wall-switch']) {
+      const d = def(id);
+      expect(d.category, id).toBe('switch');
+      expect(d.entities.some((e) => e.domain === 'switch'), id).toBe(true);
+      expect(d.power, id).toBe('mains');
+      expectCoherent(d);
+    }
+    for (const id of ['aqara-wireless-remote-h1', 'hue-tap-dial-switch', 'ikea-somrig', 'ikea-bilresa-2b']) {
+      const d = def(id);
+      expect(d.entities.map((e) => e.key), id).toEqual(['action', 'battery']);
+      expect(d.entities[0]?.capabilities?.buttonActions?.length, id).toBeGreaterThan(2);
+      for (const a of d.entities[0]?.capabilities?.buttonActions ?? []) expect(BUTTON_ACTION_LABELS[a], `${id} ${a}`).toBeDefined();
+      expectCoherent(d);
+    }
+  });
+
+  it('sin neutro no repiten la malla Zigbee; con neutro, sí', () => {
+    expect(def('aqara-h1-switch-no-neutral').role).toBe('end_device');
+    expect(def('aqara-h1-switch-neutral').role).toBe('router');
+    expect(def('tuya-zigbee-wall-switch').role).toBe('end_device');
+    expect(def('sonoff-zbm5-2c-80').role).toBe('router');
+  });
+
+  it('el mando Hue necesita el puente Hue (o ZHA/Z2M) y BILRESA va por Matter', () => {
+    expect(def('hue-tap-dial-switch').requiresHub).toBe('Philips Hue');
+    expect(transportFor(dev('b', 'ikea-bilresa-2b'), def('ikea-bilresa-2b'))).toBe('matter');
   });
 });
 

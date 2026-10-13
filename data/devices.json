@@ -7526,5 +7526,490 @@
     ],
     "icon": "switch",
     "priceEur": 9
+  },
+  {
+    "id": "aqara-h1-switch-no-neutral",
+    "brand": "Aqara",
+    "model": "WS-EUK01",
+    "name": "Aqara Smart Wall Switch H1 EU (sin neutro, simple)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Interruptor",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 300
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 35
+  },
+  {
+    "id": "aqara-h1-switch-neutral",
+    "brand": "Aqara",
+    "model": "WS-EUK03",
+    "name": "Aqara Smart Wall Switch H1 EU (con neutro, simple)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "Aqara",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Interruptor",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 38
+  },
+  {
+    "id": "aqara-h1-switch-neutral-double",
+    "brand": "Aqara",
+    "model": "WS-EUK04",
+    "name": "Aqara Smart Wall Switch H1 EU (con neutro, doble)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "Aqara",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch_left",
+        "domain": "switch",
+        "name": "Izquierda",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
+      },
+      {
+        "key": "switch_right",
+        "domain": "switch",
+        "name": "Derecha",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 45
+  },
+  {
+    "id": "aqara-wireless-remote-h1",
+    "brand": "Aqara",
+    "model": "WRS-R02",
+    "name": "Aqara Wireless Remote Switch H1 (doble)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "action",
+        "domain": "sensor",
+        "name": "Acción",
+        "initialState": "none",
+        "capabilities": {
+          "buttonActions": [
+            "single_left",
+            "double_left",
+            "hold_left",
+            "single_right",
+            "double_right",
+            "hold_right",
+            "single_both"
+          ]
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "button",
+    "priceEur": 25
+  },
+  {
+    "id": "sonoff-tx-ultimate-t5-2c",
+    "brand": "SONOFF",
+    "model": "T5-2C-86",
+    "name": "SONOFF TX Ultimate T5 (táctil, 2 canales)",
+    "category": "switch",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "ewelink"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch_1",
+        "domain": "switch",
+        "name": "Canal 1",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 1000
+        }
+      },
+      {
+        "key": "switch_2",
+        "domain": "switch",
+        "name": "Canal 2",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 1000
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 35
+  },
+  {
+    "id": "sonoff-m5-2c-80",
+    "brand": "SONOFF",
+    "model": "M5-2C-80",
+    "name": "SONOFF SwitchMan M5 (Wi-Fi, 2 canales)",
+    "category": "switch",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "ewelink"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch_1",
+        "domain": "switch",
+        "name": "Canal 1",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 1000
+        }
+      },
+      {
+        "key": "switch_2",
+        "domain": "switch",
+        "name": "Canal 2",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 1000
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 18
+  },
+  {
+    "id": "sonoff-zbm5-2c-80",
+    "brand": "SONOFF",
+    "model": "ZBM5-2C-80",
+    "name": "SONOFF ZBM5 (Zigbee, 2 canales, con neutro)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch_1",
+        "domain": "switch",
+        "name": "Canal 1",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 1000
+        }
+      },
+      {
+        "key": "switch_2",
+        "domain": "switch",
+        "name": "Canal 2",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 1000
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 20
+  },
+  {
+    "id": "hue-tap-dial-switch",
+    "brand": "Philips Hue",
+    "model": "RDM002",
+    "name": "Philips Hue Tap Dial Switch",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "hue",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "Philips Hue",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "action",
+        "domain": "sensor",
+        "name": "Acción",
+        "initialState": "none",
+        "capabilities": {
+          "buttonActions": [
+            "button_1_press",
+            "button_2_press",
+            "button_3_press",
+            "button_4_press",
+            "dial_rotate_left",
+            "dial_rotate_right"
+          ]
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "button",
+    "priceEur": 50
+  },
+  {
+    "id": "ikea-somrig",
+    "brand": "IKEA",
+    "model": "E2213",
+    "name": "IKEA SOMRIG botón de acceso directo",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "requiresHub": "IKEA",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "action",
+        "domain": "sensor",
+        "name": "Acción",
+        "initialState": "none",
+        "capabilities": {
+          "buttonActions": [
+            "1_short_release",
+            "1_double_press",
+            "1_long_press",
+            "2_short_release",
+            "2_double_press",
+            "2_long_press"
+          ]
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "button",
+    "priceEur": 9
+  },
+  {
+    "id": "ikea-bilresa-2b",
+    "brand": "IKEA",
+    "model": "BILRESA (botón doble)",
+    "name": "IKEA BILRESA mando de dos botones (Matter sobre Thread)",
+    "category": "switch",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "battery",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "action",
+        "domain": "sensor",
+        "name": "Acción",
+        "initialState": "none",
+        "capabilities": {
+          "buttonActions": [
+            "single",
+            "double",
+            "hold"
+          ]
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      }
+    ],
+    "icon": "button",
+    "priceEur": 8
+  },
+  {
+    "id": "tuya-zigbee-wall-switch",
+    "brand": "Tuya",
+    "model": "TS0012",
+    "name": "Interruptor de pared Tuya Zigbee (sin neutro, doble)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "switch_left",
+        "domain": "switch",
+        "name": "Izquierda",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 300
+        }
+      },
+      {
+        "key": "switch_right",
+        "domain": "switch",
+        "name": "Derecha",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 300
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 18
   }
 ]

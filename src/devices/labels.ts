@@ -273,6 +273,26 @@ export const BUTTON_ACTION_LABELS: Record<string, string> = {
   arrow_right: 'Derecha',
   toggle: 'Alternar',
   none: 'En espera',
+  // Pulsadores dobles (Aqara H1), Hue Tap Dial e IKEA SOMRIG.
+  single_left: 'Pulsación izquierda',
+  double_left: 'Doble izquierda',
+  hold_left: 'Mantener izquierda',
+  single_right: 'Pulsación derecha',
+  double_right: 'Doble derecha',
+  hold_right: 'Mantener derecha',
+  single_both: 'Pulsación de ambos',
+  button_1_press: 'Botón 1',
+  button_2_press: 'Botón 2',
+  button_3_press: 'Botón 3',
+  button_4_press: 'Botón 4',
+  dial_rotate_left: 'Girar a la izquierda',
+  dial_rotate_right: 'Girar a la derecha',
+  '1_short_release': 'Botón 1: pulsación',
+  '1_double_press': 'Botón 1: doble',
+  '1_long_press': 'Botón 1: mantener',
+  '2_short_release': 'Botón 2: pulsación',
+  '2_double_press': 'Botón 2: doble',
+  '2_long_press': 'Botón 2: mantener',
 };
 
 /** Tanda 3: estados de una alarma (alarm_control_panel). */
