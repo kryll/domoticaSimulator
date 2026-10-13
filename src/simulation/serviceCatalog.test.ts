@@ -17,7 +17,7 @@ const SUPPORTED: Record<string, string[]> = {
   lock: ['lock', 'unlock', 'open'],
   climate: ['set_temperature', 'set_hvac_mode', 'set_preset_mode', 'turn_on', 'turn_off', 'toggle'],
   media_player: ['turn_on', 'turn_off', 'toggle', 'media_play', 'media_pause', 'media_stop', 'media_play_pause', 'media_next_track', 'media_previous_track', 'play_media', 'volume_set', 'volume_up', 'volume_down', 'volume_mute', 'select_source'],
-  vacuum: ['start', 'pause', 'stop', 'start_pause', 'return_to_base'],
+  vacuum: ['start', 'pause', 'stop', 'start_pause', 'return_to_base', 'locate', 'clean_spot', 'clean_area', 'send_command'],
   camera: ['turn_on', 'turn_off', 'snapshot', 'record'],
   button: ['press'],
 };
@@ -98,6 +98,8 @@ describe('campos excluyentes y obligatorios', () => {
         'camera.snapshot.filename',
         'camera.record.filename',
         'notify.persistent_notification.message',
+        'vacuum.clean_area.cleaning_area_id',
+        'vacuum.send_command.command',
       ].sort(),
     );
     expect(missingRequiredFields('fan.set_percentage', {}).map((f) => f.key)).toEqual(['percentage']);

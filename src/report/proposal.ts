@@ -213,6 +213,7 @@ function quoteSection(quote: Quote, hide: boolean, notes: string | undefined): s
   ${quoteTable('Infraestructura de red y control', quote.infrastructureLines, hide, sum(quote.infrastructureLines))}
   ${quoteTable('Mano de obra', quote.laborLines, hide, sum(quote.laborLines))}
   ${summary}
+  ${quote.optionalLines.length > 0 ? `${quoteTable('Opcional (no incluido en el total)', quote.optionalLines, hide)}<p class="small muted">Suscripción de pago a Home Assistant Cloud para el control por voz de Alexa o Google; también puede configurarse a mano (gratis) con acceso HTTPS público.</p>` : ''}
   ${notes && notes.trim() !== '' ? `<h3>Notas</h3><div class="notes">${esc(notes)}</div>` : ''}
 </section>`;
 }

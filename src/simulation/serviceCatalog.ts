@@ -5,6 +5,9 @@ import { ALARM_STATE_LABELS } from '../devices/labels';
 import { isDimmable, withDefaults } from '../devices/capabilities';
 import { HVAC_MODE_LABELS, PRESET_LABELS, labelOf } from '../devices/labels';
 import { NOTIFY_PERSISTENT } from './notify';
+import { FAN_SPEED_LABELS, SELECT_OPTION_LABELS } from '../devices/labels';
+
+export { FAN_SPEED_LABELS, SELECT_OPTION_LABELS } from '../devices/labels';
 
 export type ServiceFieldType = 'number' | 'percent' | 'kelvin' | 'color' | 'select' | 'boolean' | 'text' | 'temperature';
 
@@ -40,7 +43,7 @@ export interface ServiceInfo {
 }
 
 /** Dominios con servicios: los de entidad y el genérico homeassistant. */
-export type ServiceDomain = EntityDomain | HelperType | 'homeassistant' | 'notify';
+export type ServiceDomain = EntityDomain | HelperType | 'homeassistant' | 'notify' | 'tts';
 
 const svc = (service: string, name: string, fields: ServiceField[] = []): ServiceInfo => ({ service, name, fields });
 
@@ -226,13 +229,38 @@ export function servicesForDomain(domain: ServiceDomain | string, capabilities?:
       return climateServices(caps);
     case 'media_player':
       return mediaServices(caps);
-    case 'vacuum':
-      return [
+    case 'vacuum': {
+      const list = [
         svc('vacuum.start', 'Empezar a limpiar'),
         svc('vacuum.pause', 'Pausar'),
         svc('vacuum.stop', 'Detener'),
         svc('vacuum.start_pause', 'Empezar/pausar'),
         svc('vacuum.return_to_base', 'Volver a la base'),
+        svc('vacuum.locate', 'Localizar'),
+        svc('vacuum.clean_spot', 'Limpieza localizada'),
+        svc('vacuum.clean_area', 'Limpiar áreas', [{ key: 'cleaning_area_id', label: 'Áreas (ids de sala)', type: 'text', required: true }]),
+        svc('vacuum.send_command', 'Enviar comando', [
+          { key: 'command', label: 'Comando (p. ej. app_segment_clean)', type: 'text', required: true },
+          { key: 'params', label: 'Parámetros (p. ej. [16, 17])', type: 'text' },
+        ]),
+      ];
+      const speeds = caps.fanSpeeds ?? [];
+      if (speeds.length > 0) list.push(svc('vacuum.set_fan_speed', 'Potencia de aspiración', [{ key: 'fan_speed', label: 'Potencia', type: 'select', options: options(speeds, FAN_SPEED_LABELS), required: true }]));
+      return list;
+    }
+    case 'select':
+      return [svc('select.select_option', 'Elegir opción', [{ key: 'option', label: 'Opción', type: caps.options?.length ? 'select' : 'text', ...(caps.options?.length ? { options: options(caps.options, SELECT_OPTION_LABELS) } : {}), required: true }])];
+    case 'assist_satellite':
+      return [
+        svc('assist_satellite.announce', 'Anunciar', [{ key: 'message', label: 'Mensaje', type: 'text', required: true }]),
+        svc('assist_satellite.start_conversation', 'Iniciar conversación', [{ key: 'start_message', label: 'Pregunta', type: 'text', required: true }]),
+      ];
+    case 'tts':
+      return [
+        svc('tts.speak', 'Decir (TTS)', [
+          { key: 'media_player_entity_id', label: 'Reproductores (entity_id, separados por comas)', type: 'text', required: true },
+          { key: 'message', label: 'Mensaje', type: 'text', required: true },
+        ]),
       ];
     case 'camera':
       return [
@@ -271,15 +299,24 @@ export function servicesForDomain(domain: ServiceDomain | string, capabilities?:
   }
 }
 
-const ALL_DOMAINS: ServiceDomain[] = ['light', 'switch', 'fan', 'cover', 'lock', 'climate', 'media_player', 'vacuum', 'camera', 'button', 'alarm_control_panel', 'valve', 'siren', ...HELPER_DOMAINS, 'homeassistant', 'notify'];
+const ALL_DOMAINS: ServiceDomain[] = ['light', 'switch', 'fan', 'cover', 'lock', 'climate', 'media_player', 'vacuum', 'camera', 'button', 'alarm_control_panel', 'valve', 'siren', 'select', 'assist_satellite', ...HELPER_DOMAINS, 'homeassistant', 'notify', 'tts'];
+
+
 
 /** Metadatos de un servicio completo ("light.turn_on"), si la simulación lo soporta. */
 export function serviceInfo(service: string): ServiceInfo | undefined {
   const domain = service.split('.')[0] ?? '';
+  // Alexa Media Player: notify.alexa_media y notify.alexa_media_<echo> (anuncio o TTS en el Echo).
+  if (service === 'notify.alexa_media' || service.startsWith('notify.alexa_media_')) {
+    const fields: ServiceField[] = [{ key: 'message', label: 'Mensaje', type: 'text', required: true }];
+    if (service === 'notify.alexa_media') fields.push({ key: 'target', label: 'Echos (nombres o entity_id)', type: 'text', required: true });
+    return svc(service, 'Anuncio en Alexa', fields);
+  }
   const full: EntityCapabilities = {
     colorModes: ['brightness', 'color_temp', 'rgb'],
     presetModes: ['eco'],
     fanModes: ['auto'],
+    fanSpeeds: ['quiet', 'balanced', 'turbo', 'max'],
     alarmModes: ['armed_home', 'armed_away', 'armed_night', 'armed_vacation', 'armed_custom_bypass'],
   };
   return servicesForDomain(domain, full).find((s) => s.service === service);

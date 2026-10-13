@@ -23,6 +23,7 @@ import { PROTOCOL_INK } from './style';
 import { entityStateText } from '../ui/stateText';
 import { deviceTechSummary } from '../devices/techSummary';
 import { DeviceDisplayOptions, EntityHistory } from './extras/DevicePropertiesExtras';
+import { AssistantsSection, VacuumRoomsSection } from './extras/VoiceProperties';
 
 /** Input de texto que confirma el cambio al perder el foco o pulsar Intro. */
 function CommitTextField({
@@ -138,6 +139,9 @@ function DeviceProperties({ device }: { device: Device }) {
         )}
         <DeviceDisplayOptions device={device} />
       </section>
+
+      <VacuumRoomsSection device={device} />
+      {def && def.role !== 'ha_server' && def.entities.length > 0 && <AssistantsSection key={device.id} device={device} />}
 
       {tech && (
         <section aria-label="Ficha del dispositivo">

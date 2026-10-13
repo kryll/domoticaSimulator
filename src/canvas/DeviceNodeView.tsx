@@ -9,6 +9,7 @@ import { cx } from '../ui/cx';
 import { NodeBody } from './nodes/bodies';
 import { LOW_BATTERY_LEVEL } from '../simulation/energy';
 import { nodePowerKey, parseNodePower } from './nodePower';
+import { SpeechBubble } from './nodes/SpeechBubble';
 
 const DevicePopover = lazy(() => import('./DevicePopover').then((m) => ({ default: m.DevicePopover })));
 
@@ -132,6 +133,7 @@ function DeviceNodeViewImpl({ id, data, selected }: NodeProps<DeviceNode>) {
       data-active={active ? 'true' : 'false'}
     >
       {flash > 0 && <span key={flash} aria-hidden="true" className="ha-flash pointer-events-none absolute inset-0 rounded-lg" />}
+      {definition?.assistant && <SpeechBubble deviceId={device.id} />}
       <span className="relative flex h-9 w-9 shrink-0 items-center justify-center" aria-hidden="true">
         {kind === 'light' && active && <LightHalo color={lightColor} pct={view?.brightnessPct ?? 100} />}
         {kind === 'motion' && active && <MotionWaves />}

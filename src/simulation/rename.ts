@@ -20,6 +20,7 @@ function renameTimer(timer: SimTimer, mapping: Record<string, string>): SimTimer
     case 'service_call':
     case 'wait_for':
     case 'helper_timer':
+    case 'vacuum_step':
       return { ...timer, entityId: ren(timer.entityId) };
     case 'timeline_event':
       return timer.step.entityId === undefined ? timer : { ...timer, step: { ...timer.step, entityId: ren(timer.step.entityId) } };

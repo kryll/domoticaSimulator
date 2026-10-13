@@ -84,7 +84,7 @@ describe('validateProject', () => {
     ]);
     const issues = validateProject(p, catalog);
     expect(issues.filter((i) => i.severity !== 'info')).toEqual([]);
-    expect(codes(issues)).toEqual(['integracion-cloud']);
+    expect(codes(issues)).toEqual(['integracion-cloud', 'asistente-voz-nube']);
   });
 
   it('ble-sin-proxy si no hay proxy cerca', () => {

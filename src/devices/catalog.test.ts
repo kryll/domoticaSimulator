@@ -99,12 +99,12 @@ describe('validación del catálogo', () => {
   });
 
   it.each([
-    [{ ...valid, brand: 'Apple' }, /brand/],
+    [{ ...valid, brand: 'Fnac' }, /brand/],
     [{ ...valid, protocols: [] }, /protocols/],
     [{ ...valid, protocols: ['lora'] }, /protocols/],
     [{ ...valid, id: '' }, /id/],
     [{ ...valid, rangeMeters: -3 }, /rangeMeters/],
-    [{ ...valid, requiresHub: 'Apple' }, /requiresHub/],
+    [{ ...valid, requiresHub: 'Fnac' }, /requiresHub/],
     [{ ...valid, entities: 'x' }, /entities/],
     [{ ...valid, entities: [{ key: 'a b', domain: 'light', name: 'L', initialState: 'off' }] }, /clave de entidad/],
     [{ ...valid, entities: [{ key: 'a', domain: 'tv', name: 'L', initialState: 'off' }] }, /domain/],

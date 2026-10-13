@@ -2,7 +2,7 @@
 // Tabla única: la usan las trazas, el lienzo, los selectores de estado de disparadores y
 // condiciones, los controles y el informe. Lógica pura.
 import type { EntityCapabilities, EntityStateValue } from '../types';
-import { ALARM_STATE_LABELS, BUTTON_ACTION_LABELS, HVAC_MODE_LABELS, labelOf, VALVE_STATE_LABELS } from './labels';
+import { ALARM_STATE_LABELS, ASSIST_SATELLITE_LABELS, BUTTON_ACTION_LABELS, DOCK_STATUS_LABELS, HVAC_MODE_LABELS, labelOf, SELECT_OPTION_LABELS, VALVE_STATE_LABELS } from './labels';
 
 export interface StateOption {
   value: string;
@@ -86,6 +86,7 @@ export const DOMAIN_STATE_LABELS: Record<string, Record<string, string>> = {
   alarm_control_panel: ALARM_STATE_LABELS,
   valve: VALVE_STATE_LABELS,
   siren: { on: 'Sonando', off: 'Apagada' },
+  assist_satellite: ASSIST_SATELLITE_LABELS,
   input_boolean: { on: 'Activado', off: 'Desactivado' },
   timer: { idle: 'Inactivo', active: 'En marcha', paused: 'En pausa' },
 };
@@ -128,6 +129,7 @@ export function stateOptions(domain: string, deviceClass?: string, capabilities?
     const modes = capabilities?.hvacModes?.length ? capabilities.hvacModes : DEFAULT_HVAC_MODES;
     return modes.map((value) => ({ value, label: labelOf(HVAC_MODE_LABELS, value) }));
   }
+  if (d === 'select') return (capabilities?.options ?? []).map((value) => ({ value, label: labelOf(SELECT_OPTION_LABELS, value) }));
   if (d === 'sensor') {
     const actions = capabilities?.buttonActions ?? [];
     return actions.map((value) => ({ value, label: labelOf(BUTTON_ACTION_LABELS, value) }));
@@ -156,6 +158,8 @@ export function stateLabel(entityIdOrDomain: string, value: EntityStateValue, de
     if (s === 'off') return off;
     return s;
   }
+  if (d === 'sensor' && entityIdOrDomain.endsWith('_dock_status')) return DOCK_STATUS_LABELS[s] ?? s;
+  if (d === 'select') return SELECT_OPTION_LABELS[s] ?? s;
   // Sensor de acción de un mando (sensor.<mando>_action): single → «Pulsación».
   if (d === 'sensor' && (entityIdOrDomain === 'sensor' || entityIdOrDomain.endsWith('_action'))) return BUTTON_ACTION_LABELS[s] ?? s;
   const table = DOMAIN_STATE_LABELS[d];

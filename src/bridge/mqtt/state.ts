@@ -110,7 +110,20 @@ export function genericFields(entity: BridgeEntity, st: EntityState | undefined)
       return { state: onOff(st) };
     case 'alarm_control_panel':
     case 'valve':
+    case 'select':
+    case 'assist_satellite':
       return { state: String(st.state) };
+    case 'vacuum': {
+      const fields: Fields = { state: String(st.state) };
+      if (a.fan_speed !== undefined) fields.fan_speed = String(a.fan_speed);
+      const attrs: Fields = {};
+      for (const k of ['status', 'error', 'current_room_name', 'progress', 'cleaned_area', 'cleaning_time']) {
+        const v = a[k];
+        if (v !== undefined) attrs[k] = typeof v === 'boolean' || typeof v === 'number' ? v : String(v);
+      }
+      fields.attributes = attrs;
+      return fields;
+    }
     default:
       return { state: typeof st.state === 'boolean' ? onOff(st) : st.state };
   }

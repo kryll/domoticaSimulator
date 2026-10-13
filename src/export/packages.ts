@@ -262,6 +262,20 @@ export const PAIRING_STEPS: Record<Integration, string[]> = {
   meross_lan: ['Configura el dispositivo con la app Meross.', 'Instala Meross LAN (HACS): lo descubre en la red local y lo controla sin la nube.'],
   roborock: ['Configura el robot con la app Roborock.', 'Añade la integración Roborock e inicia sesión con tu cuenta (código por correo).'],
   ecovacs: ['Configura el robot con la app Ecovacs Home.', 'Añade la integración Ecovacs e inicia sesión con tu cuenta (depende de la nube).'],
+  dreame_vacuum: [
+    'Configura el robot con la app Dreamehome (o Mi Home si es un Xiaomi fabricado por Dreame).',
+    'Instala Dreame Vacuum desde HACS (repositorio de la comunidad, no oficial) e inicia sesión con tu cuenta para obtener el token; después habla en local por miIO.',
+  ],
+  roomba: ['Configura el Roomba con la app iRobot Home.', 'Home Assistant lo descubre en la red local: acepta la integración iRobot Roomba y pulsa el botón Home del robot unos segundos para obtener la contraseña.'],
+  eufy_robovac: ['Configura el robot con la app Eufy Clean.', 'Instala Eufy RoboVac desde HACS (no oficial) e inicia sesión una vez para obtener la clave local; después lo controla por la red local.'],
+  wyoming: [
+    'Instala wyoming-satellite en la Raspberry Pi con su micrófono y altavoz (o el complemento de openWakeWord, Whisper y Piper en el servidor).',
+    'Home Assistant lo descubre: acepta la integración Wyoming Protocol y elige la canalización de Assist (STT y TTS locales o en la nube).',
+  ],
+  apple_tv: [
+    'Configura el HomePod con la app Casa del iPhone.',
+    'Home Assistant lo descubre: acepta la integración Apple TV (AirPlay) e introduce el PIN si lo pide. Solo da un reproductor: Siri no se controla desde HA (para usar Siri con HA, expón entidades con el puente HomeKit).',
+  ],
 };
 
 function phase(def: DeviceDefinition): number {

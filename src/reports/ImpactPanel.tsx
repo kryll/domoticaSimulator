@@ -189,6 +189,22 @@ export function ImpactPanel({ presentation = false }: { presentation?: boolean }
           )}
           <StatusList title="Escenas" rows={scenes} />
           <StatusList title="Scripts" rows={scripts} />
+          {report.voice.length > 0 && (
+            <section aria-label="Control por voz">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Control por voz</h3>
+              <ul className="flex flex-col gap-1" data-testid="voice-impact">
+                {report.voice.map((v) => (
+                  <li key={v.deviceId} className={cx('rounded-md border px-2 py-1 text-sm', v.status === 'broken' ? 'border-red-200 bg-red-50' : 'border-slate-200')}>
+                    <span className="font-medium text-slate-800">
+                      {v.status === 'broken' ? '🔇 ' : '🗣 '}
+                      {deviceName(v.deviceId)}
+                    </span>
+                    <span className="block text-xs text-slate-600">{v.reasons.join('; ')}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
       </div>
     </div>

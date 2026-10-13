@@ -40,7 +40,7 @@ describe('createDemoProject', () => {
     expect(demo.rooms.length).toBeGreaterThanOrEqual(6);
     expect(demo.devices.length).toBeGreaterThanOrEqual(15);
     expect(demo.connections.length).toBeGreaterThanOrEqual(demo.devices.length - 1);
-    expect(demo.automations).toHaveLength(11);
+    expect(demo.automations).toHaveLength(14);
     expect(demo.scenes).toHaveLength(2);
     expect(demo.scripts).toHaveLength(1);
   });
@@ -69,7 +69,7 @@ describe('createDemoProject', () => {
   it('pasa el validador sin errores ni avisos y todo es alcanzable', () => {
     const issues = validateProject(demo, catalog);
     expect(issues.filter((i) => i.severity !== 'info')).toEqual([]);
-    expect(new Set(issues.map((i) => i.code))).toEqual(new Set(['integracion-cloud']));
+    expect(new Set(issues.map((i) => i.code))).toEqual(new Set(['integracion-cloud', 'asistente-voz-nube']));
     expect(analyzeMesh(demo, catalog).unreachable).toEqual([]);
   });
 

@@ -7,6 +7,7 @@ import { StateSelect } from './StateSelect';
 import { DurationField } from './DurationField';
 import { DeviceActionTriggerEditor, ZoneTriggerEditor } from './advanced/AdvancedTriggerEditor';
 import { StepShell } from './tanda3/StepFlags';
+import { ConversationTriggerEditor } from './ConversationTriggerEditor';
 import { EventTriggerEditor, HomeAssistantTriggerEditor, TimePatternTriggerEditor } from './tanda3/Tanda3Editors';
 
 function withFor<T extends { for?: number }>(value: T, seconds: number | undefined): T {
@@ -110,6 +111,8 @@ function TriggerFields({ value, onChange }: { value: Trigger; onChange: (t: Trig
       return <HomeAssistantTriggerEditor value={value} onChange={onChange} />;
     case 'event':
       return <EventTriggerEditor value={value} onChange={onChange} />;
+    case 'conversation':
+      return <ConversationTriggerEditor value={value} onChange={onChange} />;
   }
 }
 

@@ -2,6 +2,7 @@
 import type { ServiceData, ServiceDataValue } from '../../types';
 import type { BridgeDevice, BridgeEntity, BridgeModel } from './model';
 import { miredToKelvin, xyToRgb } from './color';
+import { slugify } from '../../devices/entities';
 
 export interface BridgeCommand {
   entityId: string;
@@ -83,9 +84,32 @@ const ALARM: Record<string, string> = {
   TRIGGER: 'alarm_control_panel.alarm_trigger',
 };
 
+/** Anuncio de HA hacia un altavoz o satélite (notify MQTT → servicio real del simulador). */
+function announceCommand(e: BridgeEntity, bdev: BridgeDevice | undefined, raw: string): BridgeCommand | null {
+  const body = parseJson(raw);
+  const message = typeof body?.message === 'string' ? body.message : raw;
+  if (message === '') return null;
+  if (e.domain === 'assist_satellite') return cmd(e.entityId, 'assist_satellite.announce', { message });
+  if (bdev?.device.integration === 'alexa_media_player') return cmd('', `notify.alexa_media_${slugify(bdev.device.name)}`, { message });
+  return cmd('tts.google_translate_es_es', 'tts.speak', { media_player_entity_id: e.entityId, message });
+}
+
+/** send_command del vacuum MQTT: texto ("app_segment_clean") o JSON {"command", "params"}. */
+function vacuumSendCommand(e: BridgeEntity, raw: string): BridgeCommand | null {
+  const body = parseJson(raw);
+  const command = typeof body?.command === 'string' ? body.command : raw;
+  if (command === '') return null;
+  const data: Record<string, ServiceDataValue> = { command };
+  const params = body?.params;
+  if (Array.isArray(params) && params.every((x) => typeof x === 'number')) data.params = params as number[];
+  else if (params !== undefined) data.params = JSON.stringify(params);
+  return cmd(e.entityId, 'vacuum.send_command', data);
+}
+
 /** Comando del perfil genérico para una entidad y un subtopic ('' = /set directo). */
-function genericCommand(e: BridgeEntity, sub: string, payload: string): BridgeCommand | null {
+function genericCommand(e: BridgeEntity, sub: string, payload: string, bdev?: BridgeDevice): BridgeCommand | null {
   const raw = payload.trim();
+  if (sub === 'announce') return announceCommand(e, bdev, raw);
   switch (e.domain) {
     case 'light': {
       const body = parseJson(raw) ?? { state: raw };
@@ -143,9 +167,13 @@ function genericCommand(e: BridgeEntity, sub: string, payload: string): BridgeCo
       return null;
     }
     case 'vacuum': {
+      if (sub === 'fan_speed') return raw === '' ? null : cmd(e.entityId, 'vacuum.set_fan_speed', { fan_speed: raw });
+      if (sub === 'command') return vacuumSendCommand(e, raw);
       const s = VACUUM[raw.toLowerCase()];
       return s ? cmd(e.entityId, s) : null;
     }
+    case 'select':
+      return raw === '' ? null : cmd(e.entityId, 'select.select_option', { option: raw });
     case 'button':
       return raw.toUpperCase() === 'PRESS' ? cmd(e.entityId, 'button.press') : null;
     case 'siren': {
@@ -247,6 +275,7 @@ export interface CommandIndex {
 export function createCommandParser(model: BridgeModel): CommandIndex {
   const generic = new Map<string, BridgeEntity>();
   const genericDevice = new Map<string, string>();
+  const genericBdev = new Map<string, BridgeDevice>();
   const z2m = new Map<string, BridgeDevice>();
   for (const bdev of model.devices) {
     if (bdev.profile === 'z2m') z2m.set(bdev.friendlyName, bdev);
@@ -254,6 +283,7 @@ export function createCommandParser(model: BridgeModel): CommandIndex {
       for (const e of bdev.entities) {
         generic.set(e.commandTopic, e);
         genericDevice.set(e.commandTopic, bdev.device.id);
+        genericBdev.set(e.commandTopic, bdev);
       }
   }
   const base = `${model.settings.baseTopic}/`;
@@ -278,7 +308,7 @@ export function createCommandParser(model: BridgeModel): CommandIndex {
       const slash = stem.lastIndexOf('/');
       const owner = generic.get(stem.slice(0, slash));
       if (owner) {
-        const c = genericCommand(owner, stem.slice(slash + 1), payload);
+        const c = genericCommand(owner, stem.slice(slash + 1), payload, genericBdev.get(stem.slice(0, slash)));
         return c ? [c] : [];
       }
     }

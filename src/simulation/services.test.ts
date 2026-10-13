@@ -176,7 +176,9 @@ describe('vacuum, fan, lock, switch y button', () => {
     expect(run('vacuum', 'pause', cleaning)?.state.state).toBe('paused');
     const back = run('vacuum', 'return_to_base', cleaning);
     expect(back?.state.state).toBe('returning');
-    expect(back?.after).toEqual({ seconds: VACUUM_RETURN_SECONDS, state: { state: 'docked' } });
+    // La llegada a la base la hace el paso del robot (vacuum_step) a los VACUUM_RETURN_SECONDS.
+    expect(back?.vacuumNext).toBe(VACUUM_RETURN_SECONDS);
+    expect(back?.state.attributes?.return_left).toBe(VACUUM_RETURN_SECONDS);
   });
 
   it('fan: set_percentage y 0 apaga', () => {

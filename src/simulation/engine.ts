@@ -93,6 +93,9 @@ import { allDefinitions } from '../devices/catalog';
 import { applyHelperService, findHelperByEntity, helperEntities, isHelperDomain, timerFinishedState } from './helpers';
 import { DEFAULT_ALARM_CODE } from './services';
 import { applyTimelineEvent } from './timeline';
+import { VACUUM_FINISHED_EVENT, VACUUM_STEP_SECONDS, vacuumContext, vacuumErrorState, vacuumNextDelay, vacuumSensors, vacuumStep } from './vacuum';
+import { TTS_ENTITIES, alexaNotifyTargets, deviceOfEntity, isAlexaNotify, speechSeconds, ttsEntities, ttsTargets, withSpeech } from './voice';
+import { matchCommand } from './conversation';
 
 export { capturableEntities, captureSceneEntities, type CapturableEntities } from './scenes';
 // Módulos extraídos del motor (mismo comportamiento); se reexportan para no cambiar las importaciones.
@@ -169,7 +172,7 @@ export function formatDuration(seconds: number): string {
 
 export function createSimulationState(project: Project, defs: DeviceDefinition[], now: number): SimulationState {
   const devices = initialEntityStates(project, allDefinitions(project, defs));
-  const entities = { ...devices, ...helperEntities(project), ...peopleEntities(project), ...groupEntities(project, devices) };
+  const entities = { ...devices, ...helperEntities(project), ...peopleEntities(project), ...groupEntities(project, devices), ...ttsEntities() };
   const sim: SimulationState = {
     running: false,
     now,
@@ -707,6 +710,7 @@ function callServiceCore(
     return runScriptInternal(sim, project, ref, ctx, exec);
   }
   const logExtra = { entityId, ...(ctx.automationId === undefined ? {} : { automationId: ctx.automationId }) };
+  if (domain === 'tts' && service === 'speak') return ttsSpeak(sim, project, entityId, data, logExtra);
   const group = findGroupByEntity(project, entityId);
   if (group) return outcome(callGroupService(sim, project, group, service, data, ctx, exec), true);
   const current = sim.entities[entityId];
@@ -730,7 +734,13 @@ function callServiceCore(
   if (isHelperDomain(target)) return helperServiceCall(sim, project, entityId, target, service, name, current, data, logExtra, exec);
   const caps = entityCapabilities(project, entityId);
   const owner = target === 'alarm_control_panel' ? findEntityOwner(project, entityId) : undefined;
-  const res = applyService(target, service, current, data, { now: sim.now, capabilities: caps, code: owner?.device.alarmCode ?? DEFAULT_ALARM_CODE });
+  const vacuum = target === 'vacuum' ? vacuumContext(project, allDefinitions(project), sim.entities, entityId) : undefined;
+  const res = applyService(target, service, current, data, {
+    now: sim.now,
+    capabilities: caps,
+    code: owner?.device.alarmCode ?? DEFAULT_ALARM_CODE,
+    ...(vacuum ? { vacuum } : {}),
+  });
   if (!res) return outcome(addLog(sim, 'warning', `Servicio no soportado en la simulación: ${name}`, logExtra), false, 'servicio no soportado en la simulación');
   const desc = describeServiceData(data);
   let next = addLog(sim, 'info', `Servicio ${name} → ${friendly(sim, entityId)}${desc ? ` (${desc})` : ''}`, logExtra);
@@ -745,10 +755,103 @@ function callServiceCore(
     const timer: SimTimer = { kind: 'set_states', setStates: { [entityId]: res.after.state } };
     next = scheduleTimer(next, entityTimerKey(entityId), next.now + res.after.seconds * SECOND_MS, timer);
   }
+  if (res.then) {
+    const timer: SimTimer = { kind: 'set_states', setStates: { [entityId]: res.then.state } };
+    next = scheduleTimer(next, `${entityTimerKey(entityId)}:2`, next.now + res.then.seconds * SECOND_MS, timer);
+  }
+  if (res.notice !== undefined) next = addLog(next, 'info', `${friendly(sim, entityId)} ${res.notice}`, logExtra);
+  if (target === 'vacuum') next = syncVacuum(next, project, entityId);
+  if (target === 'assist_satellite' && (service === 'announce' || service === 'start_conversation')) {
+    const said = String(res.state.attributes?.last_announcement ?? '');
+    const dev = deviceOfEntity(project, allDefinitions(project), entityId);
+    if (dev && said !== '') next = withSpeech(next, dev.id, said, 'announce');
+  }
   return outcome(next, true, res.warnings.length > 0 ? res.warnings.join('; ') : undefined);
 }
 
-/** Tanda 3: servicio sobre un helper (input_*, timer, counter). */
+/**
+ * Robot aspirador: refleja en sus sensores (consumibles, superficie, base) los atributos del
+ * robot y programa su próximo paso según el estado (limpiando, volviendo, cargando...).
+ */
+function syncVacuum(sim: SimulationState, project: Project, entityId: string): SimulationState {
+  const st = sim.entities[entityId];
+  const ctx = st ? vacuumContext(project, allDefinitions(project), sim.entities, entityId) : undefined;
+  if (!st || !ctx) return sim;
+  let result = sim;
+  for (const [key, value] of Object.entries(vacuumSensors(st.attributes ?? {}, ctx))) {
+    const id = ctx.siblings[key];
+    const cur = id ? result.entities[id] : undefined;
+    if (!id || !cur || cur.state === 'unavailable' || sameState(cur.state, value)) continue;
+    result = applyChange(result, project, id, value, { ...ROOT, quiet: true });
+  }
+  const delay = st.state === 'unavailable' ? undefined : vacuumNextDelay(st, ctx.battery);
+  if (delay === undefined) return cancelTimer(result, entityTimerKey(entityId));
+  return scheduleTimer(result, entityTimerKey(entityId), result.now + delay * SECOND_MS, { kind: 'vacuum_step', entityId, seconds: delay });
+}
+
+/** Paso periódico del robot (temporizador vacuum_step). */
+function runVacuumStep(sim: SimulationState, project: Project, entityId: string, seconds: number): SimulationState {
+  const current = sim.entities[entityId];
+  const ctx = current ? vacuumContext(project, allDefinitions(project), sim.entities, entityId) : undefined;
+  if (!current || !ctx || current.state === 'unavailable') return sim;
+  const res = vacuumStep(current, ctx, seconds, `«${friendly(sim, entityId)}»`);
+  let result = applyChange(sim, project, entityId, res.vacuum, ROOT, true);
+  const batteryId = ctx.siblings.battery;
+  const battery = batteryId ? result.entities[batteryId] : undefined;
+  if (batteryId && battery && battery.state !== 'unavailable' && toNumber(battery.state) !== Math.round(res.battery)) {
+    result = applyChange(result, project, batteryId, Math.round(res.battery), { ...ROOT, quiet: true });
+  }
+  for (const l of res.logs) result = addLog(result, l.level, l.message, { entityId });
+  if (res.finished) {
+    result = fireEventInternal(result, project, VACUUM_FINISHED_EVENT, { entity_id: entityId, cleaned_area: res.finished.areaM2, cleaning_time: res.finished.minutes }, ROOT);
+  }
+  return syncVacuumWithBattery(result, project, entityId, res.battery);
+}
+
+/** syncVacuum con el nivel de batería con decimales del paso (el sensor va redondeado). */
+function syncVacuumWithBattery(sim: SimulationState, project: Project, entityId: string, battery: number): SimulationState {
+  const st = sim.entities[entityId];
+  const precise = st ? { ...sim, entities: { ...sim.entities, [entityId]: { ...st, attributes: { ...st.attributes, battery_precise: battery } } } } : sim;
+  return syncVacuum(precise, project, entityId);
+}
+
+/**
+ * Evento físico: el robot se atasca o se queda sin agua (estado error con el atributo `error`).
+ * Para hasta que se arregle y se vuelva a llamar a vacuum.start o vacuum.return_to_base.
+ */
+export function setVacuumError(sim: SimulationState, project: Project, entityId: string, code: string): SimulationState {
+  const current = sim.entities[entityId];
+  if (!current || current.state === 'unavailable') return sim;
+  const next = applyChange(cancelTimer(sim, entityTimerKey(entityId)), project, entityId, vacuumErrorState(current, code), ROOT, true);
+  return addLog(next, 'error', `${friendly(sim, entityId)}: ${String(next.entities[entityId]?.attributes?.error ?? code)}`, { entityId });
+}
+
+/** tts.speak: el texto suena en los reproductores de media_player_entity_id (burbuja y registro). */
+function ttsSpeak(sim: SimulationState, project: Project, ttsEntity: string, data: ServiceData | undefined, extra: LogExtra): Outcome {
+  const message = data?.message === undefined || Array.isArray(data.message) ? '' : String(data.message);
+  if (message.trim() === '') return outcome(addLog(sim, 'warning', 'Servicio tts.speak: falta el mensaje ("message")', extra), false, 'falta el mensaje');
+  const engineInfo = TTS_ENTITIES[ttsEntity];
+  const f = sim.failures;
+  if (engineInfo?.cloud && f && (f.internet || f.powerOutage) && !internetAvailable(project, catalog, f)) {
+    return fatalOutcome(addLog(sim, 'error', `tts.speak con ${engineInfo.name}: sin Internet no se genera el audio`, extra), 'TTS en la nube sin Internet');
+  }
+  const targets = ttsTargets(data);
+  if (targets.length === 0) return outcome(addLog(sim, 'warning', 'Servicio tts.speak: falta media_player_entity_id', extra), false, 'falta el reproductor');
+  const defs = allDefinitions(project);
+  let result = sim;
+  const failed: string[] = [];
+  for (const id of targets) {
+    const st = result.entities[id];
+    const dev = deviceOfEntity(project, defs, id);
+    if (!st || st.state === 'unavailable' || !dev) {
+      failed.push(id);
+      result = addLog(result, 'warning', `tts.speak: ${st ? `${friendly(result, id)} no está disponible` : `reproductor desconocido ${id}`}`, { ...extra, entityId: id });
+      continue;
+    }
+    result = addLog(withSpeech(result, dev.id, message, 'announce'), 'info', `🔊 ${friendly(result, id)} dice: «${message}»`, { ...extra, entityId: id });
+  }
+  return outcome(result, failed.length === 0, failed.length > 0 ? `${failed.length} reproductor(es) sin disponer` : `${speechSeconds(message)} s de audio`);
+}
 function helperServiceCall(
   sim: SimulationState,
   project: Project,
@@ -816,6 +919,25 @@ export function fireEvent(sim: SimulationState, project: Project, eventType: str
 }
 
 /**
+ * Frase dicha a Assist: ejecuta las automatizaciones con un disparador `conversation` que
+ * encaja (tienen prioridad sobre las intenciones, como en HA). `matched` dice si alguna encajó.
+ */
+export function fireConversation(sim: SimulationState, project: Project, text: string, deviceId?: Id): { sim: SimulationState; matched: boolean } {
+  let result = sim;
+  let matched = false;
+  for (const a of project.automations) {
+    const i = a.triggers.findIndex((t) => t.enabled !== false && t.type === 'conversation' && matchCommand(t.command, text) !== undefined);
+    const t = a.triggers[i];
+    if (!t || t.type !== 'conversation') continue;
+    matched = true;
+    const variables: Variables = { 'trigger.platform': 'conversation', 'trigger.id': triggerIdOf(t, i), 'trigger.sentence': text };
+    if (deviceId !== undefined) variables['trigger.device_id'] = deviceId;
+    result = runAutomationInternal(result, project, a, ROOT, `frase «${text}»`, traceTrigger(t, i, result), { variables });
+  }
+  return { sim: result, matched };
+}
+
+/**
  * Tanda 3: arranque (start) o parada (shutdown) de Home Assistant: dispara las automatizaciones
  * con `trigger: homeassistant` de ese evento. Lo llaman el inicio de la simulación y el escenario
  * «Home Assistant se reinicia» (setFailures).
@@ -846,7 +968,26 @@ function notifyService(sim: SimulationState, project: Project, service: string, 
   const extra = ctx.automationId === undefined ? {} : { automationId: ctx.automationId };
   const content = notificationContent(data);
   if (!content) return outcome(addLog(sim, 'warning', `Servicio ${service}: falta el mensaje ("message")`, extra), false, 'falta el mensaje');
+  if (isAlexaNotify(service)) return notifyOffline(sim, project, service, extra) ?? alexaAnnounce(sim, project, service, data, content.message, extra);
   return notifyOffline(sim, project, service, extra) ?? sendNotification(sim, content, extra);
+}
+
+/** Alexa Media Player: notify.alexa_media_<echo> dice el mensaje en el Echo (anuncio o TTS). */
+function alexaAnnounce(sim: SimulationState, project: Project, service: string, data: ServiceData | undefined, message: string, extra: LogExtra): Outcome {
+  const defs = allDefinitions(project);
+  const devices = alexaNotifyTargets(project, defs, service, data);
+  if (devices.length === 0) return outcome(addLog(sim, 'warning', `Servicio ${service}: no hay ningún Echo con ese nombre`, extra), false, 'Echo desconocido');
+  let result = sim;
+  for (const d of devices) {
+    const def = defs.find((x) => x.id === d.definitionId);
+    const media = def ? entitiesForDevice(d, def).find((e) => e.definition.domain === 'media_player')?.entityId : undefined;
+    if (media && result.entities[media]?.state === 'unavailable') {
+      result = addLog(result, 'warning', `${service}: «${d.name}» no está disponible`, { ...extra, entityId: media });
+      continue;
+    }
+    result = addLog(withSpeech(result, d.id, message, 'announce'), 'info', `🔊 «${d.name}» anuncia: «${message}»`, media ? { ...extra, entityId: media } : extra);
+  }
+  return outcome(result, true);
 }
 
 /** Las notificaciones a la app (notify.* salvo la persistente) necesitan Internet. */
@@ -1210,7 +1351,10 @@ function runActionsInternal(sim: SimulationState, project: Project, actions: Act
           title: renderTemplate(action.title ?? DEFAULT_NOTIFICATION_TITLE, vars, result),
           message: renderTemplate(action.message, vars, result),
         };
-        const r = notifyOffline(result, project, action.service ?? 'notify.notify', extra) ?? sendNotification(result, content, extra);
+        const r =
+          action.service !== undefined && isAlexaNotify(action.service)
+            ? notifyService(result, project, action.service, { message: content.message, ...(content.title ? { title: content.title } : {}) }, c)
+            : (notifyOffline(result, project, action.service ?? 'notify.notify', extra) ?? sendNotification(result, content, extra));
         if (checked(r)) return abortRun(r, step, `Acciones detenidas por un error: ${r.detail ?? 'error'}`);
         result = traceStep(r, step);
         break;
@@ -1317,6 +1461,8 @@ function runTimer(sim: SimulationState, project: Project, timer: SimTimer): Simu
       const seconds = coverStepSeconds(coverPosition(step.state), timer.target, caps);
       return scheduleTimer(result, entityTimerKey(timer.entityId), result.now + seconds * SECOND_MS, timer);
     }
+    case 'vacuum_step':
+      return runVacuumStep(sim, project, timer.entityId, timer.seconds ?? VACUUM_STEP_SECONDS);
     case 'timeline_event': {
       const logged = timer.description ? addLog(sim, 'info', timer.description) : sim;
       const r = applyTimelineEvent(logged, project, timer.step);

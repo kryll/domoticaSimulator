@@ -79,3 +79,8 @@ Resultado de recorrer la app como novato, instalador y usuario avanzado de HA, e
 - Importar desde un HA real (`automations.yaml`, `scenes.yaml`, `core.device_registry`, `core.area_registry`).
 - Dispositivos personalizados y catálogo ampliado (humo y CO, alarma, aire acondicionado, energía, válvula, garaje, ESPHome).
 - Generador de «día típico», búsqueda global (Ctrl+K), diseño responsive y táctil, y PWA.
+
+**Robots aspiradores y asistentes de voz (octubre 2026)**
+- Catálogo: robots de Roborock, Dreame (HACS), iRobot, Eufy (HACS), Ecovacs y Xiaomi; asistentes Amazon Echo (Dot, Pop, 4.ª, Studio, Show 5/8/15, Hub), Google Nest (Mini, Audio, Hub, Hub Max), Apple HomePod, Sonos Era 300, HA Voice PE, ESP32-S3-BOX-3 y satélite Wyoming.
+- Dominio `vacuum` completo (salas y segmentos, batería, consumibles, base de autovaciado, errores, energía) con el robot moviéndose por el plano; `assist_satellite` con intérprete de intenciones, exposición a Assist, Alexa y Google, disparador `conversation` y dependencia de Internet de Alexa y Google.
+- Laboratorio: `vacuum` por MQTT; satélites y altavoces como sensor + `notify`. Satélites ESPHome y Wyoming reales, candidatos para E2.

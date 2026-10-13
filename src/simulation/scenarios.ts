@@ -90,8 +90,40 @@ export interface ImpactReport {
   automations: ({ automationId: Id } & ImpactItem)[];
   scenes: ({ sceneId: Id } & ImpactItem)[];
   scripts: ({ scriptId: Id } & ImpactItem)[];
+  /** Control por voz de cada asistente (Alexa y Google sin Internet no entienden nada). */
+  voice: ({ deviceId: Id } & ImpactItem)[];
   /** Resumen en una línea, en español. */
   summary: string;
+}
+
+const VOICE_NAMES: Record<string, string> = { assist: 'Assist', alexa: 'Alexa', google: 'Google Assistant', siri: 'Siri' };
+
+/** Qué control por voz se pierde con estos fallos (por asistente). */
+function voiceImpact(project: Project, defs: DeviceDefinition[], failures: Failures, reasons: Map<Id, string>, offline: boolean): ({ deviceId: Id } & ImpactItem)[] {
+  const out: ({ deviceId: Id } & ImpactItem)[] = [];
+  for (const device of project.devices) {
+    const def = defs.find((d) => d.id === device.definitionId);
+    const info = def?.assistant;
+    if (!info) continue;
+    const name = VOICE_NAMES[info.kind] ?? info.kind;
+    const target = info.kind === 'siri' ? undefined : info.kind;
+    const exposed = target === undefined ? 0 : project.devices.filter((d) => (d.exposedTo ?? ['assist']).includes(target)).length;
+    const what = `${exposed} ${plural(exposed, 'dispositivo expuesto', 'dispositivos expuestos')}`;
+    const powerless = failures.powerOutage && device.ups !== true;
+    if (powerless || failures.devicesDown.includes(device.id)) {
+      out.push({ deviceId: device.id, status: 'broken', reasons: [`Está apagado o desconectado: no hay control por voz (${what})`] });
+    } else if (info.pipeline === 'cloud' && offline) {
+      out.push({ deviceId: device.id, status: 'broken', reasons: [`Sin Internet, ${name} no entiende ninguna orden: se pierde el control por voz de ${what}`] });
+    } else if (failures.haRestarting) {
+      out.push({ deviceId: device.id, status: 'broken', reasons: [`${name} no puede hablar con Home Assistant mientras se reinicia`] });
+    } else if (reasons.has(device.id) && info.kind === 'assist') {
+      out.push({ deviceId: device.id, status: 'broken', reasons: [reasons.get(device.id) ?? 'No disponible'] });
+    } else {
+      const note = info.pipeline === 'local' ? 'Assist local: sigue funcionando' : `${name} sigue respondiendo`;
+      out.push({ deviceId: device.id, status: 'ok', reasons: [note] });
+    }
+  }
+  return out;
 }
 
 interface DownEntity {
@@ -193,7 +225,10 @@ function offlineReasons(triggers: Trigger[], conditions: Condition[], actions: A
   if (conditions.flatMap(zoneConditions).length > 0 || flattenActions(actions).some((a) => actionConditions(a).flatMap(zoneConditions).length > 0)) {
     out.push(`Condición de zona: ${ZONE_OFFLINE}`);
   }
-  if (cloudNotifications(actions, project) > 0) out.push(`Acción: ${NOTIFY_OFFLINE}`);
+  if (cloudNotifications(actions, project) > 0) {
+    const alexa = flattenActions(actions).some((a) => (a.type === 'notify' && (a.service ?? '').startsWith('notify.alexa_media')) || (a.type === 'service' && a.service.startsWith('notify.alexa_media')));
+    out.push(`Acción: ${alexa ? 'los anuncios de Alexa Media Player (y las notificaciones a la app) necesitan Internet' : NOTIFY_OFFLINE}`);
+  }
   return out;
 }
 
@@ -272,9 +307,12 @@ export function failureImpact(project: Project, baseDefs: DeviceDefinition[], fa
 
   const count = (items: ImpactItem[], st: ImpactStatus): number => items.filter((x) => x.status === st).length;
   const autos = automations.length === 0 ? '' : `; automatizaciones: ${count(automations, 'broken')} ${plural(count(automations, 'broken'), 'rota', 'rotas')} y ${count(automations, 'degraded')} ${plural(count(automations, 'degraded'), 'degradada', 'degradadas')} de ${automations.length}`;
-  const summary = `${unavailableDevices.length} ${plural(unavailableDevices.length, 'dispositivo', 'dispositivos')} sin servicio${autos}`;
+  const voice = voiceImpact(project, defs, failures, reasons, offline);
+  const mute = count(voice, 'broken');
+  const voiceText = mute === 0 ? '' : `; ${mute} ${plural(mute, 'asistente de voz', 'asistentes de voz')} sin control por voz`;
+  const summary = `${unavailableDevices.length} ${plural(unavailableDevices.length, 'dispositivo', 'dispositivos')} sin servicio${autos}${voiceText}`;
 
-  return { unavailableDevices, unavailableEntities: [...down.keys()], automations, scenes, scripts, summary };
+  return { unavailableDevices, unavailableEntities: [...down.keys()], automations, scenes, scripts, voice, summary };
 }
 
 /** Impacto de un escenario predefinido. */

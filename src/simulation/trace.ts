@@ -139,6 +139,8 @@ export function describeTrigger(t: Trigger, sim: SimulationState): string {
       const data = rest.length > 0 ? ` (${rest.map(([k, v]) => `${k}: ${String(v)}`).join(', ')})` : '';
       return `Evento ${t.eventType}${who}${data}`;
     }
+    case 'conversation':
+      return `Frase de Assist: ${t.command.map((c) => `«${c}»`).join(' o ')}`;
   }
 }
 

@@ -173,6 +173,14 @@ function device(v: unknown, path: string): Device {
   if (o.showAs !== undefined) d.showAs = oneOf(o, 'showAs', ['light', 'switch'] as const, path);
   const alarmCode = optStr(o, 'alarmCode', path);
   if (alarmCode !== undefined) d.alarmCode = alarmCode;
+  if (o.aliases !== undefined) d.aliases = strList(o.aliases, `${path}.aliases`);
+  if (o.vacuumRooms !== undefined) d.vacuumRooms = strList(o.vacuumRooms, `${path}.vacuumRooms`);
+  if (o.exposedTo !== undefined) {
+    d.exposedTo = strList(o.exposedTo, `${path}.exposedTo`).map((x, i) => {
+      if (x !== 'assist' && x !== 'alexa' && x !== 'google') fail(`${path}.exposedTo[${i}]`, 'debe ser assist, alexa o google');
+      return x;
+    });
+  }
   return d;
 }
 
@@ -191,7 +199,8 @@ function trigger(v: unknown, path: string): Trigger {
 }
 
 function triggerBody(o: Obj, path: string): Trigger {
-  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'zone', 'device_action', 'time_pattern', 'homeassistant', 'event'] as const, path);
+  const type = oneOf(o, 'type', ['state', 'numeric_state', 'time', 'sun', 'zone', 'device_action', 'time_pattern', 'homeassistant', 'event', 'conversation'] as const, path);
+  if (type === 'conversation') return { type, command: strList(o.command, `${path}.command`) };
   if (type === 'time') return { type, at: str(o, 'at', path) };
   if (type === 'time_pattern') {
     const t: Trigger = { type };
@@ -659,6 +668,13 @@ function parseFase3(o: Obj, project: Project): void {
   if (variants) project.variants = variants;
   if (groups) project.groups = groups;
   if (o.reliability !== undefined) project.reliability = reliability(o.reliability, 'reliability');
+  if (o.voiceLinks !== undefined) {
+    const links = obj(o.voiceLinks, 'voiceLinks');
+    project.voiceLinks = {};
+    for (const k of ['alexa', 'google'] as const) {
+      if (links[k] !== undefined) project.voiceLinks[k] = oneOf(links, k, ['nabu_casa', 'manual'] as const, 'voiceLinks');
+    }
+  }
   // Tanda 3: helpers y definiciones personalizadas.
   const helpers = optList(o, 'helpers', helper);
   if (helpers) {

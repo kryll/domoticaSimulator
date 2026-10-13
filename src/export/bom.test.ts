@@ -46,7 +46,7 @@ describe('lista de materiales y presupuesto (B8)', () => {
     const r = billOfMaterials(p, catalog);
     expect(r.requiredInfrastructure.map((x) => x.definitionId)).toEqual(['hue-bridge-v2', 'aqara-hub-m2', 'google-nest-hub-2']);
     expect(r.requiredInfrastructure[0]).toMatchObject({ reason: 'Los dispositivos de Philips Hue con su integración necesitan su hub', unitPrice: 59 });
-    expect(r.totalWithInfrastructure).toBeCloseTo(r.total + 59 + 49 + 99);
+    expect(r.totalWithInfrastructure).toBeCloseTo(r.total + 59 + 49 + 99.99);
     const zha = billOfMaterials(project([dev('ha', 'ha-green'), dev('c', 'aqara-door-window', undefined, { integration: 'zha' })]), catalog);
     expect(zha.requiredInfrastructure.map((x) => x.definitionId)).toEqual(['sonoff-zbdongle-p']);
     const demo = billOfMaterials(createDemoProject(), catalog);

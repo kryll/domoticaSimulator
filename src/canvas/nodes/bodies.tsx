@@ -221,6 +221,28 @@ export function ValveBody({ view }: BodyProps) {
   );
 }
 
+/** Robot aspirador: sala y progreso, error destacado y cuenta atrás al volver a la base. */
+export function VacuumBody({ view }: BodyProps) {
+  const v = view.vacuum;
+  const error = view.state === 'error';
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span className={cx('truncate text-xs font-semibold', error ? 'text-red-700' : 'text-slate-900')} data-testid="node-summary" title={view.summary}>
+          {error ? '⚠ ' : ''}
+          {view.summary}
+        </span>
+      </div>
+      {view.state === 'returning' && view.countdownSeconds !== undefined && (
+        <span className="text-[10px] tabular-nums text-sky-800" title="Tiempo hasta llegar a la base">
+          ⌂ {clock(view.countdownSeconds)}
+        </span>
+      )}
+      {view.state === 'cleaning' && v?.progress !== undefined && <LevelBar pct={v.progress} color="bg-emerald-500" label="Progreso de la limpieza" />}
+    </div>
+  );
+}
+
 export function GenericBody({ view }: BodyProps) {
   return <Summary view={view} />;
 }
@@ -269,6 +291,8 @@ export function NodeBody(props: BodyProps) {
       return <AlarmBody {...props} />;
     case 'valve':
       return <ValveBody {...props} />;
+    case 'vacuum':
+      return <VacuumBody {...props} />;
     default:
       return <GenericBody {...props} />;
   }

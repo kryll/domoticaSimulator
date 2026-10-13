@@ -676,6 +676,8 @@ const PROTOCOL_BY_INTEGRATION: Partial<Record<Integration, Protocol>> = {
 
 function asDomain(entityId: string): EntityDomain | undefined {
   const d = entityId.slice(0, entityId.indexOf('.'));
+  // select y assist_satellite necesitan opciones y un dispositivo de voz: no se importan sueltos.
+  if (d === 'select' || d === 'assist_satellite') return undefined;
   return ENTITY_DOMAINS.find((x) => x === d);
 }
 

@@ -4,6 +4,7 @@
 // errores de redondeo; los campos en euros salen de dividir esos céntimos entre 100.
 import type { DeviceCategory, DeviceDefinition, Id, Integration, Project, QuoteSettings } from '../types';
 import { billOfMaterials } from '../export/bom';
+import { cloudVoiceInUse } from '../simulation/voice';
 import { CATEGORY_LABELS, INTEGRATION_LABELS } from '../devices/labels';
 import { isInfra } from '../devices/roles';
 import { countLabel } from '../ui/plural';
@@ -63,7 +64,12 @@ export interface QuoteLine {
   missing?: boolean;
   /** Sin precio en el catálogo ni en el proyecto. */
   unpriced?: boolean;
+  /** Partida opcional (no suma en los totales): p. ej. la suscripción a Home Assistant Cloud. */
+  optional?: boolean;
 }
+
+/** Home Assistant Cloud (Nabu Casa): precio anual orientativo en España (2025-26). */
+export const NABU_CASA_YEAR_EUR = 75;
 
 export interface QuoteTotalsCents {
   subtotalMaterials: number;
@@ -79,6 +85,8 @@ export interface Quote {
   materialLines: QuoteLine[];
   infrastructureLines: QuoteLine[];
   laborLines: QuoteLine[];
+  /** Partidas opcionales que no suman en el total (suscripciones). */
+  optionalLines: QuoteLine[];
   /** Materiales + infraestructura. */
   subtotalMaterials: number;
   subtotalLabor: number;
@@ -209,6 +217,16 @@ export function buildQuote(project: Project, defs: DeviceDefinition[]): Quote {
   const extraHours = clamp(settings.laborHours, 0, 1000, 0);
   if (extraHours > 0) laborLines.push(laborLine('labor:extra', 'Horas adicionales', extraHours * 60, rateCents));
 
+  // Control por voz de Alexa o Google en la nube: Home Assistant Cloud (opcional, de pago; la
+  // alternativa gratuita es la configuración manual con HTTPS público).
+  const optionalLines: QuoteLine[] = [];
+  const voice = cloudVoiceInUse(project, defs).filter((k) => (project.voiceLinks?.[k] ?? 'nabu_casa') === 'nabu_casa');
+  if (voice.length > 0) {
+    const cents = toCents(NABU_CASA_YEAR_EUR);
+    const who = voice.map((k) => (k === 'alexa' ? 'Alexa' : 'Google Assistant')).join(' y ');
+    optionalLines.push(line('optional:nabu_casa', 'Home Assistant Cloud (Nabu Casa) · opcional, suscripción anual', 1, 'ud', cents, cents, { optional: true, detail: `Control por voz de ${who} sin abrir puertos (alternativa gratuita: configuración manual con HTTPS público)` }));
+  }
+
   const sum = (lines: QuoteLine[]): number => lines.reduce((s, l) => s + l.totalCents, 0);
   const subtotalMaterials = sum(materialLines) + sum(infrastructureLines);
   const subtotalLabor = sum(laborLines);
@@ -223,6 +241,7 @@ export function buildQuote(project: Project, defs: DeviceDefinition[]): Quote {
     materialLines,
     infrastructureLines,
     laborLines,
+    optionalLines,
     subtotalMaterials: toEur(subtotalMaterials),
     subtotalLabor: toEur(subtotalLabor),
     margin: toEur(margin),

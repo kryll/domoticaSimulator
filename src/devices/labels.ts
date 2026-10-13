@@ -49,7 +49,15 @@ export const INTEGRATION_LABELS: Record<Integration, string> = {
   meross_lan: 'Meross LAN',
   roborock: 'Roborock',
   ecovacs: 'Ecovacs',
+  dreame_vacuum: 'Dreame Vacuum (HACS)',
+  roomba: 'iRobot Roomba y Braava',
+  eufy_robovac: 'Eufy RoboVac (HACS)',
+  wyoming: 'Wyoming Protocol',
+  apple_tv: 'Apple TV (AirPlay)',
 };
+
+/** Integraciones que no son oficiales: se instalan con HACS (repositorios de la comunidad). */
+export const HACS_INTEGRATIONS: ReadonlySet<Integration> = new Set<Integration>(['alexa_media_player', 'dreame_vacuum', 'eufy_robovac']);
 
 export const CATEGORY_LABELS: Record<DeviceCategory, string> = {
   light: 'Iluminación',
@@ -121,6 +129,12 @@ const BRAND_SET: Record<Brand, true> = {
   Fibaro: true,
   Zooz: true,
   ESPHome: true,
+  Dreame: true,
+  iRobot: true,
+  Eufy: true,
+  Apple: true,
+  Espressif: true,
+  'Raspberry Pi': true,
 };
 
 const DOMAIN_SET: Record<EntityDomain, true> = {
@@ -139,6 +153,8 @@ const DOMAIN_SET: Record<EntityDomain, true> = {
   alarm_control_panel: true,
   valve: true,
   siren: true,
+  select: true,
+  assist_satellite: true,
 };
 
 function keysOf<K extends string>(record: Record<K, unknown>): K[] {
@@ -180,8 +196,13 @@ export const INTEGRATION_IOT_CLASS: Record<Integration, IotClass> = {
   daikin_onecta: 'cloud_polling',
   sensibo: 'cloud_polling',
   meross_lan: 'local_polling',
-  roborock: 'cloud_polling',
+  roborock: 'local_polling',
   ecovacs: 'cloud_push',
+  dreame_vacuum: 'cloud_polling',
+  roomba: 'local_push',
+  eufy_robovac: 'local_polling',
+  wyoming: 'local_push',
+  apple_tv: 'local_push',
 };
 
 /** hvac_action de un termostato (acción HVAC en curso, como HA en español). */
@@ -269,3 +290,44 @@ export const VALVE_STATE_LABELS: Record<string, string> = {
 export function labelOf(table: Record<string, string>, value: string): string {
   return table[value] ?? value;
 }
+
+/** Potencias de aspiración de los robots (Roborock, Dreame, Ecovacs, Eufy...). */
+export const FAN_SPEED_LABELS: Record<string, string> = {
+  off: 'Apagado (solo fregar)',
+  quiet: 'Silencioso',
+  silent: 'Silencioso',
+  balanced: 'Equilibrado',
+  standard: 'Estándar',
+  normal: 'Normal',
+  medium: 'Media',
+  strong: 'Fuerte',
+  turbo: 'Turbo',
+  max: 'Máxima',
+  max_plus: 'Máxima+',
+};
+
+/** Opciones de los select de los robots (modo de limpieza y agua). */
+export const SELECT_OPTION_LABELS: Record<string, string> = {
+  vacuum: 'Solo aspirar',
+  vacuum_mop: 'Aspirar y fregar',
+  mop: 'Solo fregar',
+  low: 'Poca agua',
+  medium: 'Agua media',
+  high: 'Mucha agua',
+};
+
+/** Estado de la base de un robot (sensor dock_status). */
+export const DOCK_STATUS_LABELS: Record<string, string> = {
+  idle: 'En reposo',
+  emptying: 'Vaciando el depósito',
+  washing_mop: 'Lavando la mopa',
+  drying: 'Secando la mopa',
+};
+
+/** Estados de un satélite de voz (assist_satellite). */
+export const ASSIST_SATELLITE_LABELS: Record<string, string> = {
+  idle: 'En reposo',
+  listening: 'Escuchando',
+  processing: 'Procesando',
+  responding: 'Respondiendo',
+};

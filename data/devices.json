@@ -212,11 +212,18 @@
         "key": "media",
         "domain": "media_player",
         "name": "Pantalla",
-        "initialState": "off"
+        "initialState": "idle"
       }
     ],
     "icon": "display",
-    "priceEur": 99
+    "priceEur": 99.99,
+    "assistant": {
+      "kind": "google",
+      "pipeline": "cloud",
+      "matterController": true,
+      "screen": "7 pulgadas",
+      "speaker": "básico"
+    }
   },
   {
     "id": "amazon-echo-4",
@@ -241,10 +248,23 @@
         "domain": "media_player",
         "name": "Altavoz",
         "initialState": "idle"
+      },
+      {
+        "key": "do_not_disturb",
+        "domain": "switch",
+        "name": "No molestar",
+        "initialState": "off"
       }
     ],
     "icon": "speaker",
-    "priceEur": 99
+    "priceEur": 109.99,
+    "assistant": {
+      "kind": "alexa",
+      "pipeline": "cloud",
+      "matterController": true,
+      "zigbeeHub": true,
+      "speaker": "bueno"
+    }
   },
   {
     "id": "tplink-deco-x50",
@@ -2717,7 +2737,7 @@
     "iotClass": "local_push",
     "role": "end_device",
     "power": "mains",
-    "rangeMeters": 30,
+    "rangeMeters": 25,
     "entities": [
       {
         "key": "media",
@@ -2727,7 +2747,13 @@
       }
     ],
     "icon": "speaker",
-    "priceEur": 59
+    "priceEur": 59,
+    "assistant": {
+      "kind": "google",
+      "pipeline": "cloud",
+      "matterController": true,
+      "speaker": "básico"
+    }
   },
   {
     "id": "google-chromecast-gtv",
@@ -2779,17 +2805,29 @@
     "iotClass": "cloud_polling",
     "role": "end_device",
     "power": "mains",
-    "rangeMeters": 30,
+    "rangeMeters": 25,
     "entities": [
       {
         "key": "media",
         "domain": "media_player",
         "name": "Altavoz",
         "initialState": "idle"
+      },
+      {
+        "key": "do_not_disturb",
+        "domain": "switch",
+        "name": "No molestar",
+        "initialState": "off"
       }
     ],
     "icon": "speaker",
-    "priceEur": 59
+    "priceEur": 64.99,
+    "assistant": {
+      "kind": "alexa",
+      "pipeline": "cloud",
+      "matterController": true,
+      "speaker": "básico"
+    }
   },
   {
     "id": "samsung-qled-q80",
@@ -2889,7 +2927,18 @@
         "key": "vacuum",
         "domain": "vacuum",
         "name": "Aspiradora",
-        "initialState": "docked"
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "silent",
+            "standard",
+            "medium",
+            "turbo"
+          ],
+          "cleaningRateM2Min": 1,
+          "runtimeMinutes": 130,
+          "powerWatts": 25
+        }
       },
       {
         "key": "battery",
@@ -2898,10 +2947,80 @@
         "deviceClass": "battery",
         "unit": "%",
         "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
       }
     ],
     "icon": "vacuum",
-    "priceEur": 249
+    "priceEur": 199
   },
   {
     "id": "aqara-smoke-detector",
@@ -3849,7 +3968,7 @@
     "integrations": [
       "roborock"
     ],
-    "iotClass": "cloud_polling",
+    "iotClass": "local_polling",
     "role": "end_device",
     "power": "mains",
     "rangeMeters": 30,
@@ -3858,7 +3977,20 @@
         "key": "vacuum",
         "domain": "vacuum",
         "name": "Aspiradora",
-        "initialState": "docked"
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "off",
+            "quiet",
+            "balanced",
+            "turbo",
+            "max",
+            "max_plus"
+          ],
+          "cleaningRateM2Min": 1.1,
+          "runtimeMinutes": 180,
+          "powerWatts": 34
+        }
       },
       {
         "key": "battery",
@@ -3867,10 +3999,80 @@
         "deviceClass": "battery",
         "unit": "%",
         "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
       }
     ],
     "icon": "vacuum",
-    "priceEur": 549
+    "priceEur": 449
   },
   {
     "id": "ecovacs-deebot-t30",
@@ -3893,7 +4095,20 @@
         "key": "vacuum",
         "domain": "vacuum",
         "name": "Aspiradora",
-        "initialState": "docked"
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "quiet",
+            "normal",
+            "max",
+            "max_plus"
+          ],
+          "cleaningRateM2Min": 1,
+          "runtimeMinutes": 180,
+          "powerWatts": 40,
+          "selfEmpty": true,
+          "mopWash": true
+        }
       },
       {
         "key": "battery",
@@ -3902,6 +4117,89 @@
         "deviceClass": "battery",
         "unit": "%",
         "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
       }
     ],
     "icon": "vacuum",
@@ -4187,5 +4485,1817 @@
     ],
     "icon": "switch",
     "priceEur": 35
+  },
+  {
+    "id": "roborock-qrevo-curv",
+    "brand": "Roborock",
+    "model": "Qrevo Curv",
+    "name": "Roborock Qrevo Curv robot aspirador y friegasuelos",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "roborock"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "off",
+            "quiet",
+            "balanced",
+            "turbo",
+            "max",
+            "max_plus"
+          ],
+          "cleaningRateM2Min": 1,
+          "runtimeMinutes": 180,
+          "powerWatts": 40,
+          "selfEmpty": true,
+          "mopWash": true
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 899
+  },
+  {
+    "id": "roborock-s8-maxv-ultra",
+    "brand": "Roborock",
+    "model": "S8 MaxV Ultra",
+    "name": "Roborock S8 MaxV Ultra robot aspirador y friegasuelos",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "roborock"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "off",
+            "quiet",
+            "balanced",
+            "turbo",
+            "max",
+            "max_plus"
+          ],
+          "cleaningRateM2Min": 1,
+          "runtimeMinutes": 180,
+          "powerWatts": 40,
+          "selfEmpty": true,
+          "mopWash": true
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 1199
+  },
+  {
+    "id": "roborock-q7-max",
+    "brand": "Roborock",
+    "model": "Q7 Max",
+    "name": "Roborock Q7 Max robot aspirador",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "roborock"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "quiet",
+            "balanced",
+            "turbo",
+            "max"
+          ],
+          "cleaningRateM2Min": 1.2,
+          "runtimeMinutes": 180,
+          "powerWatts": 30
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 299
+  },
+  {
+    "id": "dreame-l10s-ultra-gen2",
+    "brand": "Dreame",
+    "model": "L10s Ultra Gen 2",
+    "name": "Dreame L10s Ultra Gen 2 robot aspirador y friegasuelos",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "dreame_vacuum"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "silent",
+            "standard",
+            "strong",
+            "turbo"
+          ],
+          "cleaningRateM2Min": 1,
+          "runtimeMinutes": 180,
+          "powerWatts": 40,
+          "selfEmpty": true,
+          "mopWash": true
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 599
+  },
+  {
+    "id": "dreame-x40-ultra",
+    "brand": "Dreame",
+    "model": "X40 Ultra",
+    "name": "Dreame X40 Ultra robot aspirador y friegasuelos",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "dreame_vacuum"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "silent",
+            "standard",
+            "strong",
+            "turbo"
+          ],
+          "cleaningRateM2Min": 1,
+          "runtimeMinutes": 200,
+          "powerWatts": 45,
+          "selfEmpty": true,
+          "mopWash": true
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 1099
+  },
+  {
+    "id": "irobot-roomba-j7-plus",
+    "brand": "iRobot",
+    "model": "Roomba j7+",
+    "name": "iRobot Roomba j7+ con base de autovaciado",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "roomba"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "cleaningRateM2Min": 1,
+          "runtimeMinutes": 75,
+          "powerWatts": 30,
+          "selfEmpty": true
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 549
+  },
+  {
+    "id": "irobot-roomba-combo-j9-plus",
+    "brand": "iRobot",
+    "model": "Roomba Combo j9+",
+    "name": "iRobot Roomba Combo j9+ aspirador y friegasuelos",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "roomba"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "cleaningRateM2Min": 0.9,
+          "runtimeMinutes": 120,
+          "powerWatts": 35,
+          "selfEmpty": true
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 899
+  },
+  {
+    "id": "eufy-x10-pro-omni",
+    "brand": "Eufy",
+    "model": "RoboVac X10 Pro Omni",
+    "name": "Eufy X10 Pro Omni robot aspirador y friegasuelos",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "eufy_robovac"
+    ],
+    "iotClass": "local_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "quiet",
+            "standard",
+            "turbo",
+            "max"
+          ],
+          "cleaningRateM2Min": 1,
+          "runtimeMinutes": 180,
+          "powerWatts": 40,
+          "selfEmpty": true,
+          "mopWash": true
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 549
+  },
+  {
+    "id": "ecovacs-deebot-x2-omni",
+    "brand": "Ecovacs",
+    "model": "DEEBOT X2 Omni",
+    "name": "Ecovacs DEEBOT X2 Omni robot aspirador y friegasuelos",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "ecovacs"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "quiet",
+            "normal",
+            "max",
+            "max_plus"
+          ],
+          "cleaningRateM2Min": 1.1,
+          "runtimeMinutes": 212,
+          "powerWatts": 45,
+          "selfEmpty": true,
+          "mopWash": true
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 899
+  },
+  {
+    "id": "xiaomi-robot-vacuum-x20-plus",
+    "brand": "Xiaomi",
+    "model": "X20+ (c102gl)",
+    "name": "Xiaomi Robot Vacuum X20+ aspirador y friegasuelos",
+    "category": "vacuum",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "dreame_vacuum"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "vacuum",
+        "domain": "vacuum",
+        "name": "Aspiradora",
+        "initialState": "docked",
+        "capabilities": {
+          "fanSpeeds": [
+            "silent",
+            "standard",
+            "strong",
+            "turbo"
+          ],
+          "cleaningRateM2Min": 1,
+          "runtimeMinutes": 180,
+          "powerWatts": 40,
+          "selfEmpty": true,
+          "mopWash": true
+        }
+      },
+      {
+        "key": "battery",
+        "domain": "sensor",
+        "name": "Batería",
+        "deviceClass": "battery",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "cleaned_area",
+        "domain": "sensor",
+        "name": "Superficie limpiada",
+        "deviceClass": "area",
+        "unit": "m²",
+        "initialState": 0
+      },
+      {
+        "key": "cleaning_time",
+        "domain": "sensor",
+        "name": "Tiempo de limpieza",
+        "deviceClass": "duration",
+        "unit": "min",
+        "initialState": 0
+      },
+      {
+        "key": "main_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo principal",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "side_brush_left",
+        "domain": "sensor",
+        "name": "Cepillo lateral",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "filter_left",
+        "domain": "sensor",
+        "name": "Filtro",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_pad_left",
+        "domain": "sensor",
+        "name": "Mopa",
+        "unit": "%",
+        "initialState": 100
+      },
+      {
+        "key": "mop_mode",
+        "domain": "select",
+        "name": "Modo de limpieza",
+        "initialState": "vacuum_mop",
+        "capabilities": {
+          "options": [
+            "vacuum",
+            "vacuum_mop",
+            "mop"
+          ]
+        }
+      },
+      {
+        "key": "water_level",
+        "domain": "select",
+        "name": "Nivel de agua",
+        "initialState": "medium",
+        "capabilities": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "key": "dock_status",
+        "domain": "sensor",
+        "name": "Estado de la base",
+        "initialState": "idle"
+      },
+      {
+        "key": "dust_bag",
+        "domain": "sensor",
+        "name": "Bolsa de la base",
+        "unit": "%",
+        "initialState": 10
+      }
+    ],
+    "icon": "vacuum",
+    "priceEur": 549
+  },
+  {
+    "id": "amazon-echo-pop",
+    "brand": "Amazon",
+    "model": "Echo Pop",
+    "name": "Amazon Echo Pop",
+    "category": "speaker",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "alexa_media_player"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle"
+      },
+      {
+        "key": "do_not_disturb",
+        "domain": "switch",
+        "name": "No molestar",
+        "initialState": "off"
+      }
+    ],
+    "icon": "speaker",
+    "priceEur": 54.99,
+    "assistant": {
+      "kind": "alexa",
+      "pipeline": "cloud",
+      "matterController": true,
+      "speaker": "básico"
+    }
+  },
+  {
+    "id": "amazon-echo-studio",
+    "brand": "Amazon",
+    "model": "Echo Studio (2025)",
+    "name": "Amazon Echo Studio",
+    "category": "speaker",
+    "protocols": [
+      "wifi",
+      "thread"
+    ],
+    "integrations": [
+      "alexa_media_player"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "border_router",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle"
+      },
+      {
+        "key": "do_not_disturb",
+        "domain": "switch",
+        "name": "No molestar",
+        "initialState": "off"
+      }
+    ],
+    "icon": "speaker",
+    "priceEur": 219.99,
+    "assistant": {
+      "kind": "alexa",
+      "pipeline": "cloud",
+      "matterController": true,
+      "zigbeeHub": true,
+      "speaker": "alta fidelidad (audio espacial)"
+    }
+  },
+  {
+    "id": "amazon-echo-show-5-3",
+    "brand": "Amazon",
+    "model": "Echo Show 5 (3.ª gen.)",
+    "name": "Amazon Echo Show 5 3.ª gen.",
+    "category": "display",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "alexa_media_player"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Pantalla",
+        "initialState": "idle"
+      },
+      {
+        "key": "do_not_disturb",
+        "domain": "switch",
+        "name": "No molestar",
+        "initialState": "off"
+      }
+    ],
+    "icon": "display",
+    "priceEur": 99.99,
+    "assistant": {
+      "kind": "alexa",
+      "pipeline": "cloud",
+      "matterController": true,
+      "screen": "5,5 pulgadas",
+      "camera": true,
+      "speaker": "básico"
+    }
+  },
+  {
+    "id": "amazon-echo-show-8-3",
+    "brand": "Amazon",
+    "model": "Echo Show 8 (3.ª gen.)",
+    "name": "Amazon Echo Show 8 3.ª gen.",
+    "category": "display",
+    "protocols": [
+      "wifi",
+      "thread"
+    ],
+    "integrations": [
+      "alexa_media_player"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "border_router",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Pantalla",
+        "initialState": "idle"
+      },
+      {
+        "key": "do_not_disturb",
+        "domain": "switch",
+        "name": "No molestar",
+        "initialState": "off"
+      }
+    ],
+    "icon": "display",
+    "priceEur": 169.99,
+    "assistant": {
+      "kind": "alexa",
+      "pipeline": "cloud",
+      "matterController": true,
+      "zigbeeHub": true,
+      "screen": "8 pulgadas",
+      "camera": true,
+      "speaker": "bueno (estéreo)"
+    }
+  },
+  {
+    "id": "amazon-echo-show-15",
+    "brand": "Amazon",
+    "model": "Echo Show 15",
+    "name": "Amazon Echo Show 15",
+    "category": "display",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "alexa_media_player"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Pantalla",
+        "initialState": "idle"
+      },
+      {
+        "key": "do_not_disturb",
+        "domain": "switch",
+        "name": "No molestar",
+        "initialState": "off"
+      }
+    ],
+    "icon": "display",
+    "priceEur": 299.99,
+    "assistant": {
+      "kind": "alexa",
+      "pipeline": "cloud",
+      "matterController": true,
+      "screen": "15,6 pulgadas",
+      "camera": true,
+      "speaker": "básico"
+    }
+  },
+  {
+    "id": "amazon-echo-hub",
+    "brand": "Amazon",
+    "model": "Echo Hub",
+    "name": "Amazon Echo Hub",
+    "category": "display",
+    "protocols": [
+      "wifi",
+      "ethernet",
+      "thread"
+    ],
+    "integrations": [
+      "alexa_media_player"
+    ],
+    "iotClass": "cloud_polling",
+    "role": "border_router",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Pantalla",
+        "initialState": "idle"
+      },
+      {
+        "key": "do_not_disturb",
+        "domain": "switch",
+        "name": "No molestar",
+        "initialState": "off"
+      }
+    ],
+    "icon": "display",
+    "priceEur": 199.99,
+    "assistant": {
+      "kind": "alexa",
+      "pipeline": "cloud",
+      "matterController": true,
+      "zigbeeHub": true,
+      "screen": "8 pulgadas (panel de control)",
+      "speaker": "básico"
+    }
+  },
+  {
+    "id": "google-nest-audio",
+    "brand": "Google",
+    "model": "Nest Audio",
+    "name": "Google Nest Audio",
+    "category": "speaker",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "google_cast"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle"
+      }
+    ],
+    "icon": "speaker",
+    "priceEur": 99.99,
+    "assistant": {
+      "kind": "google",
+      "pipeline": "cloud",
+      "matterController": true,
+      "speaker": "bueno"
+    }
+  },
+  {
+    "id": "google-nest-hub-max",
+    "brand": "Google",
+    "model": "Nest Hub Max",
+    "name": "Google Nest Hub Max",
+    "category": "display",
+    "protocols": [
+      "wifi",
+      "thread"
+    ],
+    "integrations": [
+      "google_cast"
+    ],
+    "iotClass": "local_push",
+    "role": "border_router",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Pantalla",
+        "initialState": "idle"
+      }
+    ],
+    "icon": "display",
+    "priceEur": 229,
+    "assistant": {
+      "kind": "google",
+      "pipeline": "cloud",
+      "matterController": true,
+      "screen": "10 pulgadas",
+      "camera": true,
+      "speaker": "bueno (estéreo)"
+    }
+  },
+  {
+    "id": "apple-homepod-mini",
+    "brand": "Apple",
+    "model": "HomePod mini",
+    "name": "Apple HomePod mini",
+    "category": "speaker",
+    "protocols": [
+      "wifi",
+      "thread"
+    ],
+    "integrations": [
+      "apple_tv"
+    ],
+    "iotClass": "local_push",
+    "role": "border_router",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle"
+      }
+    ],
+    "icon": "speaker",
+    "priceEur": 109,
+    "assistant": {
+      "kind": "siri",
+      "pipeline": "cloud",
+      "matterController": true,
+      "speaker": "bueno"
+    }
+  },
+  {
+    "id": "apple-homepod-2",
+    "brand": "Apple",
+    "model": "HomePod (2.ª gen.)",
+    "name": "Apple HomePod 2.ª gen.",
+    "category": "speaker",
+    "protocols": [
+      "wifi",
+      "thread"
+    ],
+    "integrations": [
+      "apple_tv"
+    ],
+    "iotClass": "local_push",
+    "role": "border_router",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle"
+      }
+    ],
+    "icon": "speaker",
+    "priceEur": 349,
+    "assistant": {
+      "kind": "siri",
+      "pipeline": "cloud",
+      "matterController": true,
+      "speaker": "alta fidelidad"
+    }
+  },
+  {
+    "id": "sonos-era-300",
+    "brand": "Sonos",
+    "model": "Era 300",
+    "name": "Sonos Era 300",
+    "category": "speaker",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "sonos"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle",
+        "capabilities": {
+          "sources": [
+            "Line-in",
+            "Bluetooth"
+          ]
+        }
+      }
+    ],
+    "icon": "speaker",
+    "priceEur": 499,
+    "assistant": {
+      "kind": "alexa",
+      "pipeline": "cloud",
+      "speaker": "alta fidelidad (audio espacial)"
+    }
+  },
+  {
+    "id": "ha-voice-pe",
+    "brand": "Home Assistant",
+    "model": "Voice Preview Edition",
+    "name": "Home Assistant Voice Preview Edition",
+    "category": "speaker",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "esphome"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "usb",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "satellite",
+        "domain": "assist_satellite",
+        "name": "Asistente",
+        "initialState": "idle"
+      },
+      {
+        "key": "media",
+        "domain": "media_player",
+        "name": "Altavoz",
+        "initialState": "idle",
+        "capabilities": {
+          "powerWatts": 2
+        }
+      },
+      {
+        "key": "mute",
+        "domain": "switch",
+        "name": "Micrófono silenciado",
+        "initialState": "off"
+      },
+      {
+        "key": "wake_word",
+        "domain": "select",
+        "name": "Palabra de activación",
+        "initialState": "Okay Nabu",
+        "capabilities": {
+          "options": [
+            "Okay Nabu",
+            "Hey Jarvis",
+            "Hey Mycroft"
+          ]
+        }
+      }
+    ],
+    "icon": "speaker",
+    "priceEur": 69,
+    "assistant": {
+      "kind": "assist",
+      "pipeline": "local",
+      "speaker": "básico (salida de audio de 3,5 mm)"
+    }
+  },
+  {
+    "id": "esp32-s3-box-3",
+    "brand": "Espressif",
+    "model": "ESP32-S3-BOX-3",
+    "name": "ESP32-S3-BOX-3 satélite de voz (ESPHome)",
+    "category": "speaker",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "esphome"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "usb",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "satellite",
+        "domain": "assist_satellite",
+        "name": "Asistente",
+        "initialState": "idle"
+      },
+      {
+        "key": "mute",
+        "domain": "switch",
+        "name": "Micrófono silenciado",
+        "initialState": "off"
+      }
+    ],
+    "icon": "speaker",
+    "priceEur": 55,
+    "assistant": {
+      "kind": "assist",
+      "pipeline": "local",
+      "screen": "2,4 pulgadas",
+      "speaker": "básico"
+    }
+  },
+  {
+    "id": "wyoming-satellite-rpi",
+    "brand": "Raspberry Pi",
+    "model": "Zero 2 W + ReSpeaker 2-Mic",
+    "name": "Satélite Wyoming (Raspberry Pi y micrófono)",
+    "category": "speaker",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "wyoming"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "usb",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "satellite",
+        "domain": "assist_satellite",
+        "name": "Asistente",
+        "initialState": "idle"
+      },
+      {
+        "key": "mute",
+        "domain": "switch",
+        "name": "Micrófono silenciado",
+        "initialState": "off"
+      }
+    ],
+    "icon": "speaker",
+    "priceEur": 45,
+    "assistant": {
+      "kind": "assist",
+      "pipeline": "local",
+      "speaker": "básico"
+    }
   }
 ]

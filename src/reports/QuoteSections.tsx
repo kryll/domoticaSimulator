@@ -228,6 +228,16 @@ export function QuoteBreakdown() {
           </tfoot>
         </table>
       </div>
+      {quote.optionalLines.length > 0 && (
+        <div className="mt-2 rounded-md border border-dashed border-violet-300 bg-violet-50/50 p-2 text-xs text-slate-700" data-testid="quote-optional">
+          <strong>Opcional (no suma en el total):</strong>{' '}
+          {quote.optionalLines.map((l) => (
+            <span key={l.key}>
+              {l.description} — {formatMoney(l.total)}/año. {l.detail}
+            </span>
+          ))}
+        </div>
+      )}
       {quote.unpriced.length > 0 && (
         <p className="mt-1 text-xs text-amber-800">Sin precio: {quote.unpriced.join(', ')}. Edítalo en la lista de materiales.</p>
       )}

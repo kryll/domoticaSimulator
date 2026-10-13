@@ -44,6 +44,11 @@ Diseño para que los dispositivos del simulador aparezcan en un Home Assistant r
 | BLE | Experimental | Proxy ESPHome falso que envía anuncios BTHome. Más adelante. |
 | RF 433 | Equivalente | Nodo ESPHome host con `remote_receiver` simulado, o MQTT. |
 | Tuya, eWeLink, Alexa, Cast | No (son de nube o propietarios) | MQTT discovery genérico. |
+| Robots aspiradores (Roborock, Dreame, Roomba, Ecovacs, Eufy) | No (nube del fabricante o protocolo propietario) | `vacuum` MQTT (esquema `state`): `state` y `fan_speed` en el JSON, `fan_speed_list`, `send_command_topic` (p. ej. `app_segment_clean` con `[16, 17]`), atributos (sala, progreso, error) por `json_attributes_topic`. La batería es un sensor aparte (HA ya no admite `battery_level` en el vacuum MQTT); consumibles, base y superficie, sensores; modo de mopa y agua, `select`. |
+| Satélites de Assist (HA Voice PE, ESP32-S3-BOX-3) | Sí, candidato para E2 | Firmware de voz real de ESPHome en la plataforma `host` → integración ESPHome con `assist_satellite` real. Sin micrófono: la frase se inyectaría como audio de fichero o con el texto de la canalización. Ahora (E1): `assist_satellite` no existe en MQTT, así que se publica como sensor de estado (`idle`, `listening`, `processing`, `responding`) + `notify` para anuncios (→ `assist_satellite.announce`). |
+| Satélite Wyoming (Raspberry Pi) | Probable, candidato para E2 | Contenedor `rhasspy/wyoming-satellite` real con `--mic-command`/`--snd-command` leyendo y escribiendo ficheros de audio, y la integración Wyoming de HA. Hay que comprobar que arranca sin dispositivo de audio. Ahora: igual que HA Voice (sensor + notify). |
+| Alexa y Google (control por voz) | No | Sus nubes necesitan cuentas reales de Amazon y Google. **El control por voz de Alexa y Google se simula en la app** (exposición de entidades, «Alexa, …», sin Internet no responden). En el HA real los altavoces llegan como reproductor (sensor, switch, number, select) + `notify` de anuncios por MQTT; el comando se traduce a `notify.alexa_media_<echo>` (Alexa Media Player) o a `tts.speak` sobre el reproductor (Google Cast). Las rutinas de Alexa y Google no son de HA y no se modelan. |
+| HomePod (Apple) | No | HA solo lo ve como reproductor (integración Apple TV/AirPlay); Siri no se controla desde HA. |
 
 ## Arquitectura
 
@@ -96,8 +101,10 @@ Interferencia: el canal Wi-Fi 1 solapa con los Zigbee/Thread 11-14, el 6 con los
   - en la app: ajustes «Home Assistant real», panel de estado, modo en vivo y vía por dispositivo;
   - perfiles de radio en el motor;
   - CI con HA en Docker (job manual o nocturno).
-- **E2:** Z-Wave con mock-server y bridge Matter con matter.js; comisionado automático.
-- **E3:** nodos ESPHome host y emulador Shelly; inyección de fallos con Docker y `tc netem`.
+- **E2:** nodos ESPHome host (incluidos los satélites de voz HA Voice y ESP32-S3-BOX con su `assist_satellite` real) y Z-Wave con mock-server; candidato: satélite Wyoming real en contenedor.
+- **E3:** bridge Matter con matter.js (comisionado automático) y emulador Shelly; inyección de fallos con Docker y `tc netem`.
+
+(Alineado con docs/ROADMAP.md en octubre de 2026: ESPHome pasa a E2 y Matter a E3; `PENDING_TRANSPORTS` en src/types.ts lo refleja en «Vía hacia HA».)
 - **E4 (opcional):** BLE con proxy falso y OTBR con RCP simulado.
 
 ## Limitaciones conocidas
@@ -105,6 +112,8 @@ Interferencia: el canal Wi-Fi 1 solapa con los Zigbee/Thread 11-14, el 6 con los
 - Ninguna radio física se emula: Zigbee y Thread no generan tramas 802.15.4 reales. La malla, la latencia y la pérdida se modelan en el motor.
 - Matter necesita Linux con red `host` e IPv6. No funciona en Docker Desktop de Mac ni de Windows.
 - HA va en tiempo real: no se puede acelerar el reloj de HA sin romperlo (`libfaketime` no es fiable).
+- Robots aspiradores: el mapa es el de las salas del plano (segmentos 16, 17… en el orden de «Mapa del robot»), no un mapa SLAM. `vacuum.clean_area` (HA 2026.3) usa los ids de sala del proyecto; en el HA real hay que mapear los segmentos a las áreas en el diálogo del vacuum.
+- Asistentes: el intérprete de intenciones de la app es sencillo (español, sin acentos, por nombre, alias o área); no es el motor de intenciones de HA (hassil). El evento `hasim_vacuum_finished` es del simulador; en HA real se usa el cambio de estado `cleaning` → `returning`.
 - La app pública de GitHub Pages no puede conectar con `ws://` local (contenido mixto y Local Network Access de Chrome). Para usar el puente, la app se sirve desde el propio entorno (Caddy en `http://localhost:8080`).
 - matterjs-server (perfil `matter`) necesita red `host` y su API (5580) no tiene autenticación: solo en una red de confianza.
 - En este contenedor de desarrollo no se pueden descargar imágenes Docker. La verificación de extremo a extremo se hace en GitHub Actions.

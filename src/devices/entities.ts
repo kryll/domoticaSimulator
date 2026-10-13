@@ -119,6 +119,15 @@ function initialAttributes(entity: DeviceEntity, siblings: DeviceEntity[]): Reco
     attrs.code_format = 'number';
     attrs.code_arm_required = caps.codeArmRequired === true;
   }
+  if (domain === 'vacuum') {
+    const speeds = caps.fanSpeeds ?? [];
+    if (speeds.length > 0) {
+      attrs.fan_speed_list = speeds.join(', ');
+      attrs.fan_speed = speeds.find((s) => s === 'balanced' || s === 'standard' || s === 'normal') ?? speeds.find((s) => s !== 'off') ?? speeds[0] ?? '';
+    }
+    attrs.status = 'En la base';
+  }
+  if (domain === 'assist_satellite') attrs.pipeline = 'Home Assistant';
   if (domain === 'cover') attrs.current_position = initialState === 'open' ? 100 : 0;
   if (domain === 'media_player') {
     attrs.volume_level = 0.3;

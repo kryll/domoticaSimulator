@@ -38,6 +38,10 @@ interface Spec {
   loadWatts?: number;
   /** Conectado a un SAI. */
   ups?: boolean;
+  /** Asistentes a los que se expone (por defecto, solo Assist). */
+  exposedTo?: Device['exposedTo'];
+  /** Robot: salas de su mapa. */
+  vacuumRooms?: string[];
 }
 
 // Rejilla de 200 × 100 px: los nodos (~180 × 70 px) no se solapan dentro de cada planta.
@@ -46,23 +50,28 @@ const SPECS: Spec[] = [
   { id: 'demo-router', def: 'tplink-deco-x50', name: 'Router Wi-Fi', floor: PB, room: 'demo-salon', at: { x: 220, y: 20 } },
   { id: 'demo-coordinador', def: 'sonoff-zbdongle-p', name: 'Coordinador Zigbee', floor: PB, room: 'demo-salon', at: { x: 420, y: 20 } },
   { id: 'demo-puente-hue', def: 'hue-bridge-v2', name: 'Puente Hue', floor: PB, room: 'demo-salon', at: { x: 20, y: 120 } },
-  { id: 'demo-luz-salon', def: 'hue-white-color-e27', name: 'Luz salón', floor: PB, room: 'demo-salon', at: { x: 220, y: 120 } },
-  { id: 'demo-termostato', def: 'netatmo-thermostat', name: 'Termostato', floor: PB, room: 'demo-salon', at: { x: 420, y: 120 } },
+  { id: 'demo-luz-salon', def: 'hue-white-color-e27', name: 'Luz salón', floor: PB, room: 'demo-salon', at: { x: 220, y: 120 }, exposedTo: ['assist', 'google'] },
+  { id: 'demo-termostato', def: 'netatmo-thermostat', name: 'Termostato', floor: PB, room: 'demo-salon', at: { x: 420, y: 120 }, exposedTo: ['assist', 'alexa', 'google'] },
   { id: 'demo-tv', def: 'samsung-qled-q80', name: 'Televisor', floor: PB, room: 'demo-salon', at: { x: 20, y: 220 } },
   { id: 'demo-altavoz', def: 'sonos-era-100', name: 'Altavoz salón', floor: PB, room: 'demo-salon', at: { x: 220, y: 220 } },
   { id: 'demo-mando', def: 'aqara-wireless-mini-switch', name: 'Mando salón', floor: PB, room: 'demo-salon', at: { x: 420, y: 220 }, integration: 'zha' },
+  // Robot aspirador con base de autovaciado: limpia el salón y la cocina (segmentos 16 y 17).
+  { id: 'demo-robot', def: 'roborock-qrevo-curv', name: 'Robot aspirador', floor: PB, room: 'demo-salon', at: { x: 20, y: 320 }, vacuumRooms: ['demo-salon', 'demo-cocina'] },
+  { id: 'demo-nest-audio', def: 'google-nest-audio', name: 'Nest salón', floor: PB, room: 'demo-salon', at: { x: 220, y: 320 } },
   { id: 'demo-nest-hub', def: 'google-nest-hub-2', name: 'Nest Hub cocina', floor: PB, room: 'demo-cocina', at: { x: 640, y: 20 } },
   { id: 'demo-luz-cocina', def: 'shelly-1pm-gen3', name: 'Luz cocina', floor: PB, room: 'demo-cocina', at: { x: 840, y: 20 }, loadWatts: 36 },
   { id: 'demo-cafetera', def: 'sonoff-s26r2', name: 'Cafetera', floor: PB, room: 'demo-cocina', at: { x: 640, y: 120 }, loadWatts: 1200 },
+  { id: 'demo-voz-cocina', def: 'ha-voice-pe', name: 'Voz cocina', floor: PB, room: 'demo-cocina', at: { x: 840, y: 120 } },
   { id: 'demo-puerta', def: 'aqara-door-window', name: 'Puerta entrada', floor: PB, room: 'demo-entrada', at: { x: 20, y: 420 }, integration: 'zha' },
   { id: 'demo-cerradura', def: 'aqara-u200', name: 'Cerradura entrada', floor: PB, room: 'demo-entrada', at: { x: 220, y: 420 } },
   { id: 'demo-camara', def: 'reolink-rlc-810a', name: 'Cámara entrada', floor: PB, room: 'demo-entrada', at: { x: 20, y: 520 } },
   { id: 'demo-movimiento', def: 'aqara-motion-p1', name: 'Movimiento pasillo', floor: PB, room: 'demo-pasillo', at: { x: 440, y: 420 }, integration: 'zha' },
   { id: 'demo-luz-pasillo', def: 'ikea-tradfri-e27-ws', name: 'Luz pasillo', floor: PB, room: 'demo-pasillo', at: { x: 640, y: 420 }, integration: 'zha' },
   { id: 'demo-clima-dormitorio', def: 'aqara-temp-hum', name: 'Clima dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 20, y: 20 }, integration: 'zha' },
-  { id: 'demo-luz-dormitorio', def: 'hue-white-e27', name: 'Luz dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 220, y: 120 } },
+  { id: 'demo-luz-dormitorio', def: 'hue-white-e27', name: 'Luz dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 220, y: 120 }, exposedTo: ['assist', 'alexa'] },
+  { id: 'demo-echo', def: 'amazon-echo-dot-5', name: 'Echo dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 420, y: 20 } },
   { id: 'demo-enchufe-dormitorio', def: 'sonoff-s26r2zb', name: 'Ventilador dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 420, y: 120 }, loadWatts: 45 },
-  { id: 'demo-persiana', def: 'shelly-2pm-gen3-cover', name: 'Persiana dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 20, y: 220 } },
+  { id: 'demo-persiana', def: 'shelly-2pm-gen3-cover', name: 'Persiana dormitorio', floor: P1, room: 'demo-dormitorio', at: { x: 20, y: 220 }, exposedTo: ['assist', 'alexa'] },
   { id: 'demo-enchufe-bano', def: 'shelly-plug-s-gen3', name: 'Enchufe baño', floor: P1, room: 'demo-bano', at: { x: 640, y: 20 }, loadWatts: 1500 },
   { id: 'demo-sensor-bano', def: 'xiaomi-lywsd03mmc', name: 'Sensor baño', floor: P1, room: 'demo-bano', at: { x: 840, y: 20 } },
   { id: 'demo-fuga-bano', def: 'aqara-water-leak', name: 'Fuga baño', floor: P1, room: 'demo-bano', at: { x: 640, y: 120 }, integration: 'zha' },
@@ -77,6 +86,8 @@ function buildDevice(spec: Spec): Device {
   const device: Device = { id: spec.id, definitionId: spec.def, name: spec.name, floorId: spec.floor, roomId: spec.room, position: { ...spec.at }, protocol, integration };
   if (spec.loadWatts !== undefined) device.loadWatts = spec.loadWatts;
   if (spec.ups) device.ups = true;
+  if (spec.exposedTo) device.exposedTo = [...spec.exposedTo];
+  if (spec.vacuumRooms) device.vacuumRooms = [...spec.vacuumRooms];
   return device;
 }
 
@@ -222,6 +233,45 @@ const AUTOMATIONS: Automation[] = [
     ],
   },
 ];
+
+AUTOMATIONS.push(
+  {
+    id: 'demo-auto-robot-salir',
+    name: 'Cuando todos salen de casa, el robot limpia',
+    description: 'Limpia el salón y la cocina (segmentos 16 y 17 del mapa del Roborock) cuando no queda nadie en casa.',
+    enabled: true,
+    mode: 'single',
+    triggers: [
+      { type: 'zone', personId: 'demo-ana', zoneId: 'home', event: 'leave' },
+      { type: 'zone', personId: 'demo-luis', zoneId: 'home', event: 'leave' },
+    ],
+    conditions: [{ type: 'numeric_state', entityId: 'zone.home', below: 1 }],
+    actions: [{ type: 'service', service: 'vacuum.send_command', entityId: 'vacuum.robot_aspirador_vacuum', data: { command: 'app_segment_clean', params: '[16, 17]' } }],
+  },
+  {
+    id: 'demo-auto-robot-error',
+    name: 'Si el robot da error, avisa por el asistente de la cocina',
+    enabled: true,
+    mode: 'single',
+    triggers: [{ type: 'state', entityId: 'vacuum.robot_aspirador_vacuum', to: 'error' }],
+    conditions: [],
+    actions: [{ type: 'service', service: 'assist_satellite.announce', entityId: 'assist_satellite.voz_cocina_satellite', data: { message: 'El robot aspirador tiene un problema y necesita ayuda' } }],
+  },
+  {
+    id: 'demo-auto-fuga-anuncio',
+    name: 'Al saltar la fuga de agua, anuncio en todos los altavoces',
+    enabled: true,
+    mode: 'single',
+    triggers: [{ type: 'state', entityId: 'binary_sensor.fuga_bano_leak', to: 'on' }],
+    conditions: [],
+    actions: [
+      // Alexa Media Player va por la nube: si no hay Internet, sigue con el resto (continue_on_error).
+      { type: 'notify', service: 'notify.alexa_media_echo_dormitorio', message: 'Atención: hay una fuga de agua en el baño', continueOnError: true },
+      { type: 'service', service: 'tts.speak', entityId: 'tts.piper', data: { media_player_entity_id: 'media_player.nest_salon, media_player.altavoz_salon', message: 'Atención: hay una fuga de agua en el baño' }, continueOnError: true },
+      { type: 'service', service: 'assist_satellite.announce', entityId: 'assist_satellite.voz_cocina_satellite', data: { message: 'Atención: hay una fuga de agua en el baño' } },
+    ],
+  },
+);
 
 const SCENES: Scene[] = [
   {

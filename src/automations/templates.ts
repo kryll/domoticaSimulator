@@ -323,6 +323,33 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
     },
     relevant: (entities) => entities.some((e) => e.domain === 'sensor' && e.deviceClass === 'battery'),
   },
+  {
+    id: 'vacuum_when_away',
+    name: 'Robot: limpiar cuando no queda nadie',
+    description: 'Cuando la última persona sale de casa, el robot aspirador limpia toda la casa (todas las salas de su mapa).',
+    inputs: [{ key: 'vacuum', label: 'Robot aspirador', kind: 'entity', domains: ['vacuum'] }],
+    build: (v) =>
+      automation('El robot limpia cuando no queda nadie', [{ type: 'numeric_state', entityId: 'zone.home', below: 1 }], [service('vacuum.start', str(v.vacuum))]),
+  },
+  {
+    id: 'vacuum_error_announce',
+    name: 'Robot: avisar por voz si se atasca',
+    description: 'Si el robot da error (cepillo atascado, depósito vacío...), lo anuncia un satélite de Assist o lo notifica.',
+    inputs: [
+      { key: 'vacuum', label: 'Robot aspirador', kind: 'entity', domains: ['vacuum'] },
+      { key: 'satellite', label: 'Satélite de voz', kind: 'entity', domains: ['assist_satellite'], optional: true, hint: 'Vacío: notificación persistente' },
+    ],
+    build: (v, project) => {
+      const robot = str(v.vacuum);
+      const sat = str(v.satellite);
+      const message = `${nameOf(project, robot)} tiene un problema y necesita ayuda`;
+      return automation(
+        `Aviso si ${nameOf(project, robot)} da error`,
+        [{ type: 'state', entityId: robot, to: 'error' }],
+        sat !== '' ? [service('assist_satellite.announce', sat, { message })] : [notifyAction(message, 'Robot aspirador')],
+      );
+    },
+  },
 ];
 
 function coversSun(v: TemplateValues, project: Project): Omit<Automation, 'id'>[] {

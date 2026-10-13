@@ -1,6 +1,8 @@
 // Catálogo de dispositivos: carga data/devices.json con validación en tiempo de ejecución.
 import rawDevices from '../../data/devices.json';
 import type {
+  AssistantInfo,
+  AssistantKind,
   Brand,
   DeviceCategory,
   ColorMode,
@@ -74,9 +76,9 @@ function isStateValue(v: unknown): v is string | number | boolean {
 }
 
 const COLOR_MODES: readonly ColorMode[] = ['onoff', 'brightness', 'color_temp', 'rgb'];
-const CAPABILITY_NUMBERS = ['minKelvin', 'maxKelvin', 'minTemp', 'maxTemp', 'tempStep', 'travelSeconds', 'motionTimeoutSeconds', 'powerWatts'] as const;
-const CAPABILITY_LISTS = ['hvacModes', 'presetModes', 'sources', 'buttonActions', 'fanModes', 'alarmModes'] as const;
-const CAPABILITY_BOOLEANS = ['codeArmRequired'] as const;
+const CAPABILITY_NUMBERS = ['minKelvin', 'maxKelvin', 'minTemp', 'maxTemp', 'tempStep', 'travelSeconds', 'motionTimeoutSeconds', 'powerWatts', 'cleaningRateM2Min', 'runtimeMinutes'] as const;
+const CAPABILITY_LISTS = ['hvacModes', 'presetModes', 'sources', 'buttonActions', 'fanModes', 'alarmModes', 'fanSpeeds', 'options'] as const;
+const CAPABILITY_BOOLEANS = ['codeArmRequired', 'selfEmpty', 'mopWash'] as const;
 const CAPABILITY_KEYS: readonly string[] = ['colorModes', ...CAPABILITY_NUMBERS, ...CAPABILITY_LISTS, ...CAPABILITY_BOOLEANS];
 
 function stringList(v: unknown, key: string, where: string): string[] {
@@ -176,12 +178,35 @@ export function parseDefinition(raw: unknown, index = 0): DeviceDefinition {
   }
   const icon = optString(raw, 'icon', where);
   if (icon !== undefined) def.icon = icon;
+  if (raw.assistant !== undefined) def.assistant = parseAssistant(raw.assistant, where);
   if (raw.priceEur !== undefined) {
     const price = raw.priceEur;
     if (typeof price !== 'number' || !Number.isFinite(price) || price < 0) fail(where, '"priceEur" debe ser un número no negativo');
     def.priceEur = price;
   }
   return def;
+}
+
+const ASSISTANT_KINDS: readonly AssistantKind[] = ['assist', 'alexa', 'google', 'siri'];
+
+/** Bloque `assistant` de un altavoz o satélite de voz. */
+function parseAssistant(raw: unknown, where: string): AssistantInfo {
+  if (!isObj(raw)) fail(where, '"assistant" debe ser un objeto');
+  const info: AssistantInfo = {
+    kind: oneOf(raw.kind, ASSISTANT_KINDS, 'assistant.kind', where),
+    pipeline: oneOf(raw.pipeline, ['local', 'cloud'] as const, 'assistant.pipeline', where),
+  };
+  for (const key of ['zigbeeHub', 'matterController', 'camera'] as const) {
+    const v = raw[key];
+    if (v === undefined) continue;
+    if (typeof v !== 'boolean') fail(where, `"assistant.${key}" debe ser verdadero o falso`);
+    info[key] = v;
+  }
+  for (const key of ['screen', 'speaker'] as const) {
+    const v = optString(raw, key, where);
+    if (v !== undefined) info[key] = v;
+  }
+  return info;
 }
 
 /** Valida la lista completa (ids únicos incluidos). */

@@ -357,3 +357,52 @@ describe('personalizados y perfil de radio', () => {
     expect(stateMessages(model, sim.entities, new Set(['demo-luz-salon'])).some((m) => m.topic === luz.entities[0]!.stateTopic)).toBe(false);
   });
 });
+
+describe('robots aspiradores y asistentes de voz por MQTT', () => {
+  const p = demo();
+  const model = buildBridgeModel(p, catalog);
+  const node = (id: string) => {
+    const n = model.devices.find((d) => d.device.id === id);
+    if (!n) throw new Error(`sin nodo ${id}`);
+    return n;
+  };
+  const cmpsOf = (id: string) => Object.values(payloadOf(model, `homeassistant/device/${node(id).nodeId}/config`).cmps as Record<string, Record<string, unknown>>);
+  const parser = createCommandParser(model);
+
+  it('vacuum: esquema state con fan_speed_list, send_command y la batería como sensor aparte', () => {
+    const cmps = cmpsOf('demo-robot');
+    const vac = cmps.find((c) => c.p === 'vacuum');
+    expect(vac).toMatchObject({ fan_speed_list: expect.arrayContaining(['quiet', 'turbo']), supported_features: expect.arrayContaining(['send_command', 'fan_speed', 'status']) });
+    expect(vac?.battery_level_topic).toBeUndefined();
+    expect(cmps.some((c) => c.p === 'sensor' && c.device_class === 'battery')).toBe(true);
+    expect(cmps.filter((c) => c.p === 'select').length).toBe(2);
+  });
+
+  it('estado y comandos del robot', () => {
+    let sim = createSimulationState(p, catalog, NOW);
+    sim = callService(sim, p, 'vacuum.robot_aspirador_vacuum', 'vacuum.set_fan_speed', { fan_speed: 'turbo' });
+    const e = node('demo-robot').entities.find((x) => x.domain === 'vacuum');
+    if (!e) throw new Error('sin vacuum');
+    expect(JSON.parse(entityStateToPayload(e, sim.entities[e.entityId]) ?? '{}')).toMatchObject({ state: 'docked', fan_speed: 'turbo' });
+    expect(parser.parse(`${e.commandTopic}/set`, 'start')).toEqual([{ entityId: e.entityId, service: 'vacuum.start', data: {} }]);
+    expect(parser.parse(`${e.commandTopic}/fan_speed/set`, 'max')).toEqual([{ entityId: e.entityId, service: 'vacuum.set_fan_speed', data: { fan_speed: 'max' } }]);
+    expect(parser.parse(`${e.commandTopic}/command/set`, '{"command": "app_segment_clean", "params": [16, 17]}')).toEqual([
+      { entityId: e.entityId, service: 'vacuum.send_command', data: { command: 'app_segment_clean', params: [16, 17] } },
+    ]);
+  });
+
+  it('assist_satellite: sensor de estado y notify de anuncios; el Echo, notify de Alexa Media Player', () => {
+    const voz = cmpsOf('demo-voz-cocina');
+    expect(voz.map((c) => c.p)).toEqual(expect.arrayContaining(['sensor', 'notify', 'select', 'switch']));
+    const sat = node('demo-voz-cocina').entities.find((x) => x.domain === 'assist_satellite');
+    if (!sat) throw new Error('sin satélite');
+    expect(parser.parse(`${sat.commandTopic}/announce/set`, 'Hola')).toEqual([{ entityId: sat.entityId, service: 'assist_satellite.announce', data: { message: 'Hola' } }]);
+    const echo = node('demo-echo').entities.find((x) => x.domain === 'media_player');
+    if (!echo) throw new Error('sin Echo');
+    expect(cmpsOf('demo-echo').some((c) => c.p === 'notify')).toBe(true);
+    expect(parser.parse(`${echo.commandTopic}/announce/set`, 'Fuga')).toEqual([{ entityId: '', service: 'notify.alexa_media_echo_dormitorio', data: { message: 'Fuga' } }]);
+    const nest = node('demo-nest-audio').entities[0];
+    if (!nest) throw new Error('sin Nest');
+    expect(parser.parse(`${nest.commandTopic}/announce/set`, 'Fuga')?.[0]).toMatchObject({ service: 'tts.speak', data: { media_player_entity_id: nest.entityId } });
+  });
+});

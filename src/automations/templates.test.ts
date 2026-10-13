@@ -39,6 +39,8 @@ describe('plantillas de automatización (B7)', () => {
       'presence_simulation',
       'night_light',
       'low_battery',
+      'vacuum_when_away',
+      'vacuum_error_announce',
     ]);
     for (const t of AUTOMATION_TEMPLATES) {
       expect(t.name).not.toMatch(/[A-Z][a-z]+ [A-Z]/);

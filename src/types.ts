@@ -45,7 +45,13 @@ export type Integration =
   | 'sensibo'
   | 'meross_lan'
   | 'roborock'
-  | 'ecovacs';
+  | 'ecovacs'
+  // Robots aspiradores y asistentes de voz (las de HACS van marcadas en HACS_INTEGRATIONS).
+  | 'dreame_vacuum'
+  | 'roomba'
+  | 'eufy_robovac'
+  | 'wyoming'
+  | 'apple_tv';
 
 export type Brand =
   | 'IKEA'
@@ -77,7 +83,14 @@ export type Brand =
   | 'Aeotec'
   | 'Fibaro'
   | 'Zooz'
-  | 'ESPHome';
+  | 'ESPHome'
+  // Robots aspiradores y asistentes de voz.
+  | 'Dreame'
+  | 'iRobot'
+  | 'Eufy'
+  | 'Apple'
+  | 'Espressif'
+  | 'Raspberry Pi';
 
 /** Forma en que Home Assistant habla con la integración. */
 export type IotClass = 'local_push' | 'local_polling' | 'cloud_push' | 'cloud_polling';
@@ -99,7 +112,10 @@ export type EntityDomain =
   // Tanda 3: alarma y válvulas.
   | 'alarm_control_panel'
   | 'valve'
-  | 'siren';
+  | 'siren'
+  // Robots aspiradores (modo de la mopa) y satélites de voz de Assist.
+  | 'select'
+  | 'assist_satellite';
 
 /** Papel del dispositivo dentro de la red. */
 export type NetworkRole =
@@ -179,6 +195,29 @@ export interface DeviceDefinition {
   icon?: string;
   /** Precio orientativo (PVP en España, 2025-26) en euros. */
   priceEur?: number;
+  /** Asistente de voz que lleva el equipo (altavoces y pantallas inteligentes, satélites de Assist). */
+  assistant?: AssistantInfo;
+}
+
+/** Asistente de voz: Assist es de HA; Alexa, Google y Siri son de su fabricante. */
+export type AssistantKind = 'assist' | 'alexa' | 'google' | 'siri';
+
+/** Asistentes a los que HA puede exponer entidades (Siri llega por el puente HomeKit, no se modela). */
+export type VoiceTarget = 'assist' | 'alexa' | 'google';
+
+export interface AssistantInfo {
+  kind: AssistantKind;
+  /** local: reconocimiento y respuesta en casa (Assist con STT/TTS locales); cloud: depende de Internet. */
+  pipeline: 'local' | 'cloud';
+  /** Hub Zigbee propio (solo para la app del fabricante: HA no ve sus dispositivos). */
+  zigbeeHub?: boolean;
+  /** Controlador Matter (multi-admin). */
+  matterController?: boolean;
+  /** Pantalla (p. ej. "8 pulgadas"). */
+  screen?: string;
+  camera?: boolean;
+  /** Calidad del altavoz ("básica", "buena", "alta fidelidad"...). */
+  speaker?: string;
 }
 
 export type DeviceCategory =
@@ -262,6 +301,7 @@ export type Trigger = (
   | TimePatternTrigger
   | HomeAssistantTrigger
   | EventTrigger
+  | ConversationTrigger
 ) &
   StepToggle;
 
@@ -553,7 +593,8 @@ export type SimTimer =
   // Tanda 3: fin de un helper timer.
   | HelperTimerTimer
   // Tanda 3: evento programado (día típico): movimiento, puerta, servicio, persona...
-  | TimelineEventTimer;
+  | TimelineEventTimer
+  | VacuumStepTimer;
 
 export interface PendingAction {
   id: Id;
@@ -1144,6 +1185,55 @@ export interface Project {
 export interface Device {
   /** Tanda 3: código de la alarma (alarm_control_panel). Sin valor: «1234». */
   alarmCode?: string;
+  /**
+   * Robot aspirador: salas del mapa en orden (segmentos 16, 17... como Roborock). Sin valor: las
+   * salas de su planta.
+   */
+  vacuumRooms?: Id[];
+  /**
+   * Asistentes a los que se exponen las entidades del dispositivo. Sin valor: solo Assist (HA
+   * expone por defecto las entidades nuevas a Assist; a Alexa y Google hay que elegirlas).
+   */
+  exposedTo?: VoiceTarget[];
+  /** Alias para los asistentes de voz («lámpara de pie», «tele»...). */
+  aliases?: string[];
+}
+
+/** Cómo llegan Alexa y Google a HA para el control por voz. */
+export type CloudVoiceLink = 'nabu_casa' | 'manual';
+
+export interface Project {
+  /** Enlace del control por voz de Alexa y Google con HA (por defecto, Home Assistant Cloud). */
+  voiceLinks?: Partial<Record<'alexa' | 'google', CloudVoiceLink>>;
+}
+
+/** Disparador de frase personalizada de Assist (`trigger: conversation`). */
+export interface ConversationTrigger {
+  type: 'conversation';
+  /** Frases con la sintaxis de HA: [opcional], (a|b) y {comodín}. */
+  command: string[];
+  id?: string;
+}
+
+/** Última frase dicha por un altavoz o satélite (burbuja en el lienzo). */
+export interface SpeechBubble {
+  text: string;
+  /** Hora simulada (ms). */
+  at: number;
+  kind: 'heard' | 'response' | 'announce';
+}
+
+export interface SimulationState {
+  /** Burbujas de voz por dispositivo. */
+  speech?: Record<Id, SpeechBubble>;
+}
+
+/** Paso del robot aspirador (limpieza, vuelta, carga y base). */
+export interface VacuumStepTimer {
+  kind: 'vacuum_step';
+  entityId: string;
+  /** Segundos que cubre el paso (por defecto 60). */
+  seconds?: number;
 }
 
 export interface EntityCapabilities {
@@ -1153,6 +1243,18 @@ export interface EntityCapabilities {
   alarmModes?: string[];
   /** Tanda 3: alarm_control_panel, pide el código también para armar. */
   codeArmRequired?: boolean;
+  /** vacuum: potencias de aspiración (fan_speed_list). */
+  fanSpeeds?: string[];
+  /** vacuum: superficie que limpia por minuto (m²/min). */
+  cleaningRateM2Min?: number;
+  /** vacuum: autonomía en minutos a potencia normal. */
+  runtimeMinutes?: number;
+  /** vacuum: base de autovaciado. */
+  selfEmpty?: boolean;
+  /** vacuum: friega y la base lava la mopa. */
+  mopWash?: boolean;
+  /** select: opciones. */
+  options?: string[];
 }
 
 export interface PendingAction {
@@ -1287,9 +1389,10 @@ export type DeviceTransport = 'z2m_mqtt' | 'mqtt_discovery' | 'zwave_js' | 'matt
 
 /** Transportes que en E1 se publican temporalmente por MQTT discovery genérico. */
 export const PENDING_TRANSPORTS: Readonly<Partial<Record<DeviceTransport, 'E2' | 'E3'>>> = {
+  // Alineado con docs/ROADMAP.md: E2 = ESPHome host y Z-Wave; E3 = Matter y Shelly.
   zwave_js: 'E2',
-  matter: 'E2',
-  esphome: 'E3',
+  matter: 'E3',
+  esphome: 'E2',
   shelly: 'E3',
 };
 

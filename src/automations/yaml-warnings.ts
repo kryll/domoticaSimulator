@@ -67,7 +67,7 @@ const TRIGGER_KEYS: Record<string, readonly string[]> = {
 };
 
 /** Plataformas de disparador que el simulador no admite: el parser las descarta con un aviso. */
-export const DROPPED_TRIGGERS: ReadonlySet<string> = new Set(['mqtt', 'webhook', 'template', 'tag', 'calendar', 'conversation', 'geo_location', 'persistent_notification']);
+export const DROPPED_TRIGGERS: ReadonlySet<string> = new Set(['mqtt', 'webhook', 'template', 'tag', 'calendar', 'geo_location', 'persistent_notification']);
 
 function checkTrigger(out: Out, v: YamlValue, path: string): void {
   if (!isYamlMap(v)) return;

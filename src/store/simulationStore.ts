@@ -18,9 +18,11 @@ import {
   jumpTo,
   runScript,
   setEntityState,
+  setVacuumError,
   testTrigger,
   tick,
 } from '../simulation/engine';
+import { sayToAssistant } from '../simulation/assist';
 import { useProjectStore } from './projectStore';
 import { groupEntities } from '../simulation/logic';
 import { syncPeopleEntities } from '../simulation/people';
@@ -73,6 +75,10 @@ export interface SimulationStoreState {
   setBinary: (entityId: string, on: boolean) => void;
   setSensorValue: (entityId: string, value: number) => void;
   jamLock: (entityId: string) => void;
+  /** Robot aspirador: simula un error (cepillo atascado, depósito vacío...). */
+  vacuumError: (entityId: string, code: string) => void;
+  /** Dice una frase al asistente del dispositivo; devuelve la respuesta hablada. */
+  say: (deviceId: Id, text: string) => string;
   /**
    * Ajusta las entidades de la simulación al proyecto: añade las nuevas, quita las que ya no
    * existen y traslada el estado de las renombradas (comparando con `prev`).
@@ -159,6 +165,12 @@ export const useSimulationStore = create<SimulationStoreState>()((set, get) => (
   setBinary: (entityId, on) => set((s) => ({ sim: openDoor(s.sim, project(), entityId, on) })),
   setSensorValue: (entityId, value) => set((s) => ({ sim: setSensorValue(s.sim, project(), entityId, value) })),
   jamLock: (entityId) => set((s) => ({ sim: jamLock(s.sim, project(), entityId) })),
+  vacuumError: (entityId, code) => set((s) => ({ sim: setVacuumError(s.sim, project(), entityId, code) })),
+  say: (deviceId, text) => {
+    const r = sayToAssistant(get().sim, project(), deviceId, text);
+    set({ sim: r.sim });
+    return r.response;
+  },
   syncWithProject: (p, prev) => {
     const renamed = prev ? renamedEntityIds(prev, p) : new Map<string, string>();
     // Renombrados: el motor traslada estados, temporizadores (recorridos, autoapagados) y fallos.

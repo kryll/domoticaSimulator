@@ -7,7 +7,7 @@ import { isInfra } from './roles';
 import { callService, entityTimerKey, findTimer } from '../simulation/engine';
 import { jamLock, motionPulse, openDoor, pressButton, setLeak } from '../simulation/events';
 import { brightnessToPct, COVER_STEP, coverPosition, coverStepSeconds, DEFAULT_ALARM_CODE } from '../simulation/services';
-import { HVAC_ACTION_LABELS, HVAC_MODE_LABELS, labelOf, PRESET_LABELS } from './labels';
+import { DOCK_STATUS_LABELS, HVAC_ACTION_LABELS, HVAC_MODE_LABELS, labelOf, PRESET_LABELS } from './labels';
 import { stateLabel } from './stateLabels';
 
 export type DeviceKind =
@@ -29,7 +29,9 @@ export type DeviceKind =
   | 'generic'
   // Tanda 3
   | 'alarm'
-  | 'valve';
+  | 'valve'
+  // Satélite de voz de Assist (HA Voice, ESP32-S3-BOX, Wyoming).
+  | 'assistant';
 
 export interface DeviceViewEntity {
   entityId: string;
@@ -63,6 +65,8 @@ export interface DeviceView {
   state?: string;
   /** Segundos que faltan para el autoapagado (movimiento) o para terminar un recorrido. */
   countdownSeconds?: number;
+  /** Robot aspirador: sala que limpia, progreso, batería y error. */
+  vacuum?: { roomId?: string; roomName?: string; progress?: number; battery?: number; error?: string };
   entities: DeviceViewEntity[];
 }
 
@@ -121,7 +125,7 @@ const CONTACT_CLASSES = ['door', 'window', 'opening', 'garage_door'];
 const SMOKE_CLASSES = ['smoke', 'gas', 'carbon_monoxide'];
 
 /** Prioridad de dominio para elegir la entidad principal. */
-const DOMAIN_PRIORITY = ['light', 'cover', 'climate', 'lock', 'alarm_control_panel', 'valve', 'media_player', 'vacuum', 'fan', 'switch', 'siren', 'camera', 'binary_sensor'];
+const DOMAIN_PRIORITY = ['vacuum', 'assist_satellite', 'light', 'cover', 'climate', 'lock', 'alarm_control_panel', 'valve', 'media_player', 'fan', 'switch', 'siren', 'camera', 'binary_sensor'];
 
 function primaryEntity(entities: DeviceEntity[]): DeviceEntity | undefined {
   for (const domain of DOMAIN_PRIORITY) {
@@ -162,6 +166,8 @@ function kindOf(def: DeviceDefinition, entity: DeviceEntity | undefined): Device
       return 'media';
     case 'vacuum':
       return 'vacuum';
+    case 'assist_satellite':
+      return 'assistant';
     case 'binary_sensor':
       if (MOTION_CLASSES.includes(deviceClass)) return 'motion';
       if (CONTACT_CLASSES.includes(deviceClass)) return 'contact';
@@ -341,12 +347,30 @@ export function deviceView(device: Device, def: DeviceDefinition, sim: Simulatio
       return view;
     }
     case 'vacuum': {
-      const view: DeviceView = { ...base, active: s === 'cleaning' || s === 'returning', summary: label('vacuum', s) };
+      const a = st.attributes ?? {};
+      const roomName = a.current_room_name === undefined ? undefined : String(a.current_room_name);
+      const progress = num(a.progress);
+      const error = a.error === undefined ? undefined : String(a.error);
+      let summary = label('vacuum', s);
+      if (s === 'cleaning' && roomName) summary = `Limpiando ${roomName}${progress !== undefined ? ` · ${progress} %` : ''}`;
+      else if (s === 'error' && error) summary = `Error: ${error}`;
+      else if (s === 'docked' && typeof a.dock_phase === 'string' && a.dock_phase !== 'idle') summary = labelOf(DOCK_STATUS_LABELS, a.dock_phase);
+      else if (s === 'docked' && battery !== undefined && battery < 100) summary = 'Cargando';
+      const view: DeviceView = { ...base, active: s === 'cleaning' || s === 'returning', summary };
       const left = s === 'returning' ? remaining(sim, primary.entityId) : undefined;
       if (left !== undefined) view.countdownSeconds = left;
       if (batteryText) view.secondary = batteryText;
+      const info: NonNullable<DeviceView['vacuum']> = {};
+      if (typeof a.current_room === 'string') info.roomId = a.current_room;
+      if (roomName) info.roomName = roomName;
+      if (progress !== undefined) info.progress = progress;
+      if (battery !== undefined) info.battery = Math.round(battery);
+      if (error) info.error = error;
+      view.vacuum = info;
       return view;
     }
+    case 'assistant':
+      return { ...base, active: s !== 'idle', summary: label('assist_satellite', s) };
     case 'alarm': {
       const view: DeviceView = { ...base, active: s !== 'disarmed', summary: label('alarm_control_panel', s) };
       const siren = sibling(entities, sim, (e) => e.definition.domain === 'siren');
@@ -406,7 +430,8 @@ export function primaryAction(device: Device, def: DeviceDefinition, sim: Simula
       if (s === 'off') return svc(id, 'media_player.turn_on', 'Encender');
       return svc(id, 'media_player.media_play_pause', s === 'playing' ? 'Pausar' : 'Reproducir');
     case 'vacuum':
-      return s === 'cleaning' ? svc(id, 'vacuum.pause', 'Pausar limpieza') : svc(id, 'vacuum.start', 'Empezar a limpiar');
+      if (s === 'cleaning') return svc(id, 'vacuum.pause', 'Pausar limpieza');
+      return svc(id, 'vacuum.start', s === 'paused' || s === 'error' ? 'Reanudar limpieza' : 'Empezar a limpiar');
     case 'alarm': {
       const code = device.alarmCode ?? DEFAULT_ALARM_CODE;
       return s === 'disarmed' ? svc(id, 'alarm_control_panel.alarm_arm_away', 'Armar fuera', { code }) : svc(id, 'alarm_control_panel.alarm_disarm', 'Desarmar', { code });
@@ -578,6 +603,9 @@ export function deviceIcon(def: DeviceDefinition, entityDeviceClass?: string): s
   if (def.entities.some((e) => e.key === 'action')) return '🎛️';
   if (def.entities.some((e) => e.domain === 'alarm_control_panel')) return '🚨';
   if (def.entities.some((e) => e.domain === 'valve')) return '🚰';
+  if (def.assistant?.kind === 'assist' || def.entities.some((e) => e.domain === 'assist_satellite')) return '🎙️';
+  if (def.assistant && def.category === 'display') return '🖥️';
+  if (def.assistant) return '🗣️';
   if (def.role === 'coordinator') return '📡';
   if (def.category === 'cover') return '🪟';
   if (def.category === 'switch' && def.entities.some((e) => e.domain === 'switch')) return '🎚️';

@@ -14,6 +14,7 @@ import {
 } from './model';
 import { stableJson, supportedColorModes, type Fields } from './state';
 import { kelvinToMired } from './color';
+import type { AssistantInfo } from '../../types';
 
 type Json = Fields[string];
 
@@ -75,8 +76,11 @@ function presetModes(e: BridgeEntity): string[] {
   return (e.caps.presetModes ?? []).filter((p) => p !== 'none');
 }
 
-/** Componentes del perfil genérico de una entidad (normalmente uno; el reproductor, varios). */
-function genericComponents(e: BridgeEntity): Components {
+/**
+ * Componentes del perfil genérico de una entidad (normalmente uno; el reproductor, varios).
+ * `assistant`: el reproductor de un altavoz inteligente lleva además un notify para anuncios.
+ */
+function genericComponents(e: BridgeEntity, assistant?: AssistantInfo): Components {
   const t = e.stateTopic;
   const base: Fields = { unique_id: e.uniqueId, default_entity_id: e.entityId, name: e.name };
   switch (e.domain) {
@@ -162,16 +166,39 @@ function genericComponents(e: BridgeEntity): Components {
           percentage_command_topic: `${t}/percentage/set`,
         },
       };
-    case 'vacuum':
+    case 'vacuum': {
+      // Esquema state de MQTT: JSON {state, fan_speed}; la batería va en su propio sensor (HA ya no
+      // admite battery_level en el vacuum MQTT). Los atributos (sala, error...) por json_attributes.
+      const speeds = e.caps.fanSpeeds ?? [];
+      const features = ['start', 'pause', 'stop', 'return_home', 'status', 'locate', 'clean_spot', 'send_command'];
+      if (speeds.length > 0) features.push('fan_speed');
       return {
         [e.key]: {
           p: 'vacuum',
           ...base,
           state_topic: t,
           command_topic: `${t}/set`,
-          supported_features: ['start', 'pause', 'stop', 'return_home', 'locate', 'clean_spot'],
+          send_command_topic: `${t}/command/set`,
+          json_attributes_topic: t,
+          json_attributes_template: '{{ value_json.attributes | tojson }}',
+          supported_features: features,
+          ...(speeds.length > 0 ? { set_fan_speed_topic: `${t}/fan_speed/set`, fan_speed_list: speeds } : {}),
         },
       };
+    }
+    case 'select':
+      return {
+        [e.key]: { p: 'select', ...base, state_topic: t, value_template: tpl('state'), command_topic: `${t}/set`, options: e.caps.options ?? [] },
+      };
+    case 'assist_satellite': {
+      // assist_satellite no existe en MQTT: sensor de estado + notify para los anuncios.
+      const obj = objectPart(e.entityId);
+      const label = (suffix: string): string => (e.name ? `${e.name} · ${suffix}` : suffix);
+      return {
+        [`${e.key}_state`]: { p: 'sensor', unique_id: `${e.uniqueId}_state`, default_entity_id: `sensor.${obj}_state`, name: label('Estado'), state_topic: t, value_template: tpl('state'), device_class: 'enum', options: ['idle', 'listening', 'processing', 'responding'] },
+        [`${e.key}_announce`]: { p: 'notify', unique_id: `${e.uniqueId}_announce`, default_entity_id: `notify.${obj}_announce`, name: label('Anuncio'), command_topic: `${t}/announce/set` },
+      };
+    }
     case 'button':
       return { [e.key]: { p: 'button', ...base, command_topic: `${t}/set`, payload_press: 'PRESS' } };
     case 'siren':
@@ -243,6 +270,16 @@ function genericComponents(e: BridgeEntity): Components {
           unit_of_measurement: '%',
         },
       };
+      if (assistant && assistant.kind !== 'assist') {
+        // Anuncios de HA hacia el altavoz (notify.alexa_media_* o tts.speak en Google Cast).
+        comps[`${e.key}_announce`] = {
+          p: 'notify',
+          unique_id: `${e.uniqueId}_announce`,
+          default_entity_id: `notify.${obj}_announce`,
+          name: label('Anuncio'),
+          command_topic: `${t}/announce/set`,
+        };
+      }
       if (sources.length > 0) {
         comps[`${e.key}_source`] = {
           p: 'select',
@@ -302,7 +339,7 @@ export function genericDiscovery(model: BridgeModel, bdev: BridgeDevice): MqttMe
       payload_off: 'offline',
     };
   }
-  for (const e of bdev.entities) Object.assign(cmps, genericComponents(e));
+  for (const e of bdev.entities) Object.assign(cmps, genericComponents(e, bdev.def.assistant));
   const payload: Fields = {
     dev: genericDeviceBlock(model, bdev),
     o: ORIGIN,

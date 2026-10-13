@@ -79,6 +79,8 @@ export const DOMAIN_INITIAL: Record<string, EntityStateValue> = {
   button: 'unknown',
   alarm_control_panel: 'disarmed',
   valve: 'closed',
+  select: '',
+  assist_satellite: 'idle',
 };
 
 export function blankEntity(index: number): EntityDefinition {

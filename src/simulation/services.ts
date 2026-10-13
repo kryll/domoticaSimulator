@@ -7,6 +7,8 @@ import type { EntityCapabilities, EntityState, EntityStateValue, ServiceData, Se
 import { formatRgb, parseRgb } from '../devices/color';
 import { hvacAction } from '../devices/climate';
 import { isDimmable, withDefaults } from '../devices/capabilities';
+import { vacuumService as robotService, type VacuumContext } from './vacuum';
+import { assistSatelliteService } from './voice';
 
 type Attrs = Record<string, EntityStateValue>;
 
@@ -16,6 +18,8 @@ export interface ServiceContext {
   capabilities?: EntityCapabilities;
   /** Tanda 3: código de la alarma (alarm_control_panel). */
   code?: string;
+  /** Robot aspirador: salas del mapa, batería y modo de la mopa. */
+  vacuum?: VacuumContext;
 }
 
 export interface ServiceResult {
@@ -25,12 +29,17 @@ export interface ServiceResult {
   warnings: string[];
   /** Persiana: iniciar recorrido hacia esta posición (0-100). */
   coverTarget?: number;
-  /** Cambio diferido (p. ej. la aspiradora llega a la base): se aplica a los `seconds`. */
+  /** Cambio diferido (p. ej. el satélite de voz vuelve a reposo): se aplica a los `seconds`. */
   after?: { seconds: number; state: EntityState };
+  /** Segundo cambio diferido (el satélite que escucha la respuesta vuelve a reposo). */
+  then?: { seconds: number; state: EntityState };
+  /** Robot aspirador: segundos hasta su próximo paso (null: ninguno pendiente). */
+  vacuumNext?: number | null;
+  /** Aviso informativo para el registro (p. ej. el robot pita al localizarlo). */
+  notice?: string;
 }
 
-/** Segundos que tarda la aspiradora en volver a la base. */
-export const VACUUM_RETURN_SECONDS = 30;
+export { VACUUM_RETURN_SECONDS } from './vacuum';
 /** Paso de volumen de volume_up / volume_down. */
 export const VOLUME_STEP = 0.1;
 /** Paso máximo (en puntos de posición) de cada temporizador del recorrido de una persiana. */
@@ -432,25 +441,12 @@ function mediaService(service: string, current: EntityState, data: ServiceData, 
 
 // ---------- vacuum ----------
 
-function vacuumService(service: string, current: EntityState): ServiceResult | undefined {
-  const attrs = attrsOf(current);
-  switch (service) {
-    case 'start':
-      return result(current, 'cleaning', attrs);
-    case 'pause':
-      return result(current, current.state === 'cleaning' || current.state === 'returning' ? 'paused' : current.state, attrs);
-    case 'stop':
-      return result(current, current.state === 'docked' ? 'docked' : 'idle', attrs);
-    case 'start_pause':
-      return result(current, current.state === 'cleaning' ? 'paused' : 'cleaning', attrs);
-    case 'return_to_base': {
-      if (current.state === 'docked') return result(current, 'docked', attrs);
-      const res = result(current, 'returning', attrs);
-      return { ...res, after: { seconds: VACUUM_RETURN_SECONDS, state: { state: 'docked' } } };
-    }
-    default:
-      return undefined;
-  }
+function vacuumService(service: string, current: EntityState, data: ServiceData, caps: EntityCapabilities, ctx?: VacuumContext): ServiceResult | undefined {
+  const r = robotService(service, current, data, caps, ctx);
+  if (!r) return undefined;
+  const res: ServiceResult = { state: r.state, warnings: r.warnings, vacuumNext: r.next ?? null };
+  if (r.notice !== undefined) res.notice = r.notice;
+  return res;
 }
 
 // ---------- camera / button ----------
@@ -556,7 +552,17 @@ export function applyService(
     case 'media_player':
       return mediaService(svc, current, data, caps);
     case 'vacuum':
-      return vacuumService(svc, current);
+      return vacuumService(svc, current, data, caps, ctx.vacuum);
+    case 'select': {
+      if (svc !== 'select_option') return undefined;
+      const option = data.option === undefined ? undefined : String(data.option);
+      const options = caps.options ?? [];
+      if (option === undefined) return result(current, current.state, attrsOf(current), ['Falta "option" en select.select_option']);
+      if (options.length > 0 && !options.includes(option)) return result(current, current.state, attrsOf(current), [`Opción no disponible: ${option} (hay ${options.join(', ')})`]);
+      return result(current, option, attrsOf(current));
+    }
+    case 'assist_satellite':
+      return assistSatelliteService(svc, current, data);
     case 'camera':
       return cameraService(svc, current);
     case 'button':
@@ -612,6 +618,11 @@ function describeEntry(key: string, v: ServiceDataValue): string {
       return 'con código';
     case 'fan_mode':
       return `ventilador ${String(v)}`;
+    case 'fan_speed':
+      return `potencia ${String(v)}`;
+    case 'message':
+    case 'start_message':
+      return `«${String(v)}»`;
     default:
       return `${key}: ${Array.isArray(v) ? `[${v.join(', ')}]` : String(v)}`;
   }

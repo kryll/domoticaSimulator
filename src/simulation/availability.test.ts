@@ -106,7 +106,7 @@ describe('setFailures', () => {
     sim = setLeak(sim, demo, 'binary_sensor.fuga_bano_leak');
     expect(st(sim, 'switch.enchufe_bano_switch')).toBe('on');
     expect(sim.log.map((l) => l.message)).toContain('Automatización «Fuga de agua en el baño: cortar el enchufe» no ejecutada: Home Assistant se está reiniciando');
-    expect(sim.traces?.at(-1)).toMatchObject({ automationId: 'demo-auto-fuga', result: 'ha_unavailable' });
+    expect(sim.traces?.find((t) => t.automationId === 'demo-auto-fuga')).toMatchObject({ automationId: 'demo-auto-fuga', result: 'ha_unavailable' });
     sim = runAutomation(sim, demo, 'demo-auto-fuga');
     expect(st(sim, 'switch.enchufe_bano_switch')).toBe('on');
   });

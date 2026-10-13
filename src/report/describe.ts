@@ -294,6 +294,8 @@ function describeTriggerClause(t: Trigger, ctx: Ctx): string {
       return t.event === 'start' ? 'arranca Home Assistant' : 'se para Home Assistant';
     case 'event':
       return `llega el evento ${quoted(t.eventType || 'sin nombre')}`;
+    case 'conversation':
+      return `alguien dice al asistente ${t.command.map((c) => quoted(c)).join(' o ') || 'una frase'}`;
   }
 }
 

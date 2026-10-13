@@ -39,6 +39,16 @@ export type RoomLabelNodeData = {
   deviceCount: number;
 };
 
+/** Robot aspirador recorriendo la sala que limpia (capa decorativa, sin interacción). */
+export type RobotNodeData = {
+  deviceId: string;
+  name: string;
+  state: string;
+  progress?: number;
+  battery?: number;
+  error?: string;
+};
+
 export type PlanNodeData = {
   src: string;
 };
@@ -47,7 +57,8 @@ export type DeviceNode = Node<DeviceNodeData, 'device'>;
 export type RoomNode = Node<RoomNodeData, 'room'>;
 export type PlanNode = Node<PlanNodeData, 'plan'>;
 export type RoomLabelNode = Node<RoomLabelNodeData, 'roomLabel'>;
-export type AppNode = DeviceNode | RoomNode | PlanNode | RoomLabelNode;
+export type RobotNode = Node<RobotNodeData, 'robot'>;
+export type AppNode = DeviceNode | RoomNode | PlanNode | RoomLabelNode | RobotNode;
 
 export type ProtocolEdgeData = { protocol: Protocol };
 export type ProtocolEdge = Edge<ProtocolEdgeData, 'protocol'>;

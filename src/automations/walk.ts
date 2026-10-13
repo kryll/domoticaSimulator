@@ -21,6 +21,7 @@ export function mapTriggerEntities(t: Trigger, map: EntityMapper): Trigger {
     case 'zone':
     case 'time_pattern':
     case 'homeassistant':
+    case 'conversation':
       return t;
   }
 }

@@ -1,6 +1,7 @@
 // Energía y baterías (B10): potencia por dispositivo según su estado, acumulación de kWh,
 // coste y descarga de baterías. Funciones puras; el motor (tick) las aplica.
-import type { Device, DeviceDefinition, EnergyState, EntityState, Id, Project, ProjectSettings, SimulationState } from '../types';
+import type { Device, DeviceDefinition, EnergyState, EntityCapabilities, EntityState, Id, Project, ProjectSettings, SimulationState } from '../types';
+import { vacuumMainsWatts } from './vacuum';
 import { defaultSettings } from '../types';
 import { entitiesForDevice } from '../devices/entities';
 import { HOUR_MS } from './clock';
@@ -26,7 +27,8 @@ const STANDBY_WATTS: Record<DeviceDefinition['category'], number> = {
   camera: 6,
   speaker: 3,
   display: 3,
-  vacuum: 3,
+  // Robot en la base cargado: 2-3 W (base y Wi-Fi).
+  vacuum: 2.5,
   hub: 3,
   network: 10,
   server: 5,
@@ -57,13 +59,20 @@ export function batteryDrainPerHour(def: DeviceDefinition, acceleration = 1): nu
   return (100 / life) * Math.max(0, acceleration);
 }
 
-function states(device: Device, def: DeviceDefinition, entities: Record<string, EntityState>): { domain: string; st: EntityState | undefined; watts?: number }[] {
+function states(device: Device, def: DeviceDefinition, entities: Record<string, EntityState>): { domain: string; st: EntityState | undefined; watts?: number; caps?: EntityCapabilities }[] {
   return entitiesForDevice(device, def).map((e) => {
-    const item: { domain: string; st: EntityState | undefined; watts?: number } = { domain: e.definition.domain, st: entities[e.entityId] };
+    const item: { domain: string; st: EntityState | undefined; watts?: number; caps?: EntityCapabilities } = { domain: e.definition.domain, st: entities[e.entityId] };
     const w = e.definition.capabilities?.powerWatts;
     if (w !== undefined) item.watts = w;
+    if (e.definition.capabilities) item.caps = e.definition.capabilities;
     return item;
   });
+}
+
+/** Nivel del sensor de batería del dispositivo (robots aspiradores). */
+function batteryOf(device: Device, def: DeviceDefinition, entities: Record<string, EntityState>): number | undefined {
+  const ref = entitiesForDevice(device, def).find((e) => e.definition.deviceClass === 'battery');
+  return ref ? toNumber(entities[ref.entityId]?.state) : undefined;
 }
 
 /**
@@ -72,7 +81,7 @@ function states(device: Device, def: DeviceDefinition, entities: Record<string, 
  */
 export function loadWatts(device: Device, def: DeviceDefinition, entities: Record<string, EntityState>): number {
   let total = 0;
-  for (const { domain, st, watts } of states(device, def, entities)) {
+  for (const { domain, st, watts, caps } of states(device, def, entities)) {
     if (!st || st.state === 'unavailable') continue;
     const s = String(st.state);
     switch (domain) {
@@ -105,8 +114,8 @@ export function loadWatts(device: Device, def: DeviceDefinition, entities: Recor
         break;
       }
       case 'vacuum':
-        if (s === 'cleaning') total += watts ?? 45;
-        else if (s === 'returning') total += 30;
+        // Limpiando va a batería: de la red solo tira la carga y la base (vaciado, lavado, secado).
+        total += vacuumMainsWatts(st, batteryOf(device, def, entities), caps ?? {});
         break;
       case 'camera':
         if (s === 'recording') total += 1.5;

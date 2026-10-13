@@ -5,7 +5,9 @@ import { useUiStore } from '../store/uiStore';
 import { EntityControls } from '../simulation/EntityControls';
 import { OfflineNotice } from '../simulation/OfflineNotice';
 import { useDeviceOffline } from '../simulation/useDeviceOffline';
-import { entitiesOfDevice } from './analysis';
+import { definitionOf, entitiesOfDevice } from './analysis';
+import { VacuumPanel } from '../simulation/controls/VacuumPanel';
+import { AssistPanel } from '../simulation/controls/AssistPanel';
 import { entityStateText } from '../ui/stateText';
 
 /** Dominios de diagnóstico que se muestran al final y plegados. */
@@ -26,7 +28,10 @@ export function DevicePopover({ deviceId }: { deviceId: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const offline = useDeviceOffline(deviceId);
   const refs = useMemo(() => (device ? entitiesOfDevice(device) : []), [device]);
-  const main = refs.filter((r) => !DIAGNOSTIC_KEYS.has(r.definition.key) && !DIAGNOSTIC_KEYS.has(r.definition.deviceClass ?? ''));
+  const def = device ? definitionOf(device) : undefined;
+  const isVacuum = def?.category === 'vacuum' && refs.some((r) => r.definition.domain === 'vacuum');
+  // El robot tiene su panel propio: sus entidades sueltas van plegadas con el diagnóstico.
+  const main = isVacuum ? [] : refs.filter((r) => !DIAGNOSTIC_KEYS.has(r.definition.key) && !DIAGNOSTIC_KEYS.has(r.definition.deviceClass ?? ''));
   const diag = refs.filter((r) => !main.includes(r));
 
   useEffect(() => {
@@ -44,7 +49,7 @@ export function DevicePopover({ deviceId }: { deviceId: string }) {
       ref={ref}
       role="dialog"
       aria-label={`Control de ${device.name}`}
-      className="nodrag nopan nowheel w-72 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl"
+      className="nodrag nopan nowheel w-80 max-h-[85vh] overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xl"
       onClick={stop}
       onDoubleClick={stop}
       onContextMenu={stop}
@@ -67,11 +72,19 @@ export function DevicePopover({ deviceId }: { deviceId: string }) {
           ✕
         </button>
       </div>
+      {/* El altavoz sigue oyendo aunque HA lo vea no disponible (sin Internet responde que no puede). */}
+      {def?.assistant && (
+        <div className="mb-2">
+          <AssistPanel device={device} def={def} />
+        </div>
+      )}
       {offline ? (
         <OfflineNotice deviceId={deviceId} />
       ) : (
         <>
           {refs.length === 0 && <p className="text-xs text-slate-500">Este dispositivo no expone entidades.</p>}
+          {isVacuum && def && <VacuumPanel device={device} def={def} />}
+
           <ul className="flex max-h-[60vh] flex-col gap-3 overflow-auto">
             {main.map((r) => (
               <li key={r.entityId}>
@@ -91,7 +104,7 @@ export function DevicePopover({ deviceId }: { deviceId: string }) {
           </ul>
           {diag.length > 0 && (
             <details className="mt-2 text-xs">
-              <summary className="cursor-pointer text-slate-500">Diagnóstico</summary>
+              <summary className="cursor-pointer text-slate-500">{isVacuum ? 'Entidades' : 'Diagnóstico'}</summary>
               <ul className="mt-1 flex flex-col gap-2">
                 {diag.map((r) => (
                   <li key={r.entityId}>

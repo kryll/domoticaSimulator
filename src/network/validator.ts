@@ -24,6 +24,8 @@ import { missingRequiredFields } from '../simulation/serviceCatalog';
 import { actionConditions, flattenActions, serviceAreaIds, serviceEntityIds } from '../automations/walk';
 import { areaEntityIds } from '../devices/areas';
 import { canConnect } from './connections';
+import { parseAreaIds, unknownVacuumRooms } from '../simulation/vacuum';
+import { TTS_ENTITIES } from '../simulation/voice';
 import { isInRange } from './coverage';
 import { analyzeMesh } from './mesh';
 
@@ -74,6 +76,9 @@ export const ISSUE_TITLES: Record<string, string> = {
   'patron-hora-no-valido': 'Patrón de hora no válido',
   'opcion-no-valida': 'Opción que no existe',
   'definicion-personalizada-no-valida': 'Dispositivo personalizado con errores',
+  'robot-sin-sala': 'Robot sin sala',
+  'segmento-sala-desconocida': 'Sala del robot que no existe',
+  'asistente-voz-nube': 'Asistente de voz en la nube',
 };
 
 /** Título legible de una incidencia (el suyo o, si no lo tiene, el de su código). */
@@ -257,7 +262,7 @@ const KIND_LABELS: Record<EntityReference['kind'], string> = {
 function knownEntityIds(ctx: Ctx): Set<string> {
   const ids = ctx.placed.flatMap((p) => entityIdsForDevice(p.device, p.def));
   // Fase 3: personas, zonas y grupos también son entidades. Tanda 3: y los helpers.
-  return new Set([...ids, ...Object.keys(peopleEntities(ctx.project)), ...(ctx.project.groups ?? []).map(groupEntityId), ...helperEntityIds(ctx.project)]);
+  return new Set([...ids, ...Object.keys(peopleEntities(ctx.project)), ...(ctx.project.groups ?? []).map(groupEntityId), ...helperEntityIds(ctx.project), ...Object.keys(TTS_ENTITIES)]);
 }
 
 function refExists(entityId: string, known: Set<string>, project: Project): boolean {
@@ -375,6 +380,45 @@ function duplicateEntityRule(ctx: Ctx): ValidationIssue[] {
     const devices = g.deviceIds.map((id) => `«${ctx.project.devices.find((d) => d.id === id)?.name ?? id}»`).join(', ');
     return issue('error', 'entity-id-duplicado', `${devices} generan los mismos entity_id (${g.entityIds.join(', ')}); cambia el nombre de alguno`, g.deviceIds);
   });
+}
+
+/** Robots aspiradores: sala de la base y salas del mapa (segmentos) que existen. */
+function vacuumRules(ctx: Ctx): ValidationIssue[] {
+  const result: ValidationIssue[] = [];
+  for (const p of ctx.placed) {
+    if (p.def.category !== 'vacuum') continue;
+    if (!p.device.roomId || !ctx.project.rooms.some((r) => r.id === p.device.roomId)) {
+      result.push(issue('warning', 'robot-sin-sala', `«${p.device.name}» no tiene sala asignada: el robot no sabe dónde está su base ni qué salas puede limpiar`, [p.device.id]));
+    }
+    const unknown = unknownVacuumRooms(ctx.project, p.device);
+    if (unknown.length > 0) {
+      result.push(issue('error', 'segmento-sala-desconocida', `«${p.device.name}» tiene en su mapa ${unknown.length === 1 ? 'una sala que ya no existe' : `${unknown.length} salas que ya no existen`}: revisa «Mapa del robot» en Propiedades`, [p.device.id]));
+    }
+  }
+  // vacuum.clean_area con áreas que no existen.
+  for (const a of ctx.project.automations) {
+    for (const x of flattenActions(a.actions)) {
+      if (x.type !== 'service' || x.service !== 'vacuum.clean_area') continue;
+      const missing = parseAreaIds(x.data?.cleaning_area_id).filter((id) => !ctx.project.rooms.some((r) => r.id === id));
+      if (missing.length > 0) {
+        result.push(issue('error', 'segmento-sala-desconocida', `La automatización «${a.name}» manda limpiar ${missing.length === 1 ? 'un área que no existe' : `${missing.length} áreas que no existen`} (${missing.join(', ')})`, [], `${a.id}:${missing.join(',')}`, { kind: 'automation', id: a.id }));
+      }
+    }
+  }
+  return result;
+}
+
+/** Alexa y Google (y Siri) dependen de Internet: sin conexión no entienden nada. */
+function cloudAssistantRule(ctx: Ctx): ValidationIssue[] {
+  const groups = new Map<string, Placed[]>();
+  for (const p of ctx.placed) {
+    if (p.def.assistant?.pipeline !== 'cloud') continue;
+    groups.set(p.def.assistant.kind, [...(groups.get(p.def.assistant.kind) ?? []), p]);
+  }
+  const NAMES: Record<string, string> = { alexa: 'Alexa', google: 'Google Assistant', siri: 'Siri' };
+  return [...groups.entries()].map(([kind, items]) =>
+    issue('info', 'asistente-voz-nube', `${NAMES[kind] ?? kind} funciona en la nube: sin Internet, ${names(items)} no ${items.length > 1 ? 'entienden' : 'entiende'} ninguna orden de voz (Assist con HA Voice o Wyoming sí es local)`, ids(items), kind),
+  );
 }
 
 function roomRule(ctx: Ctx): ValidationIssue[] {
@@ -500,6 +544,8 @@ export function validateProject(project: Project, baseDefs: DeviceDefinition[]):
     ...tanda3Rules(ctx),
     ...isolatedInfraRule(ctx),
     ...cloudRule(ctx),
+    ...cloudAssistantRule(ctx),
+    ...vacuumRules(ctx),
     ...roomRule(ctx),
   );
   return issues.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);

@@ -205,6 +205,8 @@ function triggerBodyToYaml(t: Trigger, ctx: YamlContext): YamlMap {
     case 'zone':
     case 'device_action':
       return fase3TriggerToYaml(t, ctx);
+    case 'conversation':
+      return { trigger: 'conversation', command: [...t.command] };
   }
 }
 

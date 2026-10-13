@@ -442,6 +442,12 @@ function parseTriggerBody(m: YamlMap, where: string, ctx: Ctx | undefined): Trig
       if (event !== 'start' && event !== 'shutdown') throw new Error(`Evento de Home Assistant no válido en ${where}: "${event}" (start o shutdown)`);
       return { type: 'homeassistant', event };
     }
+    case 'conversation': {
+      const raw = req(m, 'command', where);
+      const list = (Array.isArray(raw) ? raw : [raw]).map((x, i) => str(x, `${where} (command ${i + 1})`).trim()).filter((x) => x !== '');
+      if (list.length === 0) throw new Error(`El disparador de frase de ${where} necesita al menos una frase en «command»`);
+      return { type: 'conversation', command: list };
+    }
     case 'event': {
       const raw = req(m, 'event_type', where);
       const eventType = str(Array.isArray(raw) ? (raw[0] ?? null) : raw, where);

@@ -112,6 +112,19 @@ Tiempo estimado: 45-60 minutos. Necesitas Docker Engine, unos 2 GB de RAM libres
 - [ ] **13.3** Reinicia el PC: el laboratorio **no** arranca solo.
 - [ ] **13.4** `emulator/scripts/reset.sh`: queda limpio. Con `--all` también borra `.env` y los snapshots.
 
+## 14. Robot aspirador y asistentes de voz
+
+- [ ] **14.1** En HA aparece «Robot aspirador» como **vacuum** (Roborock Qrevo Curv de la demo) con su batería, consumibles, «Estado de la base» y los selects «Modo de limpieza» y «Nivel de agua» como entidades aparte. Desde la tarjeta de HA pulsa **Limpiar**: en la app el robot recorre el salón, baja la batería y el estado de HA pasa a `cleaning`.
+- [ ] **14.2** En HA llama a `vacuum.send_command` con `command: app_segment_clean` y `params: [17]`: en la app limpia solo la cocina. Cambia la potencia con `vacuum.set_fan_speed` (`turbo`) y comprueba el atributo en la app.
+- [ ] **14.3** En la app, «Simular un fallo…» → «Cepillo principal atascado»: en HA el vacuum pasa a `error` con el atributo `error`, y el «Voz cocina» (HA Voice) anuncia el problema (burbuja en el nodo y entrada en el Registro). Pulsa **Base** en HA: vuelve, vacía la base y carga.
+- [ ] **14.4** En HA, el «Voz cocina» llega como `sensor.voz_cocina_satellite_state` + `notify.voz_cocina_satellite_announce` (no existe `assist_satellite` en MQTT). Llama a `notify.send_message` sobre ese notify: en la app se ve el anuncio. «Vía hacia HA» lo marca como candidato a ESPHome host en E2.
+
+## 15. Alexa y Google
+
+- [ ] **15.1** En HA, el «Echo dormitorio» y el «Nest salón» llegan como reproductor (sensor, switch y number) más un `notify.*_announce`. Manda un mensaje al notify del Echo: en la app sale la burbuja del Echo («anuncia») y una línea en el Registro como `notify.alexa_media_echo_dormitorio`.
+- [ ] **15.2** En la app, abre el Echo y di «Alexa, enciende la luz del dormitorio» (expuesta a Alexa en la demo): se enciende y HA ve el cambio. Di «Alexa, enciende la luz del salón» (no expuesta a Alexa): responde que no la encuentra y el Registro explica que no está expuesta.
+- [ ] **15.3** Escenarios → «Se cae Internet»: el Echo y el Nest responden «Lo siento, ahora mismo no puedo conectarme» y no hacen nada; el «Voz cocina» (Assist local) sigue encendiendo luces. En «Impacto», la sección «Control por voz» muestra qué se pierde. El control por voz de Alexa y Google **se simula en la app**: el HA del laboratorio no tiene sus nubes.
+
 ---
 
 ## Límites conocidos de E1 (no son fallos)
@@ -119,6 +132,8 @@ Tiempo estimado: 45-60 minutos. Necesitas Docker Engine, unos 2 GB de RAM libres
 - Z-Wave, Matter, Thread, ESPHome y Shelly llegan a HA por **MQTT genérico** («pendiente de E2/E3» en «Vía hacia HA»). En E2 y E3 llegarán por sus integraciones reales.
 - `media_player` aparece en HA dividido en varias entidades (`…_state`, `…_power`, `…_volume`, `…_source`), porque MQTT no tiene esa plataforma.
 - El laboratorio va en tiempo real: no se puede acelerar HA.
+- `assist_satellite` no existe en MQTT: los satélites de voz llegan como sensor de estado + notify. Alexa, Google y Siri no se conectan a sus nubes: su control por voz solo se simula en la app.
+- El robot aspirador limpia a ritmo real (≈1 m²/min): una limpieza completa de la demo dura más de una hora en el laboratorio.
 - Ninguna radio es real: la malla, la latencia y la pérdida se modelan en el motor.
 - El perfil `matter` (opcional) deja el puerto 5580 abierto en todas las interfaces y sin autenticación. No lo actives fuera de una red de confianza.
 

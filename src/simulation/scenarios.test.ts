@@ -25,13 +25,23 @@ describe('escenarios de fallo (B2) con la casa de ejemplo', () => {
     expect(r.summary).toMatch(/^0 dispositivos sin servicio/);
   });
 
-  it('Internet: caen las integraciones en la nube (termostato Netatmo y cafetera eWeLink)', () => {
+  it('Internet: caen las integraciones en la nube (termostato Netatmo, cafetera eWeLink y Echo)', () => {
     const r = scenarioImpact(demo, catalog, 'internet');
-    expect(down(r)).toEqual(['demo-cafetera', 'demo-termostato']);
+    expect(down(r)).toEqual(['demo-cafetera', 'demo-echo', 'demo-termostato']);
+    // Control por voz: Alexa y Google sin Internet no entienden nada; Assist local sigue.
+    const voice = Object.fromEntries(r.voice.map((v) => [v.deviceId, v.status]));
+    expect(voice).toMatchObject({ 'demo-echo': 'broken', 'demo-nest-audio': 'broken', 'demo-voz-cocina': 'ok' });
+    expect(r.summary).toMatch(/sin control por voz/);
     expect(r.unavailableDevices[0]?.reason).toMatch(/nube sin Internet/);
     // Solo se degrada la automatización de zona (ubicación por la app y notificaciones a la app).
     // Tanda 3: y la de la cafetera (su temporizador sigue, pero el enchufe cae).
-    expect(r.automations.filter((a) => a.status !== 'ok').map((a) => [a.automationId, a.status])).toEqual([['demo-auto-salir', 'degraded'], ['demo-auto-cafetera-timer', 'degraded']]);
+    // Y las nuevas: el robot al salir todos (zonas por la app) y el anuncio en el Echo (nube).
+    expect(r.automations.filter((a) => a.status !== 'ok').map((a) => [a.automationId, a.status])).toEqual([
+      ['demo-auto-salir', 'degraded'],
+      ['demo-auto-cafetera-timer', 'degraded'],
+      ['demo-auto-robot-salir', 'degraded'],
+      ['demo-auto-fuga-anuncio', 'degraded'],
+    ]);
     const salir = r.automations.find((a) => a.automationId === 'demo-auto-salir');
     expect(salir?.reasons.join(' ')).toMatch(/app móvil por Internet/);
     expect(salir?.reasons.join(' ')).toMatch(/notificaciones a la app móvil/);

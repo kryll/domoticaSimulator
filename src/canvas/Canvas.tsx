@@ -25,16 +25,20 @@ import { devicePresentation } from './viewCache';
 import { mergeNodes } from './mergeNodes';
 import { canvasSimSlice } from './nodePower';
 import { useShallow } from 'zustand/react/shallow';
-import { analyzeProject, definitionOf, entitiesOfDevice } from './analysis';
+import { analyzeProject, definitionOf, entitiesOfDevice, knownDefinitions } from './analysis';
 import { addDeviceFromDefinition, connectDevices } from './actions';
 import { polygonBounds } from './geometry';
 import { DeviceContextMenu } from './DeviceContextMenu';
 import { setHoveredDevice, useCanvasKeyboard } from './useCanvasKeyboard';
-import { DEVICE_DRAG_MIME, type AppNode, type DeviceNode, type ProtocolEdge, type RoomNode, type PlanNode, type RoomLabelNode } from './types';
+import { DEVICE_DRAG_MIME, type AppNode, type DeviceNode, type ProtocolEdge, type RoomNode, type PlanNode, type RoomLabelNode, type RobotNode } from './types';
 import { DeviceNodeView } from './DeviceNodeView';
 import { RoomLabelNodeView, RoomNodeView } from './RoomNodeView';
 import { roomLabelPosition } from './roomLabel';
 import { PlanNodeView } from './PlanNodeView';
+import { RobotNodeView } from './RobotNodeView';
+import { robotMarkers } from './robotOverlay';
+import { getDefinition } from '../devices/catalog';
+
 import { ProtocolEdgeView } from './ProtocolEdgeView';
 import { CANVAS_TOOLBAR_PX, CanvasToolbar } from './CanvasToolbar';
 import { NightMode } from './NightMode';
@@ -53,7 +57,7 @@ import { EmptyCanvasGuide } from '../onboarding/EmptyCanvasGuide';
 /** Encuadre: deja libre arriba la altura de la barra del lienzo para que no tape nodos. */
 const FIT_VIEW_OPTIONS = { padding: { top: `${CANVAS_TOOLBAR_PX + 16}px`, x: '6%', bottom: '8%' } } as const;
 
-const nodeTypes: NodeTypes = { device: DeviceNodeView, room: RoomNodeView, plan: PlanNodeView, roomLabel: RoomLabelNodeView };
+const nodeTypes: NodeTypes = { device: DeviceNodeView, room: RoomNodeView, plan: PlanNodeView, roomLabel: RoomLabelNodeView, robot: RobotNodeView };
 const edgeTypes: EdgeTypes = { protocol: ProtocolEdgeView };
 
 const severityRank: Record<IssueSeverity, number> = { error: 3, warning: 2, info: 1 };
@@ -145,6 +149,25 @@ function buildNodes(project: Project, floorId: string, sim: SimulationState, opt
       zIndex: -1,
     };
     nodes.push(node);
+  }
+
+  // Robots aspiradores: un marcador animado en la sala que limpian (solo cambia con la sala o el progreso).
+  for (const m of robotMarkers(project, floorId, sim, (id) => getDefinition(id, knownDefinitions()))) {
+    const robot: RobotNode = {
+      id: `robot-${m.deviceId}`,
+      type: 'robot',
+      position: { x: m.bounds.x + m.bounds.width / 2, y: m.bounds.y + m.bounds.height / 2 },
+      width: m.bounds.width,
+      height: m.bounds.height,
+      data: { deviceId: m.deviceId, name: m.name, state: m.state, ...(m.progress !== undefined ? { progress: m.progress } : {}), ...(m.battery !== undefined ? { battery: m.battery } : {}), ...(m.error !== undefined ? { error: m.error } : {}) },
+      draggable: false,
+      selectable: false,
+      connectable: false,
+      focusable: false,
+      zIndex: 0,
+      style: { pointerEvents: 'none' },
+    };
+    nodes.push(robot);
   }
 
   const devicesById = new Map(project.devices.map((d) => [d.id, d]));

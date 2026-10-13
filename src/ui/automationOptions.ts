@@ -17,6 +17,7 @@ export const TRIGGER_LABELS: Record<Trigger['type'], string> = {
   time_pattern: 'Patrón de hora',
   homeassistant: 'Home Assistant (arranque/parada)',
   event: 'Evento',
+  conversation: 'Frase de Assist',
 };
 
 export const triggerFactories: Array<{ label: string; create: () => Trigger }> = [
@@ -28,6 +29,7 @@ export const triggerFactories: Array<{ label: string; create: () => Trigger }> =
   { label: TRIGGER_LABELS.time_pattern, create: () => ({ type: 'time_pattern', minutes: '/5' }) },
   { label: TRIGGER_LABELS.homeassistant, create: () => ({ type: 'homeassistant', event: 'start' }) },
   { label: TRIGGER_LABELS.event, create: () => ({ type: 'event', eventType: '' }) },
+  { label: TRIGGER_LABELS.conversation, create: () => ({ type: 'conversation', command: ['Buenas noches'] }) },
 ];
 
 export const CONDITION_LABELS: Record<Condition['type'], string> = {

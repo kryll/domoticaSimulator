@@ -9,6 +9,8 @@ import { AlarmControl } from './AlarmControl';
 import { ValveControl } from './ValveControl';
 import type { ControlProps, SensorEvents } from './types';
 import { CtlButton } from './primitives';
+import { AssistSatelliteControl } from './AssistSatelliteControl';
+import { SelectControl } from './SelectControl';
 
 /** Dominios con control por servicios (los que pueden ir en una escena). */
 export const ACTUATOR_DOMAINS = new Set(['light', 'switch', 'fan', 'cover', 'climate', 'media_player', 'lock', 'vacuum', 'camera', 'alarm_control_panel', 'valve', 'siren']);
@@ -37,6 +39,10 @@ export function ActuatorControl(props: ControlProps & { events?: SensorEvents })
     case 'fan':
     case 'camera':
       return <ToggleControl {...props} />;
+    case 'select':
+      return <SelectControl {...props} />;
+    case 'assist_satellite':
+      return props.target ? null : <AssistSatelliteControl {...props} />;
     case 'button':
       return props.target ? null : <CtlButton onClick={() => props.onService('press')}>Pulsar</CtlButton>;
     default:
