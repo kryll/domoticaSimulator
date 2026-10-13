@@ -138,7 +138,8 @@ beforeAll(async () => {
       return 'Packages del lab borrados';
     },
   });
-  server = await startServer(lab, { port: 0, token: TOKEN, authTimeoutMs: 300 });
+  // Margen amplio para el hello: con 300 ms, un runner de CI lento cortaba la app del propio test.
+  server = await startServer(lab, { port: 0, token: TOKEN, authTimeoutMs: 2000 });
   await lab.start();
   app = new FakeApp(`ws://127.0.0.1:${server.port()}/orchestrator`);
   await app.login();
