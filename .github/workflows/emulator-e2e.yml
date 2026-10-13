@@ -1,9 +1,16 @@
 name: Laboratorio e2e (HA real)
 
 # Solo manual: levanta Home Assistant, Mosquitto, Caddy y el orquestador en Docker y prueba el
-# viaje completo. No se programa para no gastar minutos de Actions.
+# viaje completo. Con los perfiles de E2 (por defecto zwave y esphome) prueba también las vías
+# reales: Z-Wave JS (mock de zwave-js + Z-Wave JS UI → integración zwave_js) y la API nativa de
+# ESPHome (→ integración esphome). No se programa para no gastar minutos de Actions.
 on:
   workflow_dispatch:
+    inputs:
+      perfiles:
+        description: 'Perfiles del laboratorio separados por comas (zwave, esphome; vacío = solo MQTT)'
+        required: false
+        default: 'zwave,esphome'
 
 permissions:
   contents: read
@@ -15,7 +22,7 @@ concurrency:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -31,26 +38,42 @@ jobs:
       - name: Dependencias del laboratorio
         working-directory: emulator
         run: npm ci
-      - name: Typecheck y tests del orquestador (aedes)
+      - name: Typecheck y tests del orquestador (aedes, mock de Z-Wave con el driver real, API de ESPHome)
         working-directory: emulator
         run: |
           npm run typecheck
           npm test
       - name: Levantar el laboratorio y hacer el onboarding
-        run: emulator/scripts/setup.sh
-      - name: Viaje completo (proyecto demo → HA → comando → estado)
+        env:
+          PERFILES: ${{ inputs.perfiles }}
+        run: |
+          FLAGS=()
+          IFS=',' read -r -a LIST <<< "${PERFILES:-}"
+          for p in "${LIST[@]}"; do
+            p="$(echo "$p" | tr -d ' ')"
+            case "$p" in
+              zwave|esphome|matter) FLAGS+=("--$p") ;;
+              '') ;;
+              *) echo "Perfil desconocido: $p" >&2; exit 2 ;;
+            esac
+          done
+          emulator/scripts/setup.sh "${FLAGS[@]}"
+          grep '^COMPOSE_PROFILES=' emulator/.env || echo 'Sin perfiles: solo MQTT'
+      - name: Viaje completo (proyecto demo → HA → comando → estado; vías reales con sus perfiles)
         working-directory: emulator
         # El orquestador exige el token del laboratorio que setup.sh genera en .env.
         run: |
           LAB_TOKEN="$(grep '^LAB_TOKEN=' .env | cut -d= -f2-)"
           echo "::add-mask::$LAB_TOKEN"
           export LAB_TOKEN
+          E2E_PROFILES="$(grep '^COMPOSE_PROFILES=' .env | cut -d= -f2- || true)"
+          export E2E_PROFILES
           npm run e2e
       - name: Logs si falla
         if: failure()
         working-directory: emulator
-        run: docker compose logs --no-color --tail=300
+        run: docker compose --profile zwave logs --no-color --tail=400
       - name: Parar
         if: always()
         working-directory: emulator
-        run: docker compose down -v
+        run: docker compose --profile zwave --profile matter down -v

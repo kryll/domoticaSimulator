@@ -10,7 +10,7 @@ import { catalog } from '../devices/catalog';
 import { parseLocalLab, LOCAL_LAB_KEY } from './localLab';
 import { acquireTabLock, type ChannelLike, type LockManagerLike } from './tabLock';
 import { mergeRestoredProject } from './sync';
-import type { Project } from '../types';
+import type { Device, DeviceDefinition, Project } from '../types';
 import { encode, filterTraffic, parseClientMessage, parseServerMessage, pushRing, topicMatches, trafficPayload, type TrafficEntry } from './protocol';
 import { diffEntities, projectForLab, projectPatch } from './sync';
 import { viaInfo } from './via';
@@ -234,10 +234,29 @@ describe('restaurar un snapshot', () => {
 });
 
 describe('vía hacia HA', () => {
-  it('marca los transportes pendientes y ZHA', () => {
-    expect(viaInfo({ protocol: 'zwave', integration: 'zwave_js' }, { integrations: [], role: 'end_device' })).toMatchObject({ transport: 'zwave_js', pending: true });
-    expect(viaInfo({ protocol: 'zwave', integration: 'zwave_js' }, { integrations: [], role: 'end_device' }).label).toMatch(/pendiente de E2/);
-    expect(viaInfo({ protocol: 'zigbee', integration: 'zha' }, { integrations: [], role: 'end_device' }).note).toMatch(/ZHA/);
-    expect(viaInfo({ protocol: 'zigbee', integration: 'zigbee2mqtt' }, { integrations: [], role: 'end_device' })).toMatchObject({ transport: 'z2m_mqtt', pending: false });
+  const dev = (definitionId: string, protocol: Device['protocol'], integration: Device['integration'], name = 'Equipo'): Device => ({ id: `d-${definitionId}`, definitionId, name, floorId: 'f', position: { x: 0, y: 0 }, protocol, integration });
+  const defOf = (id: string): DeviceDefinition => {
+    const def = catalog.find((d) => d.id === id);
+    if (!def) throw new Error(id);
+    return def;
+  };
+  it('Z-Wave y ESPHome: reales con su perfil; si no, MQTT con el aviso', () => {
+    const plug = dev('fibaro-wall-plug', 'zwave', 'zwave_js');
+    expect(viaInfo(plug, defOf('fibaro-wall-plug'))).toMatchObject({ transport: 'zwave_js', pending: true });
+    expect(viaInfo(plug, defOf('fibaro-wall-plug')).note).toMatch(/setup\.sh --zwave/);
+    expect(viaInfo(plug, defOf('fibaro-wall-plug'), new Set(['zwave_js']))).toMatchObject({ transport: 'zwave_js', pending: false, label: 'Z-Wave JS (mock)' });
+    const esp = dev('esphome-esp32', 'wifi', 'esphome');
+    expect(viaInfo(esp, defOf('esphome-esp32'), new Set(['esphome'])).label).toBe('ESPHome (API nativa emulada)');
+    expect(viaInfo(esp, defOf('esphome-esp32'), new Set(['zwave_js'])).label).toMatch(/no disponible: ahora MQTT/);
+    const voice = dev('ha-voice-pe', 'wifi', 'esphome');
+    expect(viaInfo(voice, defOf('ha-voice-pe'), new Set(['esphome'])).note).toMatch(/sin micrófono|no tiene micrófono/i);
+  });
+  it('Matter y Shelly siguen pendientes; ZHA y Z2M como antes', () => {
+    const matter = catalog.find((d) => d.protocols.includes('matter'));
+    if (matter) expect(viaInfo(dev(matter.id, 'matter', 'matter'), matter).label).toMatch(/pendiente de E3/);
+    const zha = catalog.find((d) => d.protocols.includes('zigbee') && d.entities.length > 0);
+    if (!zha) throw new Error('sin zigbee');
+    expect(viaInfo(dev(zha.id, 'zigbee', 'zha'), zha).note).toMatch(/ZHA/);
+    expect(viaInfo(dev(zha.id, 'zigbee', 'zigbee2mqtt'), zha)).toMatchObject({ transport: 'z2m_mqtt', pending: false });
   });
 });

@@ -11,17 +11,25 @@ export type NodeState = 'stopped' | 'starting' | 'running' | 'error';
 
 export type TrafficDirection = 'out' | 'in';
 
-/** Mensaje MQTT visto por el orquestador (inspector de tráfico). */
+/** Vía del mensaje en el inspector de tráfico. */
+export type TrafficVia = 'mqtt' | 'zwave' | 'esphome';
+
+/**
+ * Mensaje visto por el orquestador (inspector de tráfico): MQTT, o un resumen de una trama Z-Wave
+ * o de un mensaje de la API nativa de ESPHome (en `topic`, p. ej. «zwave/nodo 7/Binary Switch/Set»).
+ */
 export interface TrafficEntry {
   seq: number;
   /** Hora real (ms). */
   t: number;
-  /** out: publicado por el orquestador; in: recibido del broker (comandos de HA, homeassistant/status). */
+  /** out: hacia HA (publicado o reportado por el orquestador); in: de HA (comandos, homeassistant/status). */
   dir: TrafficDirection;
   topic: string;
   payload: string;
   retain: boolean;
   deviceId?: Id;
+  /** Sin valor: MQTT. */
+  via?: TrafficVia;
 }
 
 export interface SnapshotInfo {
@@ -41,8 +49,23 @@ export type ServiceStatus = 'connected' | 'connecting' | 'disconnected';
 
 export interface TransportStatus {
   devices: number;
-  /** active: emulado por su vía; pending: publicado por MQTT genérico hasta E2/E3. */
+  /** active: llega por su vía (real o MQTT); pending: publicado por MQTT genérico (vía real pendiente o perfil desactivado). */
   status: 'active' | 'pending';
+}
+
+/** Estado de una vía real (Z-Wave JS UI, nodos ESPHome). */
+export type NativeServiceState = 'disabled' | 'connecting' | 'connected' | 'error';
+
+/** Estado de un nodo de una vía real. */
+export type NativeNodeState = 'starting' | 'running' | 'stopped' | 'error';
+
+export interface NativeStatus {
+  state: NativeServiceState;
+  /** Texto para la interfaz («Z-Wave JS UI conectado», «2 nodos en marcha»...). */
+  detail: string;
+  nodes: Record<Id, { state: NativeNodeState; detail?: string }>;
+  /** Interfaz web del servicio (Z-Wave JS UI en http://localhost:8091). */
+  url?: string;
 }
 
 // ---------- App → orquestador ----------
@@ -71,8 +94,13 @@ export interface StatusMessage {
   transports: Partial<Record<DeviceTransport, TransportStatus>>;
   nodes: Record<Id, NodeState>;
   snapshots?: SnapshotInfo[];
-  /** El orquestador tiene acceso a ha-config (snapshots) y a Docker (restaurar exige Docker). */
-  capabilities?: { snapshots: boolean; docker: boolean; haToken: boolean };
+  /**
+   * El orquestador tiene acceso a ha-config (snapshots) y a Docker (restaurar exige Docker); zwave y
+   * esphome: perfiles activos (sus dispositivos llegan a HA por Z-Wave JS y la API de ESPHome).
+   */
+  capabilities?: { snapshots: boolean; docker: boolean; haToken: boolean; zwave?: boolean; esphome?: boolean };
+  /** Estado de las vías reales activas. */
+  native?: Partial<Record<'zwave_js' | 'esphome', NativeStatus>>;
   lastError?: string;
 }
 

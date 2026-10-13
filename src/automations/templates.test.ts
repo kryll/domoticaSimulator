@@ -50,7 +50,7 @@ describe('plantillas de automatización (B7)', () => {
 
   it('candidatas por dominio y clase', () => {
     const motion = T('motion_light').inputs[0] as EntityInput;
-    expect(templateCandidates(demo, catalog, motion).sort()).toEqual(['binary_sensor.camara_entrada_motion', 'binary_sensor.movimiento_pasillo_motion']);
+    expect(templateCandidates(demo, catalog, motion).sort()).toEqual(['binary_sensor.camara_entrada_motion', 'binary_sensor.movimiento_pasillo_motion', 'binary_sensor.sensor_despacho_motion']);
     const remote = T('leave_home').inputs[0] as EntityInput;
     expect(templateCandidates(demo, catalog, remote)).toEqual(['sensor.mando_salon_action']);
   });

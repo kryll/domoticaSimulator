@@ -1,5 +1,7 @@
 // Hooks de React del puente con el laboratorio.
+import { useMemo } from 'react';
 import { useBridgeStore } from './bridgeStore';
+import { activeNativeTransports, type NativeTransport } from './native';
 import { useProjectStore } from '../store/projectStore';
 import { bridgeSettings } from './schema';
 import type { HaBridgeSettings } from '../types';
@@ -30,4 +32,14 @@ export function useBridge() {
   const live = useBridgeStore((s) => s.live);
   const status = useBridgeStore((s) => s.status);
   return { connection, live, status };
+}
+
+/**
+ * Vías reales activas en el orquestador (perfiles zwave y esphome, de `status.capabilities`): con
+ * ellas, los dispositivos Z-Wave y ESPHome llegan a HA por su integración real.
+ */
+export function useActiveNative(): ReadonlySet<NativeTransport> {
+  const zwave = useBridgeStore((s) => s.status?.capabilities?.zwave === true);
+  const esphome = useBridgeStore((s) => s.status?.capabilities?.esphome === true);
+  return useMemo(() => activeNativeTransports({ zwave, esphome }), [zwave, esphome]);
 }

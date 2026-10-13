@@ -6,7 +6,9 @@
 //   - los logs (*.log, *.log.N, *.log.fault),
 //   - las cachés regenerables (deps/, tts/, .cache/, backups/),
 //   - con «Excluir credenciales», .storage/auth* (usuarios, contraseñas y tokens de HA).
-// Junto a la copia se guardan project.json (el proyecto del simulador) y meta.json.
+// Junto a la copia se guardan project.json (el proyecto del simulador) y meta.json. Con los perfiles
+// de E2 también van los datos de las vías reales («extras»): la carpeta de Z-Wave JS UI y del mock
+// (emulator/zwave/) y los puertos y claves de los nodos ESPHome (.secrets/esphome-nodes.json).
 //
 // SECRETOS: un snapshot contiene usuarios y tokens de HA (.storage/auth*) y las credenciales de
 // las integraciones (.storage/core.config_entries, p. ej. la contraseña MQTT). Por eso la carpeta
@@ -74,6 +76,15 @@ function slug(name: string): string {
   );
 }
 
+/** Datos extra del laboratorio que van en el snapshot (carpeta o fichero). */
+export interface SnapshotExtra {
+  /** Nombre dentro del snapshot ([a-z0-9._-]). */
+  name: string;
+  /** Ruta absoluta de la carpeta o del fichero. */
+  path: string;
+  kind: 'dir' | 'file';
+}
+
 export interface CreateOptions {
   /** No copia .storage/auth* (usuarios, contraseñas y tokens de HA). */
   excludeCredentials?: boolean;
@@ -84,7 +95,46 @@ export class SnapshotStore {
   constructor(
     private readonly haConfigDir: string,
     private readonly snapshotsDir: string,
+    private readonly extras: readonly SnapshotExtra[] = [],
   ) {}
+
+  /** ¿Lleva datos extra (Z-Wave, ESPHome)? Restaurarlos exige parar sus servicios. */
+  get hasExtras(): boolean {
+    return this.extras.length > 0;
+  }
+
+  private async copyExtras(target: string): Promise<void> {
+    const dir = join(target, 'extras');
+    for (const extra of this.extras) {
+      try {
+        await stat(extra.path);
+      } catch {
+        continue; // Perfil sin usar todavía.
+      }
+      await mkdir(dir, { recursive: true, mode: 0o700 });
+      await cp(extra.path, join(dir, extra.name), { recursive: extra.kind === 'dir' });
+    }
+  }
+
+  private async restoreExtras(source: string): Promise<void> {
+    for (const extra of this.extras) {
+      const from = join(source, 'extras', extra.name);
+      try {
+        await stat(from);
+      } catch {
+        continue; // El snapshot no lo tenía: se deja lo actual.
+      }
+      if (extra.kind === 'dir') {
+        await mkdir(extra.path, { recursive: true });
+        for (const entry of await readdir(extra.path)) await rm(join(extra.path, entry), { recursive: true, force: true });
+        await cp(from, extra.path, { recursive: true });
+      } else {
+        await mkdir(join(extra.path, '..'), { recursive: true });
+        await cp(from, extra.path);
+        await chmod(extra.path, 0o600);
+      }
+    }
+  }
 
   private async ensureRoot(): Promise<void> {
     await mkdir(this.snapshotsDir, { recursive: true, mode: 0o700 });
@@ -121,6 +171,7 @@ export class SnapshotStore {
       filter: (src) => !excludedFromSnapshot(relative(this.haConfigDir, src), excludeCredentials),
     });
     if (project) await writeFile(join(target, 'project.json'), JSON.stringify(project, null, 2), { mode: 0o600 });
+    await this.copyExtras(target);
     const info: SnapshotInfo = {
       id,
       name: name.trim() || 'Snapshot',
@@ -174,6 +225,7 @@ export class SnapshotStore {
       await mkdir(join(this.haConfigDir, '.storage'), { recursive: true });
       for (const k of kept) await writeFile(join(this.haConfigDir, '.storage', k.name), k.data, { mode: 0o600 });
     }
+    await this.restoreExtras(dir);
     try {
       return JSON.parse(await readFile(join(dir, 'project.json'), 'utf8')) as Project;
     } catch {

@@ -6,6 +6,7 @@ import { CONNECTION_LABELS, HA_LABELS, OTHER_TAB_MESSAGE, SERVICE_LABELS } from 
 import { LAB_TOKEN_RE, ORCHESTRATOR_URL_RE, useLocalLab } from './localLab';
 import { topicError } from './schema';
 import { TRANSPORT_LABELS } from './via';
+import { NativeStatusList } from './NativeStatus';
 import { Button } from '../ui/Button';
 import { inputClass } from '../ui/Field';
 import type { AutomationsRunIn, DeviceTransport, HaBridgeSettings } from '../types';
@@ -188,10 +189,11 @@ export function LabSettingsPanel() {
           <Row label="Mosquitto" value={status ? SERVICE_LABELS[status.mqtt] : '—'} />
           <Row label="Home Assistant" value={status ? HA_LABELS[status.ha] : '—'} />
           {transports.map(([t, info]) => (
-            <Row key={t} label={TRANSPORT_LABELS[t]} value={`${info.devices} dispositivo${info.devices === 1 ? '' : 's'}${info.status === 'pending' ? ' · pendiente: ahora por MQTT genérico' : ''}`} />
+            <Row key={t} label={TRANSPORT_LABELS[t]} value={`${info.devices} dispositivo${info.devices === 1 ? '' : 's'}${info.status === 'pending' ? ' · ahora por MQTT genérico (vía real pendiente o perfil desactivado)' : ''}`} />
           ))}
           {lastError && <Row label="Último error" value={lastError} />}
         </dl>
+        <NativeStatusList />
         <div className="flex flex-wrap gap-2">
           <a className="text-xs font-medium text-sky-800 underline" href={HA_URL} target="_blank" rel="noreferrer">
             Abrir Home Assistant
@@ -207,7 +209,8 @@ export function LabSettingsPanel() {
           <li>Instala Docker Engine (gratuito) y Node.js 22.</li>
           <li>
             En la carpeta del proyecto: <code>emulator/scripts/setup.sh</code>. Genera las contraseñas, compila la app, descarga las imágenes la primera vez y arranca Home Assistant,
-            Mosquitto, Caddy y el orquestador.
+            Mosquitto, Caddy y el orquestador. Con <code>--zwave</code>, <code>--esphome</code> o <code>--all</code>, los dispositivos Z-Wave y ESPHome llegan a HA por sus
+            integraciones reales (Z-Wave JS y ESPHome).
           </li>
           <li>
             Abre la app en <code>http://localhost:8080</code> y Home Assistant en <code>http://localhost:8123</code> (usuario y contraseña en <code>emulator/.env</code>).

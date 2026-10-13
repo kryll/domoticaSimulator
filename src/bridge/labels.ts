@@ -1,5 +1,5 @@
 // Textos de la interfaz del laboratorio.
-import type { NodeState, ServiceStatus } from './protocol';
+import type { NativeServiceState, NodeState, ServiceStatus } from './protocol';
 import type { Connection } from './bridgeStore';
 
 export const NODE_STATE_LABELS: Record<NodeState, string> = {
@@ -39,3 +39,11 @@ export function formatBytes(bytes: number): string {
 
 /** Aviso de la segunda pestaña (candado entre pestañas). */
 export const OTHER_TAB_MESSAGE = 'El laboratorio está controlado desde otra pestaña';
+
+/** Estado de una vía real (Z-Wave JS, ESPHome). */
+export const NATIVE_STATE_LABELS: Record<NativeServiceState, string> = {
+  disabled: 'Desactivada',
+  connecting: 'Conectando…',
+  connected: 'Conectada',
+  error: 'Error',
+};

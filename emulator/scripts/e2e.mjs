@@ -3,13 +3,17 @@
 // un cliente WebSocket hace de app, manda el proyecto demo y su estado, y se comprueba por la
 // API de HA que aparecen las entidades, que un light.turn_on llega como comando y que el estado
 // vuelve a HA. También para y arranca un nodo. La usa .github/workflows/emulator-e2e.yml.
-// Variables: ORCHESTRATOR_WS, HA_URL, SECRETS_DIR, E2E_TIMEOUT_S, LAB_TOKEN (si no, se lee de emulator/.env).
+// Con los perfiles de E2 (E2E_PROFILES o COMPOSE_PROFILES de .env: zwave, esphome) comprueba además
+// las vías reales: el enchufe Z-Wave de la demo con la integración zwave_js y el sensor ESPHome con
+// la integración esphome (registro de dispositivos de HA), un comando de HA al enchufe Z-Wave, un
+// cambio del sensor ESPHome desde la app, y que al parar un nodo queda no disponible.
+// Variables: ORCHESTRATOR_WS, HA_URL, SECRETS_DIR, E2E_TIMEOUT_S, LAB_TOKEN (si no, se lee de emulator/.env), E2E_PROFILES.
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { tsImport } from 'tsx/esm/api';
-import { labToken } from './labEnv.mjs';
+import { labProfiles, labToken } from './labEnv.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -25,6 +29,7 @@ try {
   process.exit(1);
 }
 const LAB_TOKEN = await labToken();
+const PROFILES = await labProfiles();
 
 const imp = (p) => tsImport(p, import.meta.url);
 const { createDemoProject } = await imp('../../src/store/demoProject.ts');
@@ -54,6 +59,37 @@ async function haState(entityId) {
   return res.status === 200 ? res.json() : undefined;
 }
 
+/** Un comando por la API WebSocket de HA (registro de dispositivos, entidades...). */
+function haWs(command) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`${HA.replace(/^http/, 'ws')}/api/websocket`);
+    ws.on('message', (raw) => {
+      const msg = JSON.parse(String(raw));
+      if (msg.type === 'auth_required') ws.send(JSON.stringify({ type: 'auth', access_token: token }));
+      else if (msg.type === 'auth_ok') ws.send(JSON.stringify({ id: 1, ...command }));
+      else if (msg.type === 'result') {
+        ws.close();
+        if (msg.success) resolve(msg.result);
+        else reject(new Error(msg.error?.message));
+      }
+    });
+    ws.on('error', reject);
+  });
+}
+
+async function entryIdsOf(domain) {
+  const res = await fetch(`${HA}/api/config/config_entries/entry?domain=${domain}`, { headers: { authorization: `Bearer ${token}` } });
+  const list = res.status === 200 ? await res.json() : [];
+  return new Set(list.map((e) => e.entry_id));
+}
+
+/** Dispositivo de HA de una integración (por sus entradas) con ese nombre. */
+async function haDeviceOf(domain, name) {
+  const entries = await entryIdsOf(domain);
+  const devices = await haWs({ type: 'config/device_registry/list' });
+  return devices.find((d) => (d.name_by_user ?? d.name) === name && d.config_entries.some((id) => entries.has(id)));
+}
+
 function haCall(domain, service, data) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`${HA.replace(/^http/, 'ws')}/api/websocket`);
@@ -79,6 +115,7 @@ project.haBridge = settings;
 const definitions = catalog.filter((d) => project.devices.some((x) => x.definitionId === d.id));
 let sim = createSimulationState(project, catalog, Date.now());
 const commands = [];
+const statuses = [];
 const ws = new WebSocket(ORCH);
 const send = (msg) => ws.send(JSON.stringify({ v: 1, ...msg }));
 let resolveHello;
@@ -90,6 +127,7 @@ const hello = new Promise((resolve, reject) => {
 ws.on('message', (raw) => {
   const msg = JSON.parse(String(raw));
   if (msg.type === 'hello') resolveHello(msg);
+  else if (msg.type === 'status') statuses.push(msg);
   else if (msg.type === 'error' && msg.code === 'auth') rejectHello(new Error(msg.message));
   else if (msg.type === 'command') {
     commands.push(msg);
@@ -145,6 +183,67 @@ try {
   send({ type: 'node', action: 'start', deviceIds: ['demo-cafetera'] });
   await until('switch.cafetera disponible', async () => (await haState('switch.cafetera'))?.state === 'off', 30_000);
   log('OK parar y arrancar un nodo');
+
+  // 4. Vías reales de E2.
+  const setEntity = (id, state) => {
+    sim = { ...sim, entities: { ...sim.entities, [id]: { ...sim.entities[id], state } } };
+    send({ type: 'state', entities: { [id]: sim.entities[id] } });
+  };
+  if (PROFILES.has('zwave') || PROFILES.has('esphome')) {
+    const caps = await until('capacidades de las vías reales en status', async () => statuses.at(-1)?.capabilities, 30_000);
+    if (PROFILES.has('zwave') && caps.zwave !== true) throw new Error('El orquestador no anuncia el perfil zwave');
+    if (PROFILES.has('esphome') && caps.esphome !== true) throw new Error('El orquestador no anuncia el perfil esphome');
+    log(`Perfiles activos: ${[...PROFILES].join(', ')}`);
+  }
+  if (PROFILES.has('zwave')) {
+    const plug = 'switch.enchufe_despacho_switch';
+    const dev = await until('«Enchufe despacho» con la integración zwave_js en el registro de dispositivos', () => haDeviceOf('zwave_js', 'Enchufe despacho'), Math.max(TIMEOUT, 300_000));
+    log(`OK Z-Wave: dispositivo ${dev.id} (${dev.manufacturer ?? '?'} ${dev.model ?? ''}) en zwave_js`);
+    const mqttDup = (await haWs({ type: 'config/device_registry/list' })).some((d) => d.identifiers.some(([dom, id]) => dom === 'mqtt' && String(id).includes('demo-enchufe-zwave')));
+    if (mqttDup) throw new Error('El enchufe Z-Wave sigue también por MQTT');
+    await until(`${plug} (alineado) en /api/states`, async () => {
+      const st = await haState(plug);
+      return st && st.state !== 'unavailable' && st.state !== 'unknown' ? st : undefined;
+    }, 180_000);
+    log(`OK ${plug}`);
+    await haCall('switch', 'turn_on', { entity_id: plug });
+    await until('comando switch.turn_on del enchufe Z-Wave en la app', async () => commands.find((c) => c.entityId === plug && c.service === 'switch.turn_on'), 60_000);
+    log('OK comando de HA por Z-Wave JS recibido por la app');
+    await until(`${plug} encendido en HA (informe del nodo)`, async () => (await haState(plug))?.state === 'on', 60_000);
+    log('OK estado de vuelta por Z-Wave');
+    // Nodo parado: el mock deja de responder y Z-Wave JS lo marca dead. HA (2025+) no pone las
+    // entidades Z-Wave en «unavailable» por un nodo dead: lo indica su sensor «Estado del nodo».
+    const nodeStatus = await until('sensor de estado del nodo Z-Wave', async () => {
+      const entries = await haWs({ type: 'config/entity_registry/list' });
+      return entries.find((e) => e.device_id === dev.id && String(e.unique_id).endsWith('.node_status'))?.entity_id;
+    }, 60_000);
+    send({ type: 'node', action: 'stop', deviceIds: ['demo-enchufe-zwave'] });
+    await until(`${nodeStatus} = dead (nodo parado)`, async () => (await haState(nodeStatus))?.state === 'dead', 120_000);
+    log(`OK nodo Z-Wave parado → ${nodeStatus} = dead`);
+    send({ type: 'node', action: 'start', deviceIds: ['demo-enchufe-zwave'] });
+    await until(`${nodeStatus} = alive (nodo arrancado)`, async () => (await haState(nodeStatus))?.state === 'alive', 180_000);
+    log('OK nodo Z-Wave arrancado → alive');
+  }
+  if (PROFILES.has('esphome')) {
+    const temp = 'sensor.sensor_despacho_temperature';
+    const dev = await until('«Sensor despacho» con la integración esphome en el registro de dispositivos', () => haDeviceOf('esphome', 'Sensor despacho'), Math.max(TIMEOUT, 240_000));
+    log(`OK ESPHome: dispositivo ${dev.id} (${dev.model ?? ''}) en esphome`);
+    await until(`${temp} (alineado) en /api/states`, async () => {
+      const st = await haState(temp);
+      return st && st.state !== 'unavailable' ? st : undefined;
+    }, 180_000);
+    // La API nativa manda los sensores como float32 (como el firmware real): 23.4 llega como 23.3999…
+    const near = (st, v) => st !== undefined && Math.abs(Number(st.state) - v) < 0.01;
+    setEntity(temp, 23.4);
+    await until(`${temp} = 23.4 en HA`, async () => near(await haState(temp), 23.4), 60_000);
+    log('OK cambio del sensor ESPHome desde la app visto en HA');
+    send({ type: 'node', action: 'stop', deviceIds: ['demo-esp32'] });
+    await until(`${temp} no disponible (nodo parado)`, async () => (await haState(temp))?.state === 'unavailable', 90_000);
+    log('OK nodo ESPHome parado → no disponible');
+    send({ type: 'node', action: 'start', deviceIds: ['demo-esp32'] });
+    await until(`${temp} disponible de nuevo`, async () => near(await haState(temp), 23.4), 180_000);
+    log('OK nodo ESPHome arrancado (HA se vuelve a conectar)');
+  }
   log('Todo correcto');
   ws.close();
   process.exit(0);

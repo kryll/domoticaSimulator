@@ -1,26 +1,36 @@
 #!/usr/bin/env bash
 # Prepara y arranca el laboratorio de HA Simulator en un PC Linux con Docker (todo gratuito).
-#   emulator/scripts/setup.sh [--no-build] [--zwave] [--matter] [--docker|--no-docker]
-#   --no-build   no vuelve a compilar la app (usa dist/ tal cual)
-#   --zwave      arranca también Z-Wave JS UI (se completa en E2)
-#   --matter     arranca también matterjs-server (se completa en E2)
-#   --docker     da al orquestador el socket de Docker (necesario para restaurar snapshots)
-#   --no-docker  se lo quita (por defecto no lo tiene)
+#   emulator/scripts/setup.sh [--no-build] [--zwave] [--esphome] [--all] [--matter] [--docker|--no-docker]
+#   --no-build    no vuelve a compilar la app (usa dist/ tal cual)
+#   --zwave       Z-Wave real: controlador mock (zwave-js) + Z-Wave JS UI → integración zwave_js
+#   --esphome     ESPHome real: API nativa emulada por nodo (127.0.0.1:6053+n) → integración esphome
+#   --all         --zwave y --esphome
+#   --no-zwave / --no-esphome / --no-matter   quita ese perfil
+#   --matter      arranca también matterjs-server (experimental, E3)
+#   --docker      da al orquestador el socket de Docker (necesario para restaurar snapshots)
+#   --no-docker   se lo quita (por defecto no lo tiene)
+# Los perfiles se recuerdan en emulator/.env (COMPOSE_PROFILES): después basta con --no-build.
 set -euo pipefail
 
 LAB="$(cd "$(dirname "$0")/.." && pwd)"
 ROOT="$(cd "$LAB/.." && pwd)"
 BUILD=1
-PROFILES=()
+PROFILE_ADD=()
+PROFILE_DEL=()
 DOCKER_CONTROL=""
 for arg in "$@"; do
   case "$arg" in
     --no-build) BUILD=0 ;;
-    --zwave) PROFILES+=(--profile zwave) ;;
-    --matter) PROFILES+=(--profile matter) ;;
+    --zwave) PROFILE_ADD+=(zwave) ;;
+    --esphome) PROFILE_ADD+=(esphome) ;;
+    --all) PROFILE_ADD+=(zwave esphome) ;;
+    --matter) PROFILE_ADD+=(matter) ;;
+    --no-zwave) PROFILE_DEL+=(zwave) ;;
+    --no-esphome) PROFILE_DEL+=(esphome) ;;
+    --no-matter) PROFILE_DEL+=(matter) ;;
     --docker) DOCKER_CONTROL=1 ;;
     --no-docker) DOCKER_CONTROL=0 ;;
-    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "Opción desconocida: $arg" >&2; exit 2 ;;
   esac
 done
@@ -65,8 +75,51 @@ if [ "$DOCKER_CONTROL" = 1 ]; then
 elif [ "$DOCKER_CONTROL" = 0 ]; then
   sed -i '/^COMPOSE_FILE=/d' .env
 fi
-mkdir -p .secrets snapshots ha-config/packages/hasim
+# Perfiles (vías reales de E2 y Matter): se suman o quitan a los de .env y se recuerdan ahí.
+CURRENT_PROFILES="$(grep '^COMPOSE_PROFILES=' .env | tail -n 1 | cut -d= -f2- || true)"
+PROFILE_LIST="$( { printf '%s\n' "${CURRENT_PROFILES//,/$'\n'}"; for p in "${PROFILE_ADD[@]+"${PROFILE_ADD[@]}"}"; do printf '%s\n' "$p"; done; } | grep -v '^$' | sort -u || true)"
+for p in "${PROFILE_DEL[@]+"${PROFILE_DEL[@]}"}"; do PROFILE_LIST="$(printf '%s\n' "$PROFILE_LIST" | grep -vx "$p" || true)"; done
+COMPOSE_PROFILES="$(printf '%s\n' "$PROFILE_LIST" | grep -v '^$' | paste -sd, - || true)"
+sed -i '/^COMPOSE_PROFILES=/d' .env
+if [ -n "$COMPOSE_PROFILES" ]; then
+  echo "COMPOSE_PROFILES=$COMPOSE_PROFILES" >> .env
+fi
+export COMPOSE_PROFILES
+has_profile() { case ",$COMPOSE_PROFILES," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
+
+mkdir -p .secrets snapshots ha-config/packages/hasim zwave/ui zwave/mock
 chmod 700 .secrets snapshots
+
+# Z-Wave JS UI: ajustes iniciales (antena = el mock por TCP, servidor de Z-Wave JS en el 3000, sin
+# MQTT ni estadísticas). Solo la primera vez: después se cambian desde su interfaz (localhost:8091).
+if has_profile zwave && [ ! -f zwave/ui/settings.json ]; then
+  key() { head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' | tr 'a-f' 'A-F'; }
+  umask 077
+  cat > zwave/ui/settings.json <<JSON
+{
+  "mqtt": { "disabled": true },
+  "gateway": { "type": 0, "plugins": [], "authEnabled": false, "payloadType": 0, "nodeNames": true, "hassDiscovery": false, "logEnabled": true, "logLevel": "info", "logToFile": false, "values": [], "disableChangelog": true, "notifyNewVersions": false },
+  "zwave": {
+    "enabled": true,
+    "port": "tcp://zwave-mock:5555",
+    "commandsTimeout": 30,
+    "logEnabled": true,
+    "logLevel": "info",
+    "logToFile": false,
+    "serverEnabled": true,
+    "serverHost": "0.0.0.0",
+    "serverPort": 3000,
+    "serverServiceDiscoveryDisabled": true,
+    "enableStatistics": false,
+    "disclaimerVersion": 1,
+    "securityKeys": { "S2_Unauthenticated": "$(key)", "S2_Authenticated": "$(key)", "S2_AccessControl": "$(key)", "S0_Legacy": "$(key)" }
+  },
+  "zniffer": { "enabled": false },
+  "ui": { "darkMode": false, "navTabs": false }
+}
+JSON
+  umask 022
+fi
 
 # 2. App compilada con base «/» (Caddy la sirve en http://localhost:8080).
 if [ "$BUILD" = 1 ]; then
@@ -82,9 +135,10 @@ fi
 [ -f "$ROOT/dist/index.html" ] || fail "No existe dist/index.html: compila la app (quita --no-build)."
 
 # 3. Contenedores (la primera vez se descargan las imágenes; después funciona sin Internet).
-say "Arrancando Home Assistant, Mosquitto, Caddy y el orquestador"
+say "Arrancando Home Assistant, Mosquitto, Caddy y el orquestador${COMPOSE_PROFILES:+ (perfiles: $COMPOSE_PROFILES)}"
 # Si el orquestador ya existía con otro juego de volúmenes (--docker/--no-docker), se recrea.
-docker compose "${PROFILES[@]}" up -d --build --remove-orphans
+# Los perfiles van en COMPOSE_PROFILES (exportado y en .env): compose los activa solo.
+docker compose up -d --build --remove-orphans
 
 say "Esperando a Home Assistant (la primera vez tarda unos minutos)"
 for _ in $(seq 1 180); do
@@ -93,7 +147,7 @@ for _ in $(seq 1 180); do
 done
 curl -fsS -o /dev/null http://127.0.0.1:8123/api/onboarding || fail "Home Assistant no responde en http://localhost:8123 (mira: docker compose logs homeassistant)"
 
-# 4. Onboarding automático (usuario, token de larga duración y entrada MQTT).
+# 4. Onboarding automático (usuario, token de larga duración, MQTT y, con el perfil zwave, Z-Wave JS).
 say "Configurando Home Assistant"
 # El onboarding corre como root dentro del contenedor: los secretos (ha-token) se dejan a nombre
 # del usuario del PC (HOST_UID/HOST_GID) con modo 0600, para que los lean los scripts del host.
@@ -108,6 +162,15 @@ cat <<MSG
                           (pégalo una vez en Ajustes → Laboratorio; está en emulator/.env)
   Home Assistant:         http://localhost:8123   usuario: ${HA_USERNAME}   contraseña: ${HA_PASSWORD}
                           (están en emulator/.env; cámbialas en HA si quieres)
+  Perfiles (vías reales): ${COMPOSE_PROFILES:-ninguno (Z-Wave y ESPHome van por MQTT; actívalos con --all)}
+MSG
+if has_profile zwave; then
+  echo "  Z-Wave JS UI:           http://localhost:8091   (antena = mock de zwave-js; HA usa ws://127.0.0.1:3000)"
+fi
+if has_profile esphome; then
+  echo "  ESPHome:                cada nodo escucha en 127.0.0.1:6054, 6055… (claves en emulator/.secrets/esphome-nodes.json)"
+fi
+cat <<MSG
   Snapshots:              restaurar necesita setup.sh --docker (control de Docker para parar HA)
   Parar:                  emulator/scripts/stop.sh
   Borrar y empezar:       emulator/scripts/reset.sh

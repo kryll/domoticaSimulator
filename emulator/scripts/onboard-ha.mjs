@@ -4,14 +4,18 @@
 //   2. obtiene un token (POST /auth/token) y completa core_config, analytics e integration,
 //   3. crea un token de larga duración y lo guarda en SECRETS_DIR/ha-token (emulator/.secrets/),
 //   4. ajusta idioma, país, moneda y zona horaria,
-//   5. crea la entrada MQTT (POST /api/config/config_entries/flow) contra el Mosquitto del lab.
+//   5. crea la entrada MQTT (POST /api/config/config_entries/flow) contra el Mosquitto del lab,
+//   6. con el perfil zwave, la entrada Z-Wave JS (ws://127.0.0.1:3000, el servidor de Z-Wave JS UI).
+// Los nodos ESPHome los da de alta el orquestador (cada uno con su puerto y su clave) cuando la app
+// manda el proyecto.
 // Variables: HA_URL, HA_USERNAME, HA_PASSWORD, MQTT_HA_PASSWORD, MQTT_HOST, MQTT_PORT, SECRETS_DIR, TZ,
-// HOST_UID y HOST_GID (setup.sh: los secretos quedan a nombre del usuario del PC, modo 0600).
+// HOST_UID y HOST_GID (setup.sh: los secretos quedan a nombre del usuario del PC, modo 0600),
+// HASIM_PROFILES (perfiles activos) y ZWAVE_JS_URL.
 // Credenciales por defecto (cámbialas en emulator/.env): hasim / hasim-cambiame.
-// Z-Wave JS y Matter se añaden en E2.
 import { chmod, chown, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tsImport } from 'tsx/esm/api';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -24,6 +28,11 @@ const TOKEN_FILE = join(SECRETS, 'ha-token');
 const MQTT_HOST = env.MQTT_HOST ?? '127.0.0.1';
 const MQTT_PORT = Number(env.MQTT_PORT ?? 1883);
 const MQTT_PASSWORD = env.MQTT_HA_PASSWORD;
+const PROFILES = new Set((env.HASIM_PROFILES ?? env.COMPOSE_PROFILES ?? '').split(',').map((p) => p.trim()).filter(Boolean));
+const ZWAVE_JS_URL = env.ZWAVE_JS_URL ?? 'ws://127.0.0.1:3000';
+
+// Formularios robustos de los flujos de HA (compartidos con el orquestador y probados con vitest).
+const { runConfigFlow, flowOk } = await tsImport('../orchestrator/src/haNative.ts', import.meta.url);
 
 const log = (msg) => console.log(`[onboarding] ${msg}`);
 
@@ -106,26 +115,17 @@ function wsCall(token, command) {
   });
 }
 
-// Rellena el formulario del flujo de MQTT a partir del esquema que devuelve HA. Las versiones
-// recientes agrupan campos en secciones (tipo «expandable», p. ej. «other_settings») que son
-// obligatorias como objeto aunque vayan vacías.
+// Valores del flujo de MQTT. Las versiones recientes de HA agrupan campos en secciones (tipo
+// «expandable», p. ej. «other_settings») que son obligatorias como objeto aunque vayan vacías:
+// fillForm las rellena (ver orchestrator/src/haNative.ts).
 const MQTT_VALUES = { broker: MQTT_HOST, port: MQTT_PORT, username: 'homeassistant', password: MQTT_PASSWORD };
 
-function fillMqttForm(schema) {
-  const values = {};
-  for (const field of Array.isArray(schema) ? schema : []) {
-    if (field.type === 'expandable') values[field.name] = fillMqttForm(field.schema);
-    else if (field.name in MQTT_VALUES) values[field.name] = MQTT_VALUES[field.name];
-    // Campos obligatorios que no conocemos (p. ej. set_ca_cert, set_client_cert): su valor por defecto.
-    else if ('default' in field) values[field.name] = field.default;
-    else if (field.required && (field.type === 'boolean' || field.selector?.boolean)) values[field.name] = false;
-    else if (field.required && field.selector?.select?.options?.length) {
-      const first = field.selector.select.options[0];
-      values[field.name] = typeof first === 'object' ? first.value : first;
-    }
-  }
-  if (!Array.isArray(schema) || schema.length === 0) return { ...MQTT_VALUES };
-  return values;
+/** API mínima de HA para runConfigFlow (REST con el token). */
+function haApiFor(token) {
+  return {
+    rest: async (method, path, json) => http(method, path, { token, ...(json !== undefined ? { json } : {}) }),
+    ws: (command) => wsCall(token, command),
+  };
 }
 
 async function existingToken() {
@@ -146,25 +146,64 @@ async function ensureMqtt(token) {
     return;
   }
   if (!MQTT_PASSWORD) throw new Error('Falta MQTT_HA_PASSWORD (está en emulator/.env)');
-  let step = (await http('POST', '/api/config/config_entries/flow', { token, json: { handler: 'mqtt', show_advanced_options: false } })).data;
-  for (let i = 0; i < 6 && step; i++) {
-    if (step.type === 'create_entry') {
-      log('Integración MQTT creada');
+  const out = await runConfigFlow(haApiFor(token), 'mqtt', MQTT_VALUES, (options) => (options.includes('broker') ? 'broker' : options[0]));
+  if (!flowOk(out)) throw new Error(`No se pudo completar el flujo de MQTT: ${out.result === 'error' ? out.message : out.reason}`);
+  log(out.result === 'created' ? 'Integración MQTT creada' : 'La integración MQTT ya existe');
+}
+
+/** ¿Responde el servidor de Z-Wave JS (Z-Wave JS UI) con su mensaje «version»? */
+function zwaveServerUp(timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try {
+        ws.close();
+      } catch {
+        // ya cerrado
+      }
+      resolve(ok);
+    };
+    const ws = new WebSocket(ZWAVE_JS_URL);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    ws.onmessage = (ev) => {
+      try {
+        finish(JSON.parse(String(ev.data)).type === 'version');
+      } catch {
+        finish(false);
+      }
+    };
+    ws.onerror = () => finish(false);
+  });
+}
+
+/** Perfil zwave: entrada Z-Wave JS en HA contra el servidor de Z-Wave JS UI (espera a que arranque). */
+async function ensureZwave(token, timeoutMs = 300_000) {
+  const entries = await http('GET', '/api/config/config_entries/entry?domain=zwave_js', { token });
+  if (Array.isArray(entries.data) && entries.data.length > 0) {
+    log('La integración Z-Wave JS ya existe');
+    return;
+  }
+  log(`Esperando al servidor de Z-Wave JS UI en ${ZWAVE_JS_URL} (la primera vez tarda un poco)`);
+  const start = Date.now();
+  while (!(await zwaveServerUp())) {
+    if (Date.now() - start > timeoutMs) throw new Error(`Z-Wave JS UI no responde en ${ZWAVE_JS_URL} (mira: docker compose logs zwave-js-ui zwave-mock)`);
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  let last;
+  for (let i = 0; i < 10; i++) {
+    // El formulario del flujo cambia entre versiones (paso «manual» con «url»; en HA OS hay un menú
+    // antes): se rellena por el esquema y se elige la opción manual si aparece un menú.
+    last = await runConfigFlow(haApiFor(token), 'zwave_js', { url: ZWAVE_JS_URL, use_addon: false }, (options) => options.find((o) => o.includes('manual')) ?? options.find((o) => o.includes('custom')) ?? options[0]);
+    if (flowOk(last)) {
+      log(last.result === 'created' ? `Integración Z-Wave JS creada (${ZWAVE_JS_URL})` : 'La integración Z-Wave JS ya existe');
       return;
     }
-    if (step.type === 'abort') {
-      if (['single_instance_allowed', 'already_configured'].includes(step.reason)) return;
-      throw new Error(`El flujo de MQTT se canceló: ${step.reason}`);
-    }
-    let input;
-    if (step.type === 'menu') input = { next_step_id: step.menu_options.includes('broker') ? 'broker' : step.menu_options[0] };
-    else if (step.type === 'form') {
-      if (step.errors && Object.keys(step.errors).length > 0) throw new Error(`MQTT: ${JSON.stringify(step.errors)}`);
-      input = fillMqttForm(step.data_schema);
-    } else throw new Error(`Paso inesperado del flujo de MQTT: ${JSON.stringify(step)}`);
-    step = (await http('POST', `/api/config/config_entries/flow/${step.flow_id}`, { token, json: input })).data;
+    await new Promise((r) => setTimeout(r, 5000));
   }
-  throw new Error('No se pudo completar el flujo de MQTT');
+  throw new Error(`No se pudo añadir Z-Wave JS a HA: ${last?.result === 'error' ? last.message : last?.reason}`);
 }
 
 /**
@@ -224,6 +263,8 @@ async function main() {
     log(`Aviso: no se pudo ajustar la configuración regional (${e.message})`),
   );
   await ensureMqtt(token);
+  if (PROFILES.has('zwave')) await ensureZwave(token);
+  if (PROFILES.has('esphome')) log('Perfil esphome: el orquestador añadirá cada nodo ESPHome a HA cuando la app mande el proyecto');
   log('Listo');
 }
 

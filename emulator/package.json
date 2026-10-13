@@ -16,11 +16,17 @@
     "e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {
+    "@zwave-js/cc": "^15.31.1",
+    "@zwave-js/core": "^15.29.0",
+    "@zwave-js/serial": "^15.31.1",
+    "@zwave-js/testing": "^15.31.1",
     "mqtt": "^5.16.0",
     "tsx": "^4.23.15",
-    "ws": "^8.22.0"
+    "ws": "^8.22.0",
+    "zwave-js": "^15.31.1"
   },
   "devDependencies": {
+    "@2colors/esphome-native-api": "^1.3.6",
     "@types/node": "^22.20.5",
     "@types/ws": "^8.18.1",
     "aedes": "^1.2.0",

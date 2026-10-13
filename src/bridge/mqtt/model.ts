@@ -19,6 +19,7 @@ import { entitiesForDevice } from '../../devices/entities';
 import { allDefinitions } from '../../devices/catalog';
 import { bridgeSettings } from '../schema';
 import { radioProfileFor } from '../radio';
+import { fnv1a } from '../hash';
 
 /** Perfil MQTT con el que se publica un dispositivo. */
 export type MqttProfile = 'z2m' | 'generic';
@@ -105,16 +106,6 @@ export function sanitizeId(text: string): string {
 export function topicName(text: string): string {
   const clean = text.replace(/[+#/]+/g, '_').trim();
   return clean === '' ? 'dispositivo' : clean;
-}
-
-/** FNV-1a de 32 bits con semilla. */
-function fnv1a(text: string, seed: number): number {
-  let h = seed >>> 0;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
 }
 
 /** Hash corto y estable de un texto (8 caracteres hex). */
@@ -262,8 +253,11 @@ function isZ2mCoordinator(device: Device, def: DeviceDefinition): boolean {
   return def.role === 'coordinator' && device.protocol === 'zigbee' && transportFor(device, def) === 'z2m_mqtt';
 }
 
-/** Construye el modelo del puente para el proyecto. */
-export function buildBridgeModel(project: Project, baseDefs: DeviceDefinition[], settings: HaBridgeSettings = bridgeSettings(project)): BridgeModel {
+/**
+ * Construye el modelo del puente MQTT para el proyecto. `exclude`: dispositivos que llegan a HA
+ * por una vía real (Z-Wave JS, ESPHome) y no se publican por MQTT.
+ */
+export function buildBridgeModel(project: Project, baseDefs: DeviceDefinition[], settings: HaBridgeSettings = bridgeSettings(project), exclude: ReadonlySet<Id> = new Set()): BridgeModel {
   // Catálogo + definiciones personalizadas del proyecto: los personalizados también llegan al lab.
   const defs = allDefinitions(project, baseDefs);
   const coordinatorDevice = project.devices.find((d) => {
@@ -278,7 +272,7 @@ export function buildBridgeModel(project: Project, baseDefs: DeviceDefinition[],
   const devices: BridgeDevice[] = [];
   for (const device of project.devices) {
     const def = defs.find((x) => x.id === device.definitionId);
-    if (!def || def.role === 'ha_server' || isZ2mCoordinator(device, def)) continue;
+    if (!def || def.role === 'ha_server' || isZ2mCoordinator(device, def) || exclude.has(device.id)) continue;
     const entityList = entitiesForDevice(device, def);
     const infra = entityList.length === 0;
     if (infra && !INFRA_ROLES.includes(def.role)) continue;
@@ -311,7 +305,9 @@ export function buildBridgeModel(project: Project, baseDefs: DeviceDefinition[],
     });
     const pending = PENDING_TRANSPORTS[transport];
     const roomName = device.roomId ? roomNames.get(device.roomId) : undefined;
-    const viaDeviceId = profile === 'generic' ? viaHubOf(project, defs, device, def) : undefined;
+    const hub = profile === 'generic' ? viaHubOf(project, defs, device, def) : undefined;
+    // Un hub que va por una vía real no está en MQTT: no se puede colgar de él.
+    const viaDeviceId = hub !== undefined && !exclude.has(hub) ? hub : undefined;
     devices.push({
       device,
       def,

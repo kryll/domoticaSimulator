@@ -13,7 +13,7 @@ function time(t: number): string {
   return `${d.toLocaleTimeString('es-ES', { hour12: false })}.${String(d.getMilliseconds()).padStart(3, '0')}`;
 }
 
-/** Inspector de tráfico MQTT del laboratorio (el «Wireshark» del lab). */
+/** Inspector de tráfico del laboratorio (el «Wireshark» del lab): MQTT, tramas Z-Wave y API de ESPHome. */
 export function TrafficView() {
   const traffic = useBridgeStore((s) => s.traffic);
   const paused = useBridgeStore((s) => s.trafficPaused);
@@ -48,7 +48,7 @@ export function TrafficView() {
           </select>
         </label>
         <label className="flex flex-1 flex-col text-xs text-slate-600">
-          Topic (texto o patrón con + y #)
+          Topic o vía (texto o patrón con + y #; «zwave», «esphome»)
           <input className={inputClass} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="p. ej. hasim-z2m/+/set" />
         </label>
         <Button size="sm" onClick={() => useBridgeStore.getState().setTrafficPaused(!paused)} aria-pressed={paused}>
@@ -72,7 +72,7 @@ export function TrafficView() {
               <th className="w-24 px-1 py-0.5">Hora</th>
               <th className="w-10 px-1 py-0.5">Sent.</th>
               <th className="w-32 px-1 py-0.5">Dispositivo</th>
-              <th className="w-64 px-1 py-0.5">Topic</th>
+              <th className="w-64 px-1 py-0.5">Topic / vía</th>
               <th className="px-1 py-0.5">Payload</th>
             </tr>
           </thead>
@@ -85,6 +85,7 @@ export function TrafficView() {
                 </td>
                 <td className="truncate px-1 py-0.5">{e.deviceId ? (names.get(e.deviceId) ?? e.deviceId) : '—'}</td>
                 <td className="break-all px-1 py-0.5">
+                  {e.via && e.via !== 'mqtt' && <span className="mr-1 rounded bg-violet-50 px-1 text-violet-800">{e.via === 'zwave' ? 'Z-Wave' : 'ESPHome'}</span>}
                   {e.topic}
                   {e.retain && <span className="ml-1 text-amber-700">(retenido)</span>}
                 </td>

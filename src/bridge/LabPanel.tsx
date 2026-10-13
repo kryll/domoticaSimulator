@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useBridgeStore, type BridgeStoreState } from './bridgeStore';
 import { couple, labAction, nodeAction } from './runtime';
-import { useBridgeSettings } from './useBridge';
+import { useActiveNative, useBridgeSettings } from './useBridge';
+import { NativeStatusList } from './NativeStatus';
 import { useLocalLab } from './localLab';
 import { useProjectStore } from '../store/projectStore';
 import { allDefinitions, catalog } from '../devices/catalog';
@@ -69,6 +70,7 @@ function StatusLine() {
           </>
         )}
       </div>
+      {status?.native && <NativeStatusList />}
       {connection === 'unauthorized' && (
         <div className="flex flex-wrap items-center gap-2 text-red-800">
           <span>El orquestador exige el token del laboratorio (LAB_TOKEN de emulator/.env).</span>
@@ -104,6 +106,8 @@ function NodesTab() {
   const devices = useProjectStore((s) => s.project.devices);
   const custom = useProjectStore((s) => s.project.customDefinitions);
   const nodes = useBridgeStore((s) => s.status?.nodes ?? NO_NODES);
+  const native = useBridgeStore((s) => s.status?.native);
+  const active = useActiveNative();
   const busy = useBridgeStore((s) => s.busy.reset);
   const connected = useBridgeStore((s) => s.connection === 'connected');
   const rows = useMemo(() => {
@@ -138,7 +142,8 @@ function NodesTab() {
       <ul className="min-h-0 flex-1 divide-y divide-slate-100 overflow-auto rounded border border-slate-200" aria-label="Nodos del laboratorio">
         {rows.map(({ device, def }) => {
           const state = nodes[device.id];
-          const via = def ? viaInfo(device, def) : undefined;
+          const via = def ? viaInfo(device, def, active) : undefined;
+          const real = via && (via.transport === 'zwave_js' || via.transport === 'esphome') && !via.pending ? native?.[via.transport]?.nodes[device.id] : undefined;
           return (
             <li key={device.id} className="flex items-center gap-2 px-2 py-1.5 text-xs">
               <div className="min-w-0 flex-1">
@@ -146,6 +151,7 @@ function NodesTab() {
                 <p className="truncate text-slate-500" title={via?.note}>
                   Vía hacia HA: {via?.label} · {RADIO_LABEL}
                 </p>
+                {real?.detail && <p className="truncate text-slate-500">{real.detail}</p>}
               </div>
               <Badge tone={state ? NODE_TONE[state] : 'slate'}>{state ? NODE_STATE_LABELS[state] : 'Sin publicar'}</Badge>
               {state === 'running' || state === 'starting' ? (

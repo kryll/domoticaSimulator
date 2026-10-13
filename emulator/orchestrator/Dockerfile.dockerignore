@@ -6,3 +6,4 @@ emulator/.env
 emulator/.secrets
 emulator/snapshots
 emulator/ha-config
+emulator/zwave

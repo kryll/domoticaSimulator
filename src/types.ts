@@ -1387,13 +1387,20 @@ export const WIFI_INTERFERENCE_LOSS_PCT = 3;
 /** Vía por la que un dispositivo llega al HA real. */
 export type DeviceTransport = 'z2m_mqtt' | 'mqtt_discovery' | 'zwave_js' | 'matter' | 'esphome' | 'shelly';
 
-/** Transportes que en E1 se publican temporalmente por MQTT discovery genérico. */
+/** Transportes que todavía se publican por MQTT discovery genérico hasta su tanda. */
 export const PENDING_TRANSPORTS: Readonly<Partial<Record<DeviceTransport, 'E2' | 'E3'>>> = {
-  // Alineado con docs/ROADMAP.md: E2 = ESPHome host y Z-Wave; E3 = Matter y Shelly.
-  zwave_js: 'E2',
+  // Alineado con docs/ROADMAP.md: E2 (Z-Wave y ESPHome) ya es real con su perfil; E3 = Matter y Shelly.
   matter: 'E3',
-  esphome: 'E2',
   shelly: 'E3',
+};
+
+/** Perfiles opcionales del laboratorio que activan una vía real (setup.sh --zwave / --esphome). */
+export type LabProfile = 'zwave' | 'esphome';
+
+/** Vías reales de E2: llegan a HA por su integración solo si el perfil está activo en el orquestador. */
+export const PROFILE_TRANSPORTS: Readonly<Partial<Record<DeviceTransport, LabProfile>>> = {
+  zwave_js: 'zwave',
+  esphome: 'esphome',
 };
 
 /**
@@ -1411,7 +1418,7 @@ export function transportFor(device: Pick<Device, 'protocol' | 'integration'>, d
   return 'mqtt_discovery';
 }
 
-/** Transporte que se usa de verdad en esta tanda (E1: los pendientes van por MQTT genérico). */
+/** Perfil MQTT de un dispositivo que va por MQTT (los que no tienen vía real activa van por el genérico). */
 export function effectiveTransport(transport: DeviceTransport): 'z2m_mqtt' | 'mqtt_discovery' {
   return transport === 'z2m_mqtt' ? 'z2m_mqtt' : 'mqtt_discovery';
 }

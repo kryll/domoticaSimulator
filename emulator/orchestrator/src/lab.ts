@@ -5,6 +5,7 @@
 import mqtt, { type IClientOptions, type MqttClient } from 'mqtt';
 import {
   PENDING_TRANSPORTS,
+  PROFILE_TRANSPORTS,
   defaultHaBridgeSettings,
   type DeviceDefinition,
   type DeviceTransport,
@@ -31,11 +32,17 @@ import {
   type StatusMessage,
   type TrafficEntry,
   type TransportStatus,
+  type NativeStatus,
+  type TrafficVia,
 } from '../../../src/bridge/protocol';
 import type { SnapshotStore } from './snapshots';
 import type { ContainerControl } from './docker';
+import { nativeDevices, type NativeTransport } from '../../../src/bridge/native';
+import type { BridgeCommand } from '../../../src/bridge/mqtt/commands';
+import type { NativeBackend } from './native';
+import { alignEntities, type HaApi } from './haNative';
 
-export const ORCHESTRATOR_VERSION = '0.2.0';
+export const ORCHESTRATOR_VERSION = '0.3.0';
 
 export interface LabOptions {
   mqttUrl: string;
@@ -54,12 +61,19 @@ export interface LabOptions {
   snapshots?: SnapshotStore;
   containers?: ContainerControl;
   haContainer?: string;
+  /** Contenedores de las vías reales que se paran al restaurar un snapshot (Z-Wave JS UI y el mock). */
+  extraContainers?: string[];
   /** Exporta los packages y recarga HA (automatizaciones en HA). Devuelve un texto para el registro. */
   sync?: (project: Project, defs: DeviceDefinition[]) => Promise<string>;
   /** Borra los packages del lab (packages/hasim) y recarga HA: automatizaciones de vuelta al simulador. */
   unsync?: () => Promise<string | undefined>;
   syncDebounceMs?: number;
   haTokenAvailable?: () => Promise<boolean>;
+  /** Vías reales activas (perfiles zwave y esphome). */
+  native?: NativeBackend[];
+  /** HA del laboratorio: alinea los entity_id de las vías reales con los del simulador. */
+  ha?: HaApi;
+  alignIntervalMs?: number;
   log?: (msg: string) => void;
 }
 
@@ -138,7 +152,14 @@ export class Lab {
   private commandSeq = 0;
   private lastError: string | undefined;
   private snapshotList: SnapshotInfo[] = [];
-  private capabilities = { snapshots: false, docker: false, haToken: false };
+  private capabilities: NonNullable<StatusMessage['capabilities']> = { snapshots: false, docker: false, haToken: false };
+  /** Dispositivos que van por una vía real (no por MQTT). */
+  private nativeIds = new Map<Id, NativeTransport>();
+  private alignTimer: ReturnType<typeof setInterval> | undefined;
+  private aligning = false;
+  /** Avisos de la alineación ya escritos en el registro (para no repetirlos cada 15 s). */
+  private readonly alignNotes = new Set<string>();
+  private statusTimer: ReturnType<typeof setTimeout> | undefined;
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly opts: LabOptions) {}
@@ -150,11 +171,26 @@ export class Lab {
   // ---------- Arranque y MQTT ----------
 
   async start(): Promise<void> {
+    const native = this.opts.native ?? [];
     this.capabilities = {
       snapshots: this.opts.snapshots !== undefined,
       docker: (await this.opts.containers?.available()) ?? false,
       haToken: (await this.opts.haTokenAvailable?.()) ?? false,
+      zwave: native.some((b) => b.transport === 'zwave_js'),
+      esphome: native.some((b) => b.transport === 'esphome'),
     };
+    for (const backend of native) {
+      await backend.start({
+        command: (deviceId, command, label) => this.forward(deviceId, [command], label),
+        traffic: (e) => this.record(e.dir, e.topic, e.payload, false, e.deviceId, e.via),
+        changed: () => this.statusSoon(),
+        log: (msg) => this.log(msg),
+      });
+    }
+    if (native.length > 0 && this.opts.ha) {
+      this.alignTimer = setInterval(() => void this.align(), this.opts.alignIntervalMs ?? 15_000);
+      this.alignTimer.unref?.();
+    }
     if (this.opts.snapshots) this.snapshotList = await this.opts.snapshots.list().catch(() => []);
     await this.connectMqtt();
     this.trafficTimer = setInterval(() => this.flushTraffic(), this.opts.trafficFlushMs ?? 250);
@@ -230,6 +266,9 @@ export class Lab {
 
   async close(): Promise<void> {
     if (this.trafficTimer) clearInterval(this.trafficTimer);
+    if (this.alignTimer) clearInterval(this.alignTimer);
+    if (this.statusTimer) clearTimeout(this.statusTimer);
+    for (const b of this.opts.native ?? []) await b.close();
     if (this.haTimer) clearTimeout(this.haTimer);
     if (this.syncTimer) clearTimeout(this.syncTimer);
     await this.queue.catch(() => undefined);
@@ -280,7 +319,11 @@ export class Lab {
   private onCommand(topic: string, payload: string): void {
     const commands = this.parser?.parse(topic, payload);
     if (!commands || commands.length === 0) return;
-    const deviceId = this.parser?.deviceOf(topic);
+    this.forward(this.parser?.deviceOf(topic), commands, topic);
+  }
+
+  /** Reenvía a la app los comandos de HA (MQTT o vías reales) si el nodo está en marcha. */
+  private forward(deviceId: Id | undefined, commands: readonly BridgeCommand[], topic: string): void {
     if (deviceId !== undefined && this.nodes.get(deviceId) !== 'running') {
       this.log(`Comando ignorado: el nodo ${deviceId} está parado`);
       return;
@@ -293,6 +336,62 @@ export class Lab {
     for (const c of commands) {
       app.send(this.wrap({ type: 'command', id: `c${++this.commandSeq}`, entityId: c.entityId, service: c.service, data: c.data, topic }));
     }
+  }
+
+  // ---------- Vías reales (Z-Wave JS, ESPHome) ----------
+
+  /** Reconcilia las vías reales con el proyecto, los estados y los nodos caídos. */
+  private async syncNative(): Promise<void> {
+    const project = this.project;
+    const backends = this.opts.native ?? [];
+    if (!project || backends.length === 0) return;
+    const avail = this.effectiveAvailability();
+    const down = new Set<Id>(avail.unavailable);
+    for (const [id, st] of this.nodes) if (st !== 'running') down.add(id);
+    for (const backend of backends) {
+      const devices = new Set([...this.nativeIds].filter(([, t]) => t === backend.transport).map(([id]) => id));
+      try {
+        await backend.sync({ project, defs: this.defs, entities: this.entities, devices, down, live: avail.live });
+      } catch (err) {
+        this.lastError = `${backend.transport}: ${err instanceof Error ? err.message : String(err)}`;
+        this.log(this.lastError);
+      }
+    }
+  }
+
+  /** Alinea en HA los entity_id de las vías reales con los del simulador (cada pocos segundos). */
+  private async align(): Promise<void> {
+    const ha = this.opts.ha;
+    if (!ha || this.aligning) return;
+    const targets = (this.opts.native ?? []).flatMap((b) => b.alignTargets());
+    if (targets.length === 0) return;
+    this.aligning = true;
+    try {
+      const r = await alignEntities(ha, targets);
+      for (const line of r.renamed) this.log(`entity_id alineado: ${line}`);
+      for (const id of r.conflicts) this.noteOnce(`No se puede alinear ${id}: ese entity_id ya existe en HA (se reintenta)`);
+    } catch (err) {
+      this.noteOnce(`Alineación de entity_id: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      this.aligning = false;
+    }
+  }
+
+  private noteOnce(msg: string): void {
+    if (this.alignNotes.has(msg)) return;
+    if (this.alignNotes.size > 200) this.alignNotes.clear();
+    this.alignNotes.add(msg);
+    this.log(msg);
+  }
+
+  /** Estado a la app, agrupando los avisos seguidos de las vías reales. */
+  private statusSoon(): void {
+    if (this.statusTimer) return;
+    this.statusTimer = setTimeout(() => {
+      this.statusTimer = undefined;
+      this.broadcastStatus();
+    }, 200);
+    this.statusTimer.unref?.();
   }
 
   // ---------- Publicación ----------
@@ -393,7 +492,10 @@ export class Lab {
       this.hello(next.value);
     }
     // Sin app al mando no hay mundo físico: todo pasa a no disponible.
-    void this.enqueue(() => this.publishAvailability());
+    void this.enqueue(async () => {
+      await this.publishAvailability();
+      await this.syncNative();
+    });
   }
 
   /** ¿Controla esta conexión el lab? (tests y /health). */
@@ -404,10 +506,18 @@ export class Lab {
   statusMessage(): StatusMessage {
     const transports: Partial<Record<DeviceTransport, TransportStatus>> = {};
     for (const d of this.model?.devices ?? []) {
-      const t = transports[d.transport] ?? { devices: 0, status: PENDING_TRANSPORTS[d.transport] ? 'pending' : 'active' };
+      const pending = PENDING_TRANSPORTS[d.transport] !== undefined || PROFILE_TRANSPORTS[d.transport] !== undefined;
+      const t = transports[d.transport] ?? { devices: 0, status: pending ? 'pending' : 'active' };
       t.devices += 1;
       transports[d.transport] = t;
     }
+    for (const transport of this.nativeIds.values()) {
+      const t = transports[transport] ?? { devices: 0, status: 'active' };
+      t.devices += 1;
+      transports[transport] = t;
+    }
+    const native: Partial<Record<NativeTransport, NativeStatus>> = {};
+    for (const b of this.opts.native ?? []) native[b.transport] = b.status();
     return {
       v: 1,
       type: 'status',
@@ -417,6 +527,7 @@ export class Lab {
       nodes: Object.fromEntries(this.nodes),
       snapshots: this.snapshotList,
       capabilities: this.capabilities,
+      ...(Object.keys(native).length > 0 ? { native } : {}),
       ...(this.lastError ? { lastError: this.lastError } : {}),
     };
   }
@@ -507,14 +618,20 @@ export class Lab {
       nextSettings.discoveryPrefix !== prevSettings.discoveryPrefix;
     this.settings = { ...nextSettings };
     if (topicsChanged && this.main) await this.enqueue(() => this.reconnectMqtt());
-    this.model = buildBridgeModel(project, this.defs, this.settings);
+    const active = new Set((this.opts.native ?? []).map((b) => b.transport));
+    this.nativeIds = nativeDevices(project, this.defs, active);
+    this.model = buildBridgeModel(project, this.defs, this.settings, new Set(this.nativeIds.keys()));
     this.parser = createCommandParser(this.model);
     // Nodos: los nuevos arrancan (autostart) o quedan parados; se olvidan los borrados.
-    const ids = new Set(this.model.devices.map((d) => d.device.id));
+    const ids = new Set([...this.model.devices.map((d) => d.device.id), ...this.nativeIds.keys()]);
     for (const id of [...this.nodes.keys()]) if (!ids.has(id)) this.nodes.delete(id);
     for (const id of ids) if (!this.nodes.has(id)) this.nodes.set(id, this.opts.autostart === false ? 'stopped' : 'running');
-    await this.enqueue(() => this.publishAll());
+    await this.enqueue(async () => {
+      await this.publishAll();
+      await this.syncNative();
+    });
     this.broadcastStatus();
+    if (this.opts.ha && this.nativeIds.size > 0) setTimeout(() => void this.align(), 3000).unref?.();
     if (this.settings.automationsRunIn === 'home_assistant') this.scheduleSync();
     else await this.retireAutomations('las automatizaciones vuelven al simulador');
   }
@@ -526,6 +643,7 @@ export class Lab {
     await this.enqueue(async () => {
       await this.publishAvailability();
       await this.publishStates();
+      await this.syncNative();
     });
   }
 
@@ -533,10 +651,13 @@ export class Lab {
   async onNode(action: 'start' | 'stop', which: Id[] | 'all'): Promise<void> {
     const model = this.model;
     if (!model) return;
-    const ids = which === 'all' ? model.devices.map((d) => d.device.id) : which.filter((id) => this.nodes.has(id));
+    const ids = which === 'all' ? [...this.nodes.keys()] : which.filter((id) => this.nodes.has(id));
     if (action === 'stop') {
       for (const id of ids) this.nodes.set(id, 'stopped');
-      await this.enqueue(() => this.publishAvailability());
+      await this.enqueue(async () => {
+        await this.publishAvailability();
+        await this.syncNative();
+      });
       this.broadcastStatus();
       return;
     }
@@ -544,6 +665,11 @@ export class Lab {
     this.broadcastStatus();
     await this.enqueue(async () => {
       for (const id of ids) {
+        if (this.nativeIds.has(id)) {
+          // Vía real: arrancar es que el nodo vuelva a responder (lo hace syncNative).
+          this.nodes.set(id, 'running');
+          continue;
+        }
         const bdev = model.devices.find((d) => d.device.id === id);
         if (!bdev) continue;
         try {
@@ -556,6 +682,7 @@ export class Lab {
         }
       }
       await this.publishAvailability();
+      await this.syncNative();
     });
     this.broadcastStatus();
   }
@@ -573,6 +700,7 @@ export class Lab {
             this.lastPayload.clear();
             for (const key of this.nodes.keys()) this.nodes.set(key, this.opts.autostart === false ? 'stopped' : 'running');
             await this.publishAll(true);
+            await this.syncNative();
           });
           this.broadcastStatus();
           reply(true, 'Laboratorio reiniciado: retenidos borrados y discovery publicado de nuevo. La app vuelve a los estados iniciales.');
@@ -595,13 +723,25 @@ export class Lab {
           const docker = this.capabilities.docker ? this.opts.containers : undefined;
           if (!docker) throw new Error('Restaurar necesita el perfil con Docker (emulator/scripts/setup.sh --docker): el orquestador debe parar Home Assistant antes de copiar la configuración.');
           const container = this.opts.haContainer ?? 'hasim-homeassistant';
+          // Z-Wave JS UI y el mock también escriben en sus datos: se paran si existen.
+          const extras: string[] = [];
+          for (const name of this.opts.extraContainers ?? []) {
+            try {
+              await docker.stop(name);
+              extras.push(name);
+            } catch {
+              // Perfil no activo: el contenedor no existe.
+            }
+          }
           let project: Project | undefined;
           await docker.stop(container);
           try {
             project = await store.restore(id);
+            for (const b of this.opts.native ?? []) await b.reset?.();
           } finally {
-            // HA vuelve a arrancar aunque la copia falle.
+            // HA (y los servicios de las vías reales) vuelven a arrancar aunque la copia falle.
             await docker.start(container);
+            for (const name of extras) await docker.start(name).catch((err: unknown) => this.log(`No se pudo arrancar ${name}: ${String(err)}`));
           }
           reply(true, 'Snapshot restaurado. Home Assistant se ha reiniciado con la configuración del snapshot.', project ? { project } : {});
           return;
@@ -685,9 +825,9 @@ export class Lab {
 
   // ---------- Inspector de tráfico ----------
 
-  private record(dir: 'in' | 'out', topic: string, payload: string, retain: boolean): void {
-    const deviceId = this.parser?.deviceOf(topic);
-    const entry: TrafficEntry = { seq: ++this.seq, t: Date.now(), dir, topic, payload: trafficPayload(payload), retain, ...(deviceId ? { deviceId } : {}) };
+  private record(dir: 'in' | 'out', topic: string, payload: string, retain: boolean, device?: Id, via?: TrafficVia): void {
+    const deviceId = device ?? (via === undefined ? this.parser?.deviceOf(topic) : undefined);
+    const entry: TrafficEntry = { seq: ++this.seq, t: Date.now(), dir, topic, payload: trafficPayload(payload), retain, ...(deviceId ? { deviceId } : {}), ...(via ? { via } : {}) };
     const limit = this.opts.trafficLimit ?? 2000;
     this.traffic.push(entry);
     if (this.traffic.length > limit) this.traffic.splice(0, this.traffic.length - limit);
@@ -711,7 +851,8 @@ export class Lab {
       ha: this.haStatus,
       apps: this.apps.size,
       controller: this.controller !== undefined,
-      devices: this.model?.devices.length ?? 0,
+      devices: (this.model?.devices.length ?? 0) + this.nativeIds.size,
+      native: Object.fromEntries((this.opts.native ?? []).map((b) => [b.transport, b.status().state])),
       nodes: Object.fromEntries(this.nodes),
     };
   }

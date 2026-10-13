@@ -76,6 +76,10 @@ const SPECS: Spec[] = [
   { id: 'demo-sensor-bano', def: 'xiaomi-lywsd03mmc', name: 'Sensor baño', floor: P1, room: 'demo-bano', at: { x: 840, y: 20 } },
   { id: 'demo-fuga-bano', def: 'aqara-water-leak', name: 'Fuga baño', floor: P1, room: 'demo-bano', at: { x: 640, y: 120 }, integration: 'zha' },
   { id: 'demo-aspiradora', def: 'xiaomi-robot-vacuum-s10', name: 'Aspiradora', floor: P1, room: 'demo-despacho', at: { x: 640, y: 320 } },
+  // E2: vías reales del laboratorio. Z-Wave (antena + enchufe con medidor) y un nodo ESPHome.
+  { id: 'demo-antena-zwave', def: 'ha-connect-zwa-2', name: 'Antena Z-Wave', floor: P1, room: 'demo-despacho', at: { x: 840, y: 320 } },
+  { id: 'demo-enchufe-zwave', def: 'fibaro-wall-plug', name: 'Enchufe despacho', floor: P1, room: 'demo-despacho', at: { x: 640, y: 420 }, loadWatts: 60 },
+  { id: 'demo-esp32', def: 'esphome-esp32', name: 'Sensor despacho', floor: P1, room: 'demo-despacho', at: { x: 840, y: 420 } },
 ];
 
 function buildDevice(spec: Spec): Device {

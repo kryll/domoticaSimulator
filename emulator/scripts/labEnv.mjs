@@ -19,3 +19,21 @@ export async function labToken() {
   }
   throw new Error('Falta el token del laboratorio: define LAB_TOKEN o ejecuta emulator/scripts/setup.sh (lo escribe en emulator/.env)');
 }
+
+/**
+ * Perfiles del laboratorio (vías reales): la variable E2E_PROFILES o COMPOSE_PROFILES o, si no
+ * están, la línea COMPOSE_PROFILES= de emulator/.env (la escribe setup.sh).
+ */
+export async function labProfiles() {
+  const fromEnv = process.env.E2E_PROFILES ?? process.env.COMPOSE_PROFILES;
+  let text = fromEnv;
+  if (text === undefined) {
+    try {
+      const env = await readFile(join(here, '..', '.env'), 'utf8');
+      text = env.split('\n').find((l) => l.startsWith('COMPOSE_PROFILES='))?.slice('COMPOSE_PROFILES='.length) ?? '';
+    } catch {
+      text = '';
+    }
+  }
+  return new Set(text.split(',').map((p) => p.trim()).filter(Boolean));
+}

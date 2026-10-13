@@ -66,7 +66,7 @@ Tiempo estimado: 45-60 minutos. Necesitas Docker Engine, unos 2 GB de RAM libres
 - [ ] **7.2** Mientras está parado, actúa sobre él desde HA: no cambia nada.
 - [ ] **7.3** «Arrancar»: vuelve a estar disponible con su estado.
 - [ ] **7.4** «Parar todo» y «Arrancar todo» funcionan.
-- [ ] **7.5** Escenario «Falla el coordinador»: en HA caen solo los dispositivos Zigbee.
+- [ ] **7.5** Escenario «Falla el coordinador»: en HA caen los dispositivos Zigbee (y, desde E2, los Z-Wave de la demo: su antena también es un coordinador).
 - [ ] **7.6** Escenario «Se cae Internet»: en HA caen los dispositivos de la nube (Termostato, Cafetera).
 
 ## 8. Pausa y desacople
@@ -129,7 +129,7 @@ Tiempo estimado: 45-60 minutos. Necesitas Docker Engine, unos 2 GB de RAM libres
 
 ## Límites conocidos de E1 (no son fallos)
 
-- Z-Wave, Matter, Thread, ESPHome y Shelly llegan a HA por **MQTT genérico** («pendiente de E2/E3» en «Vía hacia HA»). En E2 y E3 llegarán por sus integraciones reales.
+- Matter, Thread y Shelly llegan a HA por **MQTT genérico** («pendiente de E3» en «Vía hacia HA»). Z-Wave y ESPHome también, salvo con los perfiles de E2 (`setup.sh --all`, ver [PRUEBAS_E2.md](PRUEBAS_E2.md)).
 - `media_player` aparece en HA dividido en varias entidades (`…_state`, `…_power`, `…_volume`, `…_source`), porque MQTT no tiene esa plataforma.
 - El laboratorio va en tiempo real: no se puede acelerar HA.
 - `assist_satellite` no existe en MQTT: los satélites de voz llegan como sensor de estado + notify. Alexa, Google y Siri no se conectan a sus nubes: su control por voz solo se simula en la app.

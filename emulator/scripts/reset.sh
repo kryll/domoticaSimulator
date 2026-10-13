@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Borra el laboratorio para empezar de cero: contenedores, volúmenes, la configuración de HA
-# creada al usarlo (salvo configuration.yaml) y el token. Conserva .env y los snapshots salvo
-# con --all.   emulator/scripts/reset.sh [--yes] [--all]
+# creada al usarlo (salvo configuration.yaml), el token, los datos de Z-Wave JS UI y del mock
+# (emulator/zwave/) y los puertos y claves de los nodos ESPHome. Conserva .env y los snapshots
+# salvo con --all.   emulator/scripts/reset.sh [--yes] [--all]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 YES=0
@@ -21,7 +22,11 @@ docker compose --profile zwave --profile matter down -v --remove-orphans
 # Los archivos de ha-config los crea HA como root: se borran desde un contenedor.
 docker run --rm --entrypoint sh -v "$PWD/ha-config:/c" eclipse-mosquitto:2 -c \
   'cd /c && for f in .[!.]* *; do case "$f" in configuration.yaml|packages|"*"|".[!.]*") ;; *) rm -rf "$f" ;; esac; done; rm -rf packages/hasim'
-rm -f .secrets/ha-token
+# Z-Wave JS UI y el mock escriben como root: también se borra desde un contenedor.
+if [ -d zwave ]; then
+  docker run --rm --entrypoint sh -v "$PWD/zwave:/z" eclipse-mosquitto:2 -c 'rm -rf /z/ui /z/mock'
+fi
+rm -f .secrets/ha-token .secrets/esphome-nodes.json
 if [ "$ALL" = 1 ]; then
   docker run --rm --entrypoint sh -v "$PWD:/lab" eclipse-mosquitto:2 -c 'rm -rf /lab/snapshots/* /lab/.secrets'
   rm -f .env

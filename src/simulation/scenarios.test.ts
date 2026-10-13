@@ -49,12 +49,23 @@ describe('escenarios de fallo (B2) con la casa de ejemplo', () => {
     expect(r.scripts[0]?.reasons[0]).toMatch(/Termostato/);
   });
 
-  it('coordinador: caen sus hijos Zigbee y se rompen las automatizaciones que disparan con ellos', () => {
+  it('coordinador: caen sus hijos Zigbee (y Z-Wave) y se rompen las automatizaciones que disparan con ellos', () => {
     const failures = scenarioFailures('coordinator', demo, catalog);
-    expect(failures.devicesDown).toEqual(['demo-coordinador']);
+    expect(failures.devicesDown).toEqual(['demo-coordinador', 'demo-antena-zwave']);
     const r = failureImpact(demo, catalog, failures);
     expect(down(r)).toEqual(
-      ['demo-clima-dormitorio', 'demo-coordinador', 'demo-enchufe-dormitorio', 'demo-fuga-bano', 'demo-luz-pasillo', 'demo-mando', 'demo-movimiento', 'demo-puerta'].sort(),
+      [
+        'demo-antena-zwave',
+        'demo-clima-dormitorio',
+        'demo-coordinador',
+        'demo-enchufe-dormitorio',
+        'demo-enchufe-zwave',
+        'demo-fuga-bano',
+        'demo-luz-pasillo',
+        'demo-mando',
+        'demo-movimiento',
+        'demo-puerta',
+      ].sort(),
     );
     expect(r.unavailableDevices.find((d) => d.deviceId === 'demo-mando')?.reason).toBe('depende de «Coordinador Zigbee», que no está disponible');
     expect(status(r, 'demo-auto-fuga')).toBe('broken');
