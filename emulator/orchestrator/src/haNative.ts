@@ -1,7 +1,7 @@
 // Home Assistant del laboratorio para las vías reales: flujos de configuración robustos (los
 // formularios cambian entre versiones de HA), entradas de la integración `esphome` por nodo y
-// alineación de entity_id (las entidades que crean zwave_js y esphome reciben el entity_id del
-// simulador, así las automatizaciones exportadas siguen funcionando).
+// alineación de entity_id (las entidades que crean zwave_js, esphome y matter reciben el entity_id
+// del simulador, así las automatizaciones exportadas siguen funcionando).
 import { haWsCall } from './haSync';
 
 type Json = Record<string, unknown>;
@@ -175,7 +175,7 @@ export async function removeEsphomeEntry(api: HaApi, mac: string): Promise<boole
 // ---------- Alineación de entity_id ----------
 
 export interface AlignTarget {
-  platform: 'zwave_js' | 'esphome';
+  platform: 'zwave_js' | 'esphome' | 'matter';
   /** entity_id deseado (el del simulador). */
   entityId: string;
   match: (uniqueId: string) => boolean;
@@ -210,6 +210,17 @@ export function zwaveUniqueIdMatcher(homeId: number, nodeId: number, cc: number,
     if (propertyKey === undefined) return rest === '' || rest.startsWith('.');
     return rest === `-${propertyKey}` || rest.startsWith(`-${propertyKey}.`);
   };
+}
+
+/**
+ * unique_id de una entidad de la integración matter de HA:
+ * «<fabric comprimida (16 hex)>-<nodo (16 hex)>-<endpoint bridged>-<endpoint>-<clave>-<cluster>-<atributo>»
+ * (helpers.get_device_id + entity.py de HA). En el bridge, el endpoint del dispositivo es el bridged.
+ */
+export function matterUniqueIdMatcher(nodeId: number, endpoint: number, clusterId: number, attributeId: number): (uid: string) => boolean {
+  const node = nodeId.toString(16).toUpperCase().padStart(16, '0');
+  const re = new RegExp(`^[0-9A-F]{16}-${node}-${endpoint}-${endpoint}-[^-]+-${clusterId}-${attributeId}$`);
+  return (uid) => re.test(uid);
 }
 
 /**

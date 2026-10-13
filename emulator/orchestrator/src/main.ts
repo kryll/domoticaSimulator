@@ -10,6 +10,7 @@ import type { NativeBackend } from './native';
 import { ZwaveBackend, wsMockLink } from './zwave/backend';
 import { EsphomeBackend } from './esphome/backend';
 import { ESPHOME_PORT_BASE } from './esphome/store';
+import { MATTER_BRIDGE_PORT, MatterBackend } from './matter/backend';
 import type { SnapshotExtra } from './snapshots';
 
 const env = process.env;
@@ -47,9 +48,25 @@ if (profiles.has('esphome')) {
     }),
   );
 }
+// Datos de matter.js del bridge (fabrics, números de endpoint): emulator/matter/bridge.
+const matterDir = env.MATTER_DATA_DIR ?? join(secretsDir, '..', 'matter', 'bridge');
+if (profiles.has('matter')) {
+  native.push(
+    new MatterBackend({
+      serverUrl: env.MATTER_SERVER_URL ?? 'ws://127.0.0.1:5580/ws',
+      port: Number(env.MATTER_BRIDGE_PORT ?? MATTER_BRIDGE_PORT),
+      storagePath: matterDir,
+      secretsFile: join(secretsDir, 'matter.json'),
+    }),
+  );
+}
 const extras: SnapshotExtra[] = [];
 if (env.ZWAVE_DATA_DIR) extras.push({ name: 'zwave', path: env.ZWAVE_DATA_DIR, kind: 'dir' });
 extras.push({ name: 'esphome-nodes.json', path: join(secretsDir, 'esphome-nodes.json'), kind: 'file' });
+if (profiles.has('matter')) {
+  extras.push({ name: 'matter', path: matterDir, kind: 'dir' });
+  extras.push({ name: 'matter.json', path: join(secretsDir, 'matter.json'), kind: 'file' });
+}
 
 const lab = new Lab({
   mqttUrl: env.MQTT_URL ?? 'mqtt://127.0.0.1:1883',
