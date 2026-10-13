@@ -6,8 +6,8 @@
 //   4. ajusta idioma, país, moneda y zona horaria,
 //   5. crea la entrada MQTT (POST /api/config/config_entries/flow) contra el Mosquitto del lab,
 //   6. con el perfil zwave, la entrada Z-Wave JS (ws://127.0.0.1:3000, el servidor de Z-Wave JS UI).
-// Los nodos ESPHome los da de alta el orquestador (cada uno con su puerto y su clave) cuando la app
-// manda el proyecto.
+// Los nodos ESPHome (cada uno con su puerto y su clave) y los Shelly emulados (host y puerto) los da
+// de alta el orquestador cuando la app manda el proyecto.
 // Variables: HA_URL, HA_USERNAME, HA_PASSWORD, MQTT_HA_PASSWORD, MQTT_HOST, MQTT_PORT, SECRETS_DIR, TZ,
 // HOST_UID y HOST_GID (setup.sh: los secretos quedan a nombre del usuario del PC, modo 0600),
 // HASIM_PROFILES (perfiles activos) y ZWAVE_JS_URL.
@@ -270,6 +270,7 @@ async function main() {
   await ensureMqtt(token);
   if (PROFILES.has('zwave')) await ensureZwave(token);
   if (PROFILES.has('esphome')) log('Perfil esphome: el orquestador añadirá cada nodo ESPHome a HA cuando la app mande el proyecto');
+  if (PROFILES.has('shelly')) log('Perfil shelly: el orquestador añadirá cada Shelly emulado a HA (integración shelly) cuando la app mande el proyecto');
   log('Listo');
 }
 

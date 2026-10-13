@@ -12,6 +12,8 @@
 #   zwave:   zwave-mock (controlador Z-Wave emulado con zwave-js) + Z-Wave JS UI → integración zwave_js.
 #   esphome: sin contenedores nuevos; el orquestador emula la API nativa de cada nodo ESPHome en
 #            127.0.0.1:16053+n → integración esphome.
+#   shelly:  (E3, setup.sh --shelly) sin contenedores nuevos; el orquestador emula cada Shelly Gen2+
+#            (HTTP /shelly + WebSocket /rpc) en 127.0.0.1:18181+n → integración shelly.
 name: hasim-lab
 
 services:
