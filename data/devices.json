@@ -6905,5 +6905,626 @@
     ],
     "icon": "bulb",
     "priceEur": 10
+  },
+  {
+    "id": "aqara-t1-relay-neutral",
+    "brand": "Aqara",
+    "model": "SSM-U01",
+    "name": "Aqara Single Switch Module T1 (con neutro)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "Aqara",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2500
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 22
+  },
+  {
+    "id": "aqara-t1-relay-no-neutral",
+    "brand": "Aqara",
+    "model": "SSM-U02",
+    "name": "Aqara Single Switch Module T1 (sin neutro)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "requiresHub": "Aqara",
+    "rangeMeters": 15,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 300
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 22
+  },
+  {
+    "id": "aqara-dual-relay-t2",
+    "brand": "Aqara",
+    "model": "DCM-K01",
+    "name": "Aqara Dual Relay Module T2",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "homekit_device",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "Aqara",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch_1",
+        "domain": "switch",
+        "name": "Canal 1",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2500
+        }
+      },
+      {
+        "key": "switch_2",
+        "domain": "switch",
+        "name": "Canal 2",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2500
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 30
+  },
+  {
+    "id": "shelly-1-gen3",
+    "brand": "Shelly",
+    "model": "S3SW-001X16EU",
+    "name": "Shelly 1 Gen3",
+    "category": "switch",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 18
+  },
+  {
+    "id": "shelly-1-gen4",
+    "brand": "Shelly",
+    "model": "S4SW-001X16EU",
+    "name": "Shelly 1 Gen4",
+    "category": "switch",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 20
+  },
+  {
+    "id": "shelly-1pm-gen4",
+    "brand": "Shelly",
+    "model": "S4SW-001P16EU",
+    "name": "Shelly 1PM Gen4",
+    "category": "switch",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 25
+  },
+  {
+    "id": "shelly-2pm-gen4",
+    "brand": "Shelly",
+    "model": "S4SW-002P16EU",
+    "name": "Shelly 2PM Gen4",
+    "category": "switch",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch_0",
+        "domain": "switch",
+        "name": "Canal 1",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2300
+        }
+      },
+      {
+        "key": "switch_1",
+        "domain": "switch",
+        "name": "Canal 2",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2300
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 33
+  },
+  {
+    "id": "shelly-1-mini-gen3",
+    "brand": "Shelly",
+    "model": "S3SW-001X8EU",
+    "name": "Shelly 1 Mini Gen3",
+    "category": "switch",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 1840
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 15
+  },
+  {
+    "id": "shelly-1pm-mini-gen3",
+    "brand": "Shelly",
+    "model": "S3SW-001P8EU",
+    "name": "Shelly 1PM Mini Gen3",
+    "category": "switch",
+    "protocols": [
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 25,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 1840
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 18
+  },
+  {
+    "id": "shelly-pro-1pm",
+    "brand": "Shelly",
+    "model": "SPSW-001PE16EU",
+    "name": "Shelly Pro 1PM (carril DIN)",
+    "category": "switch",
+    "protocols": [
+      "ethernet",
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 3680
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 60
+  },
+  {
+    "id": "shelly-pro-2pm",
+    "brand": "Shelly",
+    "model": "SPSW-002PE16EU",
+    "name": "Shelly Pro 2PM (carril DIN)",
+    "category": "switch",
+    "protocols": [
+      "ethernet",
+      "wifi",
+      "ble"
+    ],
+    "integrations": [
+      "shelly"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch_0",
+        "domain": "switch",
+        "name": "Canal 1",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2300
+        }
+      },
+      {
+        "key": "switch_1",
+        "domain": "switch",
+        "name": "Canal 2",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2300
+        }
+      },
+      {
+        "key": "power",
+        "domain": "sensor",
+        "name": "Potencia",
+        "deviceClass": "power",
+        "unit": "W",
+        "initialState": 0
+      },
+      {
+        "key": "energy",
+        "domain": "sensor",
+        "name": "Energía",
+        "deviceClass": "energy",
+        "unit": "kWh",
+        "initialState": 0
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 80
+  },
+  {
+    "id": "sonoff-minir4m",
+    "brand": "SONOFF",
+    "model": "MINIR4M",
+    "name": "SONOFF MINI R4M (Matter)",
+    "category": "switch",
+    "protocols": [
+      "matter",
+      "wifi"
+    ],
+    "integrations": [
+      "matter",
+      "ewelink"
+    ],
+    "iotClass": "local_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 13
+  },
+  {
+    "id": "sonoff-zbminir2",
+    "brand": "SONOFF",
+    "model": "ZBMINIR2",
+    "name": "SONOFF ZBMINI R2 (Zigbee, con neutro)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 12
+  },
+  {
+    "id": "sonoff-mini-zb2gs",
+    "brand": "SONOFF",
+    "model": "MINI-ZB2GS",
+    "name": "SONOFF MINI-ZB2GS (Zigbee, 2 canales)",
+    "category": "switch",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_polling",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "switch_1",
+        "domain": "switch",
+        "name": "Canal 1",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
+      },
+      {
+        "key": "switch_2",
+        "domain": "switch",
+        "name": "Canal 2",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 18
+  },
+  {
+    "id": "sonoff-basicr4",
+    "brand": "SONOFF",
+    "model": "BASICR4",
+    "name": "SONOFF BASIC R4",
+    "category": "switch",
+    "protocols": [
+      "wifi"
+    ],
+    "integrations": [
+      "ewelink"
+    ],
+    "iotClass": "cloud_push",
+    "role": "end_device",
+    "power": "mains",
+    "rangeMeters": 30,
+    "entities": [
+      {
+        "key": "switch",
+        "domain": "switch",
+        "name": "Relé",
+        "initialState": "off",
+        "capabilities": {
+          "powerWatts": 2200
+        }
+      }
+    ],
+    "icon": "switch",
+    "priceEur": 9
   }
 ]

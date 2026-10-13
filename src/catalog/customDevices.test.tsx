@@ -94,5 +94,6 @@ describe('dispositivos personalizados: interfaz', () => {
     expect(within(results).getByText('Personalizado')).toBeInTheDocument();
     // Un dispositivo del plano con esa definición la encuentra (lienzo, propiedades, motor).
     expect(definitionOf({ id: 'd', definitionId: saved?.id ?? '', name: 'x', floorId: 'f1', position: { x: 0, y: 0 }, protocol: 'zigbee', integration: 'zha' })?.name).toBe(saved?.name);
-  });
+    // Pinta el catálogo entero (más de 150 tarjetas) varias veces: más margen que los 5 s por defecto.
+  }, 15_000);
 });

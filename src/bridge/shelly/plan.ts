@@ -86,6 +86,14 @@ const MODELS: Record<string, ModelInfo> = {
   'SNSW-001X16EU': { app: 'Plus1', prefix: 'shellyplus1', gen: 2 },
   'SNSW-002P16EU': { app: 'Plus2PM', prefix: 'shellyplus2pm', gen: 2 },
   'SNPL-00112EU': { app: 'PlusPlugS', prefix: 'shellyplusplugs', gen: 2 },
+  // Relés del catálogo ampliado (modelos de aioshelly; app y prefijo siguen el patrón de cada gama).
+  'S3SW-001X8EU': { app: 'Mini1G3', prefix: 'shelly1minig3', gen: 3 },
+  'S3SW-001P8EU': { app: 'Mini1PMG3', prefix: 'shelly1pmminig3', gen: 3 },
+  'S4SW-001X16EU': { app: 'S1G4', prefix: 'shelly1g4', gen: 4 },
+  'S4SW-001P16EU': { app: 'S1PMG4', prefix: 'shelly1pmg4', gen: 4 },
+  'S4SW-002P16EU': { app: 'S2PMG4', prefix: 'shelly2pmg4', gen: 4 },
+  'SPSW-001PE16EU': { app: 'Pro1PM', prefix: 'shellypro1pm', gen: 2 },
+  'SPSW-002PE16EU': { app: 'Pro2PM', prefix: 'shellypro2pm', gen: 2 },
 };
 
 /** Modelo Shelly de una definición del catálogo («S3SW-002P16EU (modo persiana)» → «S3SW-002P16EU»). */

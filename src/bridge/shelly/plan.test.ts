@@ -59,6 +59,35 @@ describe('Shelly: modelos y compatibilidad', () => {
     expect(shellySupport(dev('r', 'shelly-1pm-gen3', 'Raro'), odd)).toMatchObject({ ok: false, reason: expect.stringContaining('binary_sensor') });
   });
 
+  it('relés nuevos (1 y 1PM Gen3/Gen4, Mini Gen3, 2PM Gen4, Pro 1PM/2PM): vía Shelly y plan aceptado', () => {
+    const relays: Array<[string, string, number, string, number]> = [
+      ['shelly-1-gen3', 'S3SW-001X16EU', 3, 'shelly1g3', 1],
+      ['shelly-1-gen4', 'S4SW-001X16EU', 4, 'shelly1g4', 1],
+      ['shelly-1pm-gen4', 'S4SW-001P16EU', 4, 'shelly1pmg4', 1],
+      ['shelly-2pm-gen4', 'S4SW-002P16EU', 4, 'shelly2pmg4', 2],
+      ['shelly-1-mini-gen3', 'S3SW-001X8EU', 3, 'shelly1minig3', 1],
+      ['shelly-1pm-mini-gen3', 'S3SW-001P8EU', 3, 'shelly1pmminig3', 1],
+      ['shelly-pro-1pm', 'SPSW-001PE16EU', 2, 'shellypro1pm', 1],
+      ['shelly-pro-2pm', 'SPSW-002PE16EU', 2, 'shellypro2pm', 2],
+    ];
+    for (const [id, model, gen, prefix, outputs] of relays) {
+      const d = defOf(id);
+      const device = dev('r', id, 'Relé');
+      expect(shellySupport(device, d), id).toEqual({ ok: true });
+      expect(nativeDecision(device, d, new Set(['shelly'])), id).toMatchObject({ transport: 'shelly', native: true });
+      const plan = shellyNodePlan('p', device, d);
+      expect(plan, id).toMatchObject({ model, gen });
+      expect(plan.hostname.startsWith(`${prefix}-`), id).toBe(true);
+      expect(plan.components.filter((c) => c.type === 'switch'), id).toHaveLength(outputs);
+      // Con una sola salida y medidor, la potencia y la energía cuelgan de switch:0.
+      if (outputs === 1 && d.entities.some((e) => e.key === 'power')) {
+        expect(plan.entities.map((e) => e.uniqueSuffix), id).toEqual(['switch:0', 'switch:0-power', 'switch:0-energy']);
+      }
+    }
+    // El Pro, también por Ethernet.
+    expect(nativeDecision(dev('p', 'shelly-pro-1pm', 'Pro', { protocol: 'ethernet' }), defOf('shelly-pro-1pm'), new Set(['shelly']))).toMatchObject({ native: true });
+  });
+
   it('MAC estable, única por dispositivo y localmente administrada (12 cifras hex)', () => {
     const a = shellyMacFor('p', 'd');
     expect(a).toMatch(/^[0-9A-F]{12}$/);

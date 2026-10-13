@@ -68,6 +68,31 @@ describe('bombillas IKEA', () => {
   });
 });
 
+describe('relés de Aqara, Shelly y SONOFF', () => {
+  it('Aqara T1 (con y sin neutro) y Dual Relay T2 son Zigbee con hub Aqara; el sin neutro no repite la malla', () => {
+    expect(def('aqara-t1-relay-neutral')).toMatchObject({ protocols: ['zigbee'], role: 'router', requiresHub: 'Aqara' });
+    expect(def('aqara-t1-relay-no-neutral')).toMatchObject({ role: 'end_device', requiresHub: 'Aqara' });
+    expect(def('aqara-dual-relay-t2').entities.filter((e) => e.domain === 'switch')).toHaveLength(2);
+    for (const id of ['aqara-t1-relay-neutral', 'aqara-t1-relay-no-neutral', 'aqara-dual-relay-t2']) expectCoherent(def(id));
+  });
+
+  it('SONOFF: MINIR4M por Matter, ZBMINIR2 y MINI-ZB2GS por Zigbee (Z2M), BASICR4 en la nube (eWeLink)', () => {
+    expect(transportFor(dev('m', 'sonoff-minir4m'), def('sonoff-minir4m'))).toBe('matter');
+    expect(transportFor(dev('z', 'sonoff-zbminir2', undefined, { integration: 'zigbee2mqtt' }), def('sonoff-zbminir2'))).toBe('z2m_mqtt');
+    expect(transportFor(dev('z', 'sonoff-mini-zb2gs', undefined, { integration: 'zigbee2mqtt' }), def('sonoff-mini-zb2gs'))).toBe('z2m_mqtt');
+    expect(def('sonoff-basicr4').iotClass).toBe('cloud_push');
+    expect(transportFor(dev('b', 'sonoff-basicr4'), def('sonoff-basicr4'))).toBe('mqtt_discovery');
+    for (const id of ['sonoff-minir4m', 'sonoff-zbminir2', 'sonoff-mini-zb2gs', 'sonoff-basicr4']) expectCoherent(def(id));
+  });
+
+  it('los relés Shelly nuevos van por la vía Shelly y cuentan como proxy Bluetooth', () => {
+    for (const id of ['shelly-1-gen3', 'shelly-1-gen4', 'shelly-1pm-gen4', 'shelly-2pm-gen4', 'shelly-1-mini-gen3', 'shelly-1pm-mini-gen3', 'shelly-pro-1pm', 'shelly-pro-2pm']) {
+      expect(transportFor(dev('s', id), def(id)), id).toBe('shelly');
+      expect(def(id).protocols, id).toContain('ble');
+    }
+  });
+});
+
 describe('coherencia de todo el catálogo ampliado', () => {
   it('las definiciones nuevas cumplen las reglas de protocolo, hub e integración', () => {
     const fresh = catalog.filter((d) => /^(ikea-(tradfri-(e27-cws|e27-ws-1055|e14|gu10-)|kajplats-|somrig|bilresa)|aqara-(t1-|dual-relay|h1-|wireless-remote-h1|camera-|doorbell-g4|power-plug-h2)|shelly-(1-gen|1pm-gen4|2pm-gen4|1-mini|1pm-mini|pro-[12]pm)|sonoff-(minir4m|zbminir2|mini-zb2gs|basicr4|tx-ultimate|m5-|zbm5-)|hue-tap-dial|tuya-zigbee-(wall|plug))/.test(d.id));
