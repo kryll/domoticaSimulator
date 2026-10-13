@@ -158,8 +158,14 @@ describe('Lab con Z-Wave JS y ESPHome reales', () => {
   });
 
   it('el inspector de tráfico muestra la API nativa', async () => {
-    const traffic = sent.filter((m): m is Extract<ServerMessage, { type: 'traffic' }> => m.type === 'traffic').flatMap((m) => m.entries);
-    expect(traffic.some((e) => e.via === 'esphome' && e.dir === 'in' && /SwitchCommandRequest/.test(e.payload))).toBe(true);
+    // El tráfico se envía por lotes: se espera a que llegue en lugar de leerlo al momento.
+    const found = await waitFor(() =>
+      sent
+        .filter((m): m is Extract<ServerMessage, { type: 'traffic' }> => m.type === 'traffic')
+        .flatMap((m) => m.entries)
+        .find((e) => e.via === 'esphome' && e.dir === 'in' && /SwitchCommandRequest/.test(e.payload)),
+    );
+    expect(found).toBeDefined();
   });
 });
 
