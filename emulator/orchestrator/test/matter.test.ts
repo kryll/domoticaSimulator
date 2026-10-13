@@ -270,6 +270,49 @@ async function fakeMatterServer(sim: NetworkSimulator, pairing: () => { passcode
   return { url: `ws://127.0.0.1:${port}/ws`, calls, nodes };
 }
 
+describe('Matter: reiniciar el orquestador', () => {
+  it('el estado del simulador gana al que matter.js guardó en la ejecución anterior (OnOff, nivel)', { timeout: 60_000 }, async () => {
+    const sim = new NetworkSimulator();
+    const dir = await mkdtemp(join(tmpdir(), 'hasim-matter-'));
+    const secretsFile = join(dir, 'matter.json');
+    const project = { ...createDemoProject(), id: 'test' };
+    const initial = createSimulationState(project, catalog, Date.now()).entities;
+    const plug = 'switch.enchufe_matter_switch';
+    const light = 'light.luz_matter';
+    expect(initial[plug]?.state).toBe('off');
+    expect(initial[light]?.state).toBe('off');
+    // El mismo entorno (y su almacenamiento) para los dos arranques, como la carpeta emulator/matter/bridge.
+    const env = mockEnv(sim, 'bridge', 1);
+    const first = new MatterBackend({ environment: env, secretsFile, matterLogLevel: 'error' });
+    await first.start(recorder().events);
+    await first.sync(context(project, initial));
+    const level0 = first.clusterStateOf('demo-luz-matter', 'levelControl')?.currentLevel;
+    // Cambios en vivo (no al crear el endpoint): matter.js guarda los atributos no volátiles.
+    const changed = {
+      ...initial,
+      [plug]: { ...initial[plug], state: 'on' },
+      [light]: { ...initial[light], state: 'on', attributes: { ...initial[light]?.attributes, brightness: 40 } },
+    } as Record<string, EntityState>;
+    await first.sync(context(project, changed));
+    expect(first.clusterStateOf('demo-enchufe-matter', 'onOff')?.onOff).toBe(true);
+    expect(first.clusterStateOf('demo-luz-matter', 'onOff')?.onOff).toBe(true);
+    expect(first.clusterStateOf('demo-luz-matter', 'levelControl')?.currentLevel).not.toBe(level0);
+    await first.sync(context(project, changed, { live: false }));
+    await first.close();
+
+    // Reinicio: la app vuelve con el proyecto recién abierto (todo apagado). Eso es lo que debe
+    // publicar el bridge, no lo guardado antes (HA seguiría viendo el enchufe encendido).
+    const again = new MatterBackend({ environment: env, secretsFile, matterLogLevel: 'error' });
+    cleanups.push(() => again.close());
+    await again.start(recorder().events);
+    await again.sync(context(project, initial));
+    expect(again.clusterStateOf('demo-enchufe-matter', 'onOff')?.onOff).toBe(false);
+    expect(again.clusterStateOf('demo-luz-matter', 'onOff')?.onOff).toBe(false);
+    expect(again.clusterStateOf('demo-luz-matter', 'levelControl')?.currentLevel).toBe(level0);
+    for (const id of MATTER_IDS) expect(again.reachableOf(id)).toBe(true);
+  });
+});
+
 describe('Matter: comisionado automático en matterjs-server', () => {
   it('comisiona con commission_with_code, guarda el nodo y al reiniciar lo reutiliza sin volver a comisionar', { timeout: 180_000 }, async () => {
     const sim = new NetworkSimulator();

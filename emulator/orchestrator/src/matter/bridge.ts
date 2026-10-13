@@ -2,7 +2,7 @@
 // y un endpoint «bridged» (con BridgedDeviceBasicInformation) por cada dispositivo Matter/Thread del
 // proyecto. Un solo comisionado para todos los dispositivos; añadir o quitar endpoints funciona en
 // caliente. Parar un dispositivo = Reachable a false (HA lo muestra no disponible).
-import { Endpoint, Environment, Logger, LogLevel, ServerNode, VendorId, type EndpointType, type MutableEndpoint } from '@matter/main';
+import { Endpoint, Environment, isDeepEqual, Logger, LogLevel, ServerNode, VendorId, type EndpointType, type MutableEndpoint } from '@matter/main';
 import { AggregatorEndpoint } from '@matter/main/endpoints/aggregator';
 import { BridgedDeviceBasicInformationServer } from '@matter/main/behaviors/bridged-device-basic-information';
 import { BooleanStateServer } from '@matter/main/behaviors/boolean-state';
@@ -201,6 +201,25 @@ function bridgedInfo(plan: MatterDevicePlan, reachable: boolean): Struct {
   };
 }
 
+/**
+ * matter.js guarda los atributos no volátiles de cada endpoint (OnOff, CurrentLevel, color, posición
+ * de la persiana...) y, al volver a crear un endpoint con el mismo id (reiniciar el orquestador),
+ * los valores guardados ganan a los que se le pasan al crearlo. El bridge publicaría entonces el
+ * estado de la ejecución anterior y no el del simulador (y como el backend ya da ese estado por
+ * enviado, HA no lo vería corregido hasta el siguiente cambio). Se vuelven a escribir los valores
+ * iniciales que no coinciden con lo restaurado.
+ */
+async function restoreInitialState(endpoint: Endpoint, init: Record<string, Struct>): Promise<void> {
+  for (const [id, values] of Object.entries(init)) {
+    const current = endpoint.stateOf(id) as Struct;
+    const patch: Struct = {};
+    for (const [key, value] of Object.entries(values)) {
+      if (!isDeepEqual(current[key], value)) patch[key] = value;
+    }
+    if (Object.keys(patch).length > 0) await endpoint.setStateOf(id, patch);
+  }
+}
+
 /** Firma del tipo de endpoint: si cambia (otro tipo o clusters), se recrea el endpoint. */
 const shapeOf = (plan: MatterDevicePlan): string => JSON.stringify([plan.kind, plan.clusters, plan.light ?? null]);
 
@@ -313,6 +332,7 @@ export class MatterBridge {
       const endpoint = new Endpoint(type, { id: plan.endpointId, ...init });
       setCommandSink(endpoint, onCommand);
       await aggregator.add(endpoint);
+      await restoreInitialState(endpoint, init);
       this.bridged.set(plan.endpointId, { plan, endpoint, shape, info: JSON.stringify(bridgedInfo(plan, true)) });
       return;
     }
@@ -355,6 +375,13 @@ export class MatterBridge {
     if (!b) return undefined;
     const reachable: unknown = b.endpoint.stateOf('bridgedDeviceBasicInformation').reachable;
     return typeof reachable === 'boolean' ? reachable : undefined;
+  }
+
+  /** Valores que publica ahora un cluster del endpoint (diagnóstico y tests). */
+  clusterStateOf(endpointId: string, cluster: MatterCluster): Struct | undefined {
+    const b = this.bridged.get(endpointId);
+    if (!b || !b.plan.clusters.includes(cluster)) return undefined;
+    return { ...(b.endpoint.stateOf(cluster) as Struct) };
   }
 
   /**

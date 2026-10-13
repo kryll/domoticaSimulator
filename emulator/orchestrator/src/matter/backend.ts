@@ -6,7 +6,7 @@
 // el comisionado (las claves de la fabric las guarda matter.js en su carpeta de datos).
 import type { Environment } from '@matter/main';
 import type { Id } from '../../../../src/types';
-import { buildMatterPlan, describeMatterCommand, describeMatterState, matterCommandToService, matterStateOf, MATTER_CLUSTER_IDS, type MatterCommand, type MatterDevicePlan, type MatterDeviceKind } from '../../../../src/bridge/matter/plan';
+import { buildMatterPlan, describeMatterCommand, describeMatterState, matterCommandToService, matterStateOf, MATTER_CLUSTER_IDS, type MatterCluster, type MatterCommand, type MatterDevicePlan, type MatterDeviceKind } from '../../../../src/bridge/matter/plan';
 import type { NativeStatus } from '../../../../src/bridge/protocol';
 import type { NativeBackend, NativeContext, NativeEvents } from '../native';
 import { matterUniqueIdMatcher, type AlignTarget } from '../haNative';
@@ -115,6 +115,12 @@ export class MatterBackend implements NativeBackend {
   reachableOf(deviceId: Id): boolean | undefined {
     const plan = this.plans.get(deviceId);
     return plan ? this.bridge?.reachableOf(plan.endpointId) : undefined;
+  }
+
+  /** Valores que publica ahora un cluster del endpoint del dispositivo (diagnóstico y tests). */
+  clusterStateOf(deviceId: Id, cluster: MatterCluster): Record<string, unknown> | undefined {
+    const plan = this.plans.get(deviceId);
+    return plan ? this.bridge?.clusterStateOf(plan.endpointId, cluster) : undefined;
   }
 
   /** Ids de los endpoints que tiene ahora el bridge (diagnóstico y tests). */
