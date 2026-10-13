@@ -329,6 +329,12 @@ try {
       return st && st.state !== 'unavailable' && st.state !== 'unknown' ? st : undefined;
     }, 180_000);
     log(`OK ${light}`);
+    // HA debe ver el estado del simulador (el proyecto recién abierto: todo apagado), no el que el
+    // bridge tenía antes de reiniciar el orquestador (matter.js guarda OnOff y el nivel en su carpeta).
+    // Tras un reinicio, matterjs-server tarda ~1m45s en darse cuenta (caduca su suscripción).
+    await until(`${light} apagada en HA como en el simulador`, async () => (await haState(light))?.state === 'off', 180_000);
+    await until(`${plug} apagado en HA como en el simulador`, async () => (await haState(plug))?.state === 'off', 180_000);
+    log('OK estado inicial del simulador en HA por Matter');
     // HA → app: light.turn_on con brillo (MoveToLevelWithOnOff) y vuelta del estado por Matter.
     const before = commands.length;
     await haCall('light', 'turn_on', { entity_id: light, brightness: 128 });
@@ -340,7 +346,6 @@ try {
     }, 60_000);
     log('OK estado de vuelta por Matter');
     // App → HA: el enchufe Matter se enciende en el simulador.
-    await until(`${plug} en /api/states`, async () => (await haState(plug))?.state === 'off', 180_000);
     setEntity(plug, 'on');
     await until(`${plug} = on en HA`, async () => (await haState(plug))?.state === 'on', 60_000);
     log('OK cambio del enchufe Matter desde la app visto en HA');
