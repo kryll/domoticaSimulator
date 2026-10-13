@@ -9,6 +9,7 @@ import { computeUnavailable, internetAvailable, unavailabilityReasons } from '..
 import { canConnect, explainUnconnected, suggestConnections } from './connections';
 import { cloudLossReason, downUplinkDevices, failuresMayCutInternet, hasInternetNode, internetLoss, internetPathExists } from './internet';
 import { validateProject } from './validator';
+import { createDemoProject } from '../store/demoProject';
 
 const f = (patch: Partial<Failures>): Failures => ({ ...NO_FAILURES, ...patch });
 
@@ -226,5 +227,30 @@ describe('salida a Internet: validador', () => {
     expect(codes).not.toContain('fuera-de-cobertura');
     expect(codes).not.toContain('conexion-protocolo-incompatible');
     expect(codes).not.toContain('infraestructura-sin-conexion');
+  });
+});
+
+describe('salida a Internet: proyecto demo', () => {
+  it('la fibra entra por el router Movistar; el Deco y HA cuelgan de él y no hay avisos de Internet', () => {
+    const demo = createDemoProject();
+    const links = demo.connections.map((c) => `${c.sourceId}>${c.targetId}`);
+    expect(links).toEqual(expect.arrayContaining(['demo-internet>demo-router-operadora', 'demo-router>demo-router-operadora', 'demo-router-operadora>demo-servidor']));
+    expect(internetPathExists(demo, catalog)).toBe(true);
+    const codes = validateProject(demo, catalog).map((i) => i.code);
+    expect(codes).not.toContain('sin-camino-internet');
+    expect(codes).not.toContain('sin-salida-internet');
+    expect(validateProject(demo, catalog).filter((i) => i.severity !== 'info')).toEqual([]);
+  });
+
+  it('tirar la fibra o el router corta la nube igual que «Se cae Internet»', () => {
+    const demo = createDemoProject();
+    const cloud = (failures: Failures): string[] =>
+      [...unavailabilityReasons(demo, catalog, failures)].filter(([, r]) => r.startsWith('integración en la nube')).map(([id]) => id).sort();
+    const cut = cloud(f({ internet: true }));
+    expect(cut).toEqual(['demo-cafetera', 'demo-echo', 'demo-termostato']);
+    expect(cloud(f({ devicesDown: ['demo-internet'] }))).toEqual(cut);
+    expect(cloud(f({ devicesDown: ['demo-router-operadora'] }))).toEqual(cut);
+    // Corte de luz: el router no tiene SAI, así que tampoco hay Internet (como antes con el Deco).
+    expect(internetAvailable(demo, catalog, f({ powerOutage: true }))).toBe(false);
   });
 });
