@@ -35,7 +35,10 @@ interface NodeRuntime {
   registered: 'no' | 'pending' | 'yes' | 'error';
   registerTimer?: ReturnType<typeof setTimeout>;
   attempts: number;
+  /** Último error del alta en HA. */
   error?: string;
+  /** El nodo no pudo arrancar (puerto ocupado). */
+  startError?: string;
 }
 
 export class EsphomeBackend implements NativeBackend {
@@ -65,6 +68,11 @@ export class EsphomeBackend implements NativeBackend {
 
   async sync(ctx: NativeContext): Promise<void> {
     this.entities = ctx.entities;
+    // Otro proyecto: sus nodos son otros dispositivos (otra MAC, clave y puerto) aunque compartan id
+    // (dos copias de la demo). Los del proyecto anterior se quitan, también de HA.
+    if (this.projectId !== '' && this.projectId !== ctx.project.id) {
+      for (const [id, rt] of [...this.nodes]) await this.remove(id, rt);
+    }
     this.projectId = ctx.project.id;
     const plans = buildEsphomePlan(ctx.project, ctx.defs).filter((p) => ctx.devices.has(p.deviceId));
     const wanted = new Set(plans.map((p) => p.deviceId));
@@ -80,15 +88,17 @@ export class EsphomeBackend implements NativeBackend {
         rt.plan = plan;
       }
       const run = ctx.live && !ctx.down.has(plan.deviceId);
+      // Un nodo que no debe estar en marcha no está en error aunque antes no pudiera abrir su puerto.
+      if (!run) rt.startError = undefined;
       if (run && !rt.server.running) {
         try {
           await rt.server.start();
-          rt.error = undefined;
+          rt.startError = undefined;
           rt.lastSent.clear();
           this.log(`${plan.name} en marcha en ${this.opts.host ?? '127.0.0.1'}:${rt.port}`);
         } catch (err) {
-          rt.error = `No se pudo abrir el puerto ${rt.port}: ${err instanceof Error ? err.message : String(err)}`;
-          this.log(rt.error);
+          rt.startError = `No se pudo abrir el puerto ${rt.port}: ${err instanceof Error ? err.message : String(err)}`;
+          this.log(`${plan.name}: ${rt.startError}`);
         }
         this.changed();
       } else if (!run && rt.server.running) {
@@ -212,9 +222,9 @@ export class EsphomeBackend implements NativeBackend {
     let errors = 0;
     for (const [id, rt] of this.nodes) {
       const where = `${this.opts.host ?? '127.0.0.1'}:${rt.port}`;
-      if (rt.error && !rt.server.running) {
+      if (rt.startError && !rt.server.running) {
         errors += 1;
-        nodes[id] = { state: 'error', detail: rt.error };
+        nodes[id] = { state: 'error', detail: rt.startError };
         continue;
       }
       if (!rt.server.running) {

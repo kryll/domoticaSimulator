@@ -309,3 +309,24 @@ describe('puertos de los nodos ESPHome', () => {
     expect(await store.ensure('p/nuevo', false)).toEqual({ port: ESPHOME_PORT_BASE + 1 });
   });
 });
+
+describe('cambiar de proyecto', () => {
+  it('los nodos del proyecto anterior se quitan y los del nuevo nacen con su MAC, clave y puerto aunque compartan id', async () => {
+    const storeFile = join(await mkdtemp(join(tmpdir(), 'hasim-espswitch-')), 'esphome-nodes.json');
+    const portBase = (await freePort()) - 1;
+    const backend = new EsphomeBackend({ storeFile, portBase });
+    await backend.start({ command: () => undefined, traffic: () => undefined, changed: () => undefined, log: () => undefined });
+    try {
+      const demo = createDemoProject();
+      const voz = new Set(['demo-voz-cocina']);
+      await backend.sync({ project: { ...demo, id: 'viejo' }, defs: catalog, entities: {}, devices: voz, down: new Set(), live: true });
+      await backend.sync({ project: { ...demo, id: 'nuevo' }, defs: catalog, entities: {}, devices: voz, down: new Set(), live: true });
+      const saved = JSON.parse(await readFile(storeFile, 'utf8')) as { nodes: Record<string, { port: number; key: string }> };
+      expect(Object.keys(saved.nodes)).toEqual(['nuevo/demo-voz-cocina']);
+      expect(backend.status().nodes['demo-voz-cocina']?.state).toBe('starting');
+      expect(backend.status().detail).toMatch(/1 de 1 nodos en marcha/);
+    } finally {
+      await backend.close();
+    }
+  });
+});
