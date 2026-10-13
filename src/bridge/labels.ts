@@ -54,4 +54,5 @@ export const TRAFFIC_VIA_LABELS: Record<TrafficVia, string> = {
   zwave: 'Z-Wave',
   esphome: 'ESPHome',
   shelly: 'Shelly',
+  matter: 'Matter',
 };

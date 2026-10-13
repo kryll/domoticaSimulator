@@ -16,6 +16,7 @@
     "e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {
+    "@matter/main": "0.17.9",
     "@zwave-js/cc": "^15.31.1",
     "@zwave-js/core": "^15.29.0",
     "@zwave-js/serial": "^15.31.1",

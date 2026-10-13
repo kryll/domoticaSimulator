@@ -12,8 +12,11 @@
 #   zwave:   zwave-mock (controlador Z-Wave emulado con zwave-js) + Z-Wave JS UI → integración zwave_js.
 #   esphome: sin contenedores nuevos; el orquestador emula la API nativa de cada nodo ESPHome en
 #            127.0.0.1:16053+n → integración esphome.
-#   shelly:  (E3, setup.sh --shelly) sin contenedores nuevos; el orquestador emula cada Shelly Gen2+
+# Perfiles de E3 (incluidos en --all):
+#   shelly:  (setup.sh --shelly) sin contenedores nuevos; el orquestador emula cada Shelly Gen2+
 #            (HTTP /shelly + WebSocket /rpc) en 127.0.0.1:18181+n → integración shelly.
+#   matter:  (setup.sh --matter) matterjs-server (API WebSocket solo en 127.0.0.1:5580) + bridge Matter
+#            de matter.js dentro del orquestador (UDP 5541 y mDNS) → integración matter.
 name: hasim-lab
 
 services:
@@ -96,6 +99,9 @@ services:
       ZWAVE_DATA_DIR: /zwave
       ESPHOME_HOST: 127.0.0.1
       ESPHOME_PORT_BASE: "16053"
+      MATTER_SERVER_URL: ws://127.0.0.1:5580/ws
+      MATTER_BRIDGE_PORT: "5541"
+      MATTER_DATA_DIR: /matter/bridge
       # LAB_TOKEN llega de .env (env_file): el orquestador lo exige a la app y en /project.
       # Si sirves la app en la LAN con un nombre (p. ej. http://mipc.local:8080), añádelo aquí.
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
@@ -104,6 +110,7 @@ services:
       - ./snapshots:/snapshots
       - ./.secrets:/secrets
       - ./zwave:/zwave
+      - ./matter:/matter
     # docker.sock no se monta por defecto (da control total sobre Docker): está en
     # docker-compose.docker.yml, que activa setup.sh --docker (necesario para restaurar snapshots).
     depends_on:
@@ -165,15 +172,22 @@ services:
     depends_on:
       - zwave-mock
 
-  # matterjs-server necesita red host (mDNS e IPv6) y su API WebSocket (5580) escucha en todas
-  # las interfaces y no tiene autenticación: actívalo solo en una red de confianza o bloquea el
-  # 5580 con el cortafuegos (p. ej. «sudo ufw deny 5580»).
+  # ---- Perfil «matter» (E3) ----
+  # matterjs-server (libre, el servidor Matter que usa HA) necesita red host (mDNS e IPv6). Su API
+  # WebSocket no tiene autenticación: escucha solo en 127.0.0.1 (LISTEN_ADDRESS), igual que HA y el
+  # orquestador, que van en red host (su panel web, en http://localhost:5580). Versión fijada. ENABLE_TEST_NET_DCL acepta certificados de
+  # pruebas: el bridge de matter.js usa los de desarrollo (vendor 0xFFF1), como todo emulador.
   matter-server:
     profiles: ["matter"]
-    image: ghcr.io/matter-js/matterjs-server:latest
+    image: ghcr.io/matter-js/matterjs-server:1.4.0
     container_name: hasim-matter-server
     network_mode: host
     restart: "no"
+    environment:
+      LISTEN_ADDRESS: 127.0.0.1
+      PORT: "5580"
+      ENABLE_TEST_NET_DCL: "true"
+      TZ: ${TZ:-Europe/Madrid}
     volumes:
       - matter-data:/data
 

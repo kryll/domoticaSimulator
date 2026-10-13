@@ -129,7 +129,7 @@ Tiempo estimado: 45-60 minutos. Necesitas Docker Engine, unos 2 GB de RAM libres
 
 ## Límites conocidos de E1 (no son fallos)
 
-- Matter, Thread y Shelly llegan a HA por **MQTT genérico** («pendiente de E3» en «Vía hacia HA»). Z-Wave y ESPHome también, salvo con los perfiles de E2 (`setup.sh --all`, ver [PRUEBAS_E2.md](PRUEBAS_E2.md)).
+- Sin perfiles, Z-Wave, ESPHome, Matter, Thread y Shelly llegan a HA por **MQTT genérico** («no disponible: ahora MQTT discovery genérico» en «Vía hacia HA»). Con los perfiles de E2 y E3 (`setup.sh --all`) llegan por sus integraciones reales: ver [PRUEBAS_E2.md](PRUEBAS_E2.md) y [PRUEBAS_E3.md](PRUEBAS_E3.md).
 - `media_player` aparece en HA dividido en varias entidades (`…_state`, `…_power`, `…_volume`, `…_source`), porque MQTT no tiene esa plataforma.
 - El laboratorio va en tiempo real: no se puede acelerar HA.
 - `assist_satellite` no existe en MQTT: los satélites de voz llegan como sensor de estado + notify. Alexa, Google y Siri no se conectan a sus nubes: su control por voz solo se simula en la app.

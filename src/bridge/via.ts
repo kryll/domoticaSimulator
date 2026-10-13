@@ -16,7 +16,7 @@ export const RADIO_LABEL = 'Radio: modelada, no real';
 
 export interface ViaInfo {
   transport: DeviceTransport;
-  /** Texto para la interfaz, p. ej. «Matter (matter.js), pendiente de E3: ahora MQTT discovery genérico». */
+  /** Texto para la interfaz, p. ej. «Matter (matter.js) no disponible: ahora MQTT discovery genérico». */
   label: string;
   pending: boolean;
   /** Nota adicional (ZHA o Hue sin radio virtual). */
@@ -44,7 +44,7 @@ function voiceNote(device: Pick<Device, 'integration'>, def: Partial<Pick<Device
 
 /**
  * Vía hacia HA de un dispositivo. `active`: vías reales activas en el orquestador (perfiles zwave,
- * esphome y shelly, de `status.capabilities`); sin ellas, esos dispositivos siguen por MQTT con el aviso.
+ * esphome, shelly y matter, de `status.capabilities`); sin ellas, esos dispositivos siguen por MQTT con el aviso.
  */
 export function viaInfo(device: Device, def: DeviceDefinition, active: ReadonlySet<NativeTransport> = new Set()): ViaInfo {
   if (def.role === 'ha_server') return { transport: 'mqtt_discovery', label: 'Es el propio Home Assistant del lab', pending: false };

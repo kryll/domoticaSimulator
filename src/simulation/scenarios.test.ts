@@ -107,7 +107,7 @@ describe('escenarios de fallo (B2) con la casa de ejemplo', () => {
 
   it('hubs: caen el puente Hue, el Nest Hub y lo que cuelga de ellos', () => {
     const r = scenarioImpact(demo, catalog, 'hub');
-    expect(down(r)).toEqual(['demo-cerradura', 'demo-luz-dormitorio', 'demo-luz-salon', 'demo-nest-hub', 'demo-puente-hue']);
+    expect(down(r)).toEqual(['demo-cerradura', 'demo-luz-dormitorio', 'demo-luz-matter', 'demo-luz-salon', 'demo-nest-hub', 'demo-puente-hue']);
     expect(status(r, 'demo-auto-atardecer')).toBe('degraded');
     expect(status(r, 'demo-auto-fuga')).toBe('ok');
     expect(r.scenes.find((s) => s.sceneId === 'demo-escena-cine')?.status).toBe('degraded');

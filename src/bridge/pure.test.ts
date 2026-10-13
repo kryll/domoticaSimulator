@@ -251,9 +251,16 @@ describe('vía hacia HA', () => {
     const voice = dev('ha-voice-pe', 'wifi', 'esphome');
     expect(viaInfo(voice, defOf('ha-voice-pe'), new Set(['esphome'])).note).toMatch(/sin micrófono|no tiene micrófono/i);
   });
-  it('Matter y Shelly siguen pendientes; ZHA y Z2M como antes', () => {
-    const matter = catalog.find((d) => d.protocols.includes('matter'));
-    if (matter) expect(viaInfo(dev(matter.id, 'matter', 'matter'), matter).label).toMatch(/pendiente de E3/);
+  it('Matter y Shelly: reales con su perfil (si no, MQTT con el aviso); ZHA y Z2M como antes', () => {
+    const plug = dev('tapo-p110m', 'matter', 'matter');
+    expect(viaInfo(plug, defOf('tapo-p110m'))).toMatchObject({ transport: 'matter', pending: true });
+    expect(viaInfo(plug, defOf('tapo-p110m')).note).toMatch(/setup\.sh --matter/);
+    expect(viaInfo(plug, defOf('tapo-p110m'), new Set(['matter']))).toMatchObject({ transport: 'matter', pending: false, label: 'Matter (matter.js)' });
+    const shelly = dev('shelly-1pm-gen3', 'wifi', 'shelly');
+    expect(viaInfo(shelly, defOf('shelly-1pm-gen3'))).toMatchObject({ transport: 'shelly', pending: true });
+    expect(viaInfo(shelly, defOf('shelly-1pm-gen3')).note).toMatch(/setup\.sh --shelly/);
+    expect(viaInfo(shelly, defOf('shelly-1pm-gen3'), new Set(['shelly']))).toMatchObject({ transport: 'shelly', pending: false, label: 'Shelly (API RPC emulada)' });
+    expect(viaInfo(plug, defOf('tapo-p110m'), new Set(['shelly'])).label).toMatch(/no disponible: ahora MQTT/);
     const zha = catalog.find((d) => d.protocols.includes('zigbee') && d.entities.length > 0);
     if (!zha) throw new Error('sin zigbee');
     expect(viaInfo(dev(zha.id, 'zigbee', 'zha'), zha).note).toMatch(/ZHA/);

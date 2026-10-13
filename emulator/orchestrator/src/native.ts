@@ -1,4 +1,5 @@
-// Vías reales del laboratorio (E2): Z-Wave JS con el mock de zwave-js y ESPHome con la API nativa.
+// Vías reales del laboratorio: Z-Wave JS con el mock de zwave-js y ESPHome con la API nativa (E2),
+// y Shelly con la API RPC Gen2+ emulada y Matter con un bridge de matter.js (E3).
 // El Lab les pasa el proyecto, los estados y qué dispositivos deben estar caídos; ellas avisan de
 // los comandos de HA, del tráfico y de su estado.
 import type { DeviceDefinition, EntityState, Id, Project } from '../../../src/types';
@@ -39,6 +40,8 @@ export interface NativeBackend {
   status(): NativeStatus;
   /** Entidades ya creadas en HA que deben llevar el entity_id del simulador. */
   alignTargets(): AlignTarget[];
+  /** Antes de restaurar un snapshot: deja de escribir en sus datos (el bridge Matter se cierra). */
+  suspend?(): Promise<void>;
   /** Tras restaurar un snapshot: olvida lo que tiene en memoria (claves, red) y vuelve a leerlo. */
   reset?(): Promise<void>;
   close(): Promise<void>;

@@ -49,7 +49,7 @@ export function TrafficView() {
           </select>
         </label>
         <label className="flex flex-1 flex-col text-xs text-slate-600">
-          Topic o vía (texto o patrón con + y #; «zwave», «esphome», «shelly»)
+          Topic o vía (texto o patrón con + y #; «zwave», «esphome», «shelly», «matter»)
           <input className={inputClass} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="p. ej. hasim-z2m/+/set" />
         </label>
         <Button size="sm" onClick={() => useBridgeStore.getState().setTrafficPaused(!paused)} aria-pressed={paused}>

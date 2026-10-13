@@ -7,3 +7,4 @@ emulator/.secrets
 emulator/snapshots
 emulator/ha-config
 emulator/zwave
+emulator/matter

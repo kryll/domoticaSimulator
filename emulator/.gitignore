@@ -3,6 +3,7 @@
 .secrets/
 snapshots/
 /zwave/
+/matter/
 ha-config/*
 !ha-config/configuration.yaml
 !ha-config/packages/

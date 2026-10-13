@@ -74,7 +74,7 @@ export interface LabOptions {
   unsync?: () => Promise<string | undefined>;
   syncDebounceMs?: number;
   haTokenAvailable?: () => Promise<boolean>;
-  /** Vías reales activas (perfiles zwave, esphome y shelly). */
+  /** Vías reales activas (perfiles zwave, esphome, shelly y matter). */
   native?: NativeBackend[];
   /** HA del laboratorio: alinea los entity_id de las vías reales con los del simulador. */
   ha?: HaApi;
@@ -185,6 +185,7 @@ export class Lab {
       zwave: native.some((b) => b.transport === 'zwave_js'),
       esphome: native.some((b) => b.transport === 'esphome'),
       shelly: native.some((b) => b.transport === 'shelly'),
+      matter: native.some((b) => b.transport === 'matter'),
     };
     for (const backend of native) {
       await backend.start({
@@ -763,6 +764,7 @@ export class Lab {
           let project: Project | undefined;
           await docker.stop(container);
           try {
+            for (const b of this.opts.native ?? []) await b.suspend?.();
             project = await store.restore(id);
             for (const b of this.opts.native ?? []) await b.reset?.();
           } finally {

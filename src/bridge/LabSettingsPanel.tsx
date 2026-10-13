@@ -209,8 +209,8 @@ export function LabSettingsPanel() {
           <li>Instala Docker Engine (gratuito) y Node.js 22.</li>
           <li>
             En la carpeta del proyecto: <code>emulator/scripts/setup.sh</code>. Genera las contraseñas, compila la app, descarga las imágenes la primera vez y arranca Home Assistant,
-            Mosquitto, Caddy y el orquestador. Con <code>--zwave</code>, <code>--esphome</code>, <code>--shelly</code> o <code>--all</code>, los dispositivos Z-Wave, ESPHome y
-            Shelly llegan a HA por sus integraciones reales (Z-Wave JS, ESPHome y Shelly).
+            Mosquitto, Caddy y el orquestador. Con <code>--zwave</code>, <code>--esphome</code>, <code>--shelly</code>, <code>--matter</code> o <code>--all</code>, los
+            dispositivos Z-Wave, ESPHome, Shelly y Matter/Thread llegan a HA por sus integraciones reales (Z-Wave JS, ESPHome, Shelly y Matter).
           </li>
           <li>
             Abre la app en <code>http://localhost:8080</code> y Home Assistant en <code>http://localhost:8123</code> (usuario y contraseña en <code>emulator/.env</code>).
