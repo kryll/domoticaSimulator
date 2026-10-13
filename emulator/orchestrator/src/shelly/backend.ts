@@ -31,7 +31,10 @@ interface NodeRuntime {
   registered: 'no' | 'pending' | 'yes' | 'error';
   registerTimer?: ReturnType<typeof setTimeout>;
   attempts: number;
+  /** Último error del alta en HA. */
   error?: string;
+  /** El Shelly no pudo arrancar (puerto ocupado). */
+  startError?: string;
 }
 
 export class ShellyBackend implements NativeBackend {
@@ -65,6 +68,11 @@ export class ShellyBackend implements NativeBackend {
 
   async sync(ctx: NativeContext): Promise<void> {
     this.entities = ctx.entities;
+    // Otro proyecto: sus Shellys son otros dispositivos (otra MAC, hostname y puerto) aunque
+    // compartan id (dos copias de la demo). Los del proyecto anterior se quitan, también de HA.
+    if (this.projectId !== '' && this.projectId !== ctx.project.id) {
+      for (const [id, rt] of [...this.nodes]) await this.remove(id, rt);
+    }
     this.projectId = ctx.project.id;
     const plans = buildShellyPlan(ctx.project, ctx.defs).filter((p) => ctx.devices.has(p.deviceId));
     const wanted = new Set(plans.map((p) => p.deviceId));
@@ -80,15 +88,17 @@ export class ShellyBackend implements NativeBackend {
         rt.plan = plan;
       }
       const run = ctx.live && !ctx.down.has(plan.deviceId);
+      // Un Shelly que no debe estar en marcha no está en error aunque antes no pudiera abrir su puerto.
+      if (!run) rt.startError = undefined;
       if (run && !rt.server.running) {
         try {
           await rt.server.start();
-          rt.error = undefined;
+          rt.startError = undefined;
           rt.lastSent = shellyComponentsStatus(rt.plan, this.entities);
           this.log(`${plan.friendlyName} (${plan.hostname}) en marcha en ${this.host}:${rt.port}`);
         } catch (err) {
-          rt.error = `No se pudo abrir el puerto ${rt.port}: ${err instanceof Error ? err.message : String(err)}`;
-          this.log(rt.error);
+          rt.startError = `No se pudo abrir el puerto ${rt.port}: ${err instanceof Error ? err.message : String(err)}`;
+          this.log(`${plan.friendlyName}: ${rt.startError}`);
         }
         this.changed();
       } else if (!run && rt.server.running) {
@@ -205,9 +215,9 @@ export class ShellyBackend implements NativeBackend {
     let errors = 0;
     for (const [id, rt] of this.nodes) {
       const where = `${this.host}:${rt.port}`;
-      if (rt.error && !rt.server.running) {
+      if (rt.startError && !rt.server.running) {
         errors += 1;
-        nodes[id] = { state: 'error', detail: rt.error };
+        nodes[id] = { state: 'error', detail: rt.startError };
         continue;
       }
       if (!rt.server.running) {

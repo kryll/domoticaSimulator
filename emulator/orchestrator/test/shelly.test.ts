@@ -279,3 +279,50 @@ describe('backend Shelly', () => {
     expect(changes).toBeGreaterThan(0);
   });
 });
+
+describe('Shelly: cambiar de proyecto y errores', () => {
+  it('los Shelly del proyecto anterior se quitan (también de HA) y los del nuevo nacen con su MAC aunque compartan id', async () => {
+    const storeFile = join(await mkdtemp(join(tmpdir(), 'hasim-shellyswitch-')), 'shelly-nodes.json');
+    const portBase = (await freePort()) - 1;
+    const ha = fakeHa();
+    const backend = new ShellyBackend({ storeFile, portBase, ha, registerRetryMs: [50] });
+    await backend.start({ command: () => undefined, traffic: () => undefined, changed: () => undefined, log: () => undefined });
+    cleanups.push(() => backend.close());
+    const base: Project = { ...createDemoProject(), devices: [device], connections: [], automations: [] };
+    const ctx = (id: string) => ({ project: { ...base, id }, defs: catalog, entities: {}, devices: new Set(['luz']), down: new Set<string>(), live: true });
+    await backend.sync(ctx('viejo'));
+    const oldInfo = (await (await fetch(`http://127.0.0.1:${portBase + 1}/shelly`)).json()) as Frame;
+    const oldMac = String(oldInfo.mac);
+    ha.devices.push({ id: 'd1', config_entries: ['s1'], connections: [['mac', oldMac]], identifiers: [] });
+    await backend.sync(ctx('nuevo'));
+    const saved = JSON.parse(await readFile(storeFile, 'utf8')) as { nodes: Record<string, { port: number }> };
+    expect(Object.keys(saved.nodes)).toEqual(['nuevo/luz']);
+    const info = (await (await fetch(`http://127.0.0.1:${portBase + 1}/shelly`)).json()) as Frame;
+    expect(info.mac).toBe(shellyNodePlan('nuevo', device, def).mac);
+    expect(info.mac).not.toBe(oldMac);
+    await waitFor(() => ha.deleted.length === 1);
+    // El nuevo se da de alta en HA y sus entidades se alinean por su MAC.
+    const targets = await waitFor(() => backend.alignTargets().length > 0 && backend.alignTargets());
+    const newMac = String(info.mac).toUpperCase();
+    expect(targets[0]?.match(`${newMac}-switch:0`)).toBe(true);
+    expect(targets[0]?.match(`${oldMac.toUpperCase()}-switch:0`)).toBe(false);
+  });
+
+  it('un fallo antiguo del alta en HA no pone en «Error» un Shelly parado', async () => {
+    const storeFile = join(await mkdtemp(join(tmpdir(), 'hasim-shellyerr-')), 'shelly-nodes.json');
+    const portBase = (await freePort()) - 1;
+    const ha = fakeHa();
+    const failing: HaApi = { ...ha, rest: async (method, path, json) => (method === 'POST' && path === '/api/config/config_entries/flow' ? { status: 500, data: { message: 'caído' } } : ha.rest(method, path, json)) };
+    const backend = new ShellyBackend({ storeFile, portBase, ha: failing, registerRetryMs: [60_000] });
+    await backend.start({ command: () => undefined, traffic: () => undefined, changed: () => undefined, log: () => undefined });
+    cleanups.push(() => backend.close());
+    const project: Project = { ...createDemoProject(), id: 'p', devices: [device], connections: [], automations: [] };
+    await backend.sync({ project, defs: catalog, entities: {}, devices: new Set(['luz']), down: new Set(), live: true });
+    // Falla el alta: el Shelly sigue en marcha, con el error en el detalle.
+    await waitFor(() => /caído|500|Alta/.test(backend.status().nodes.luz?.detail ?? ''));
+    expect(backend.status().nodes.luz?.state).toBe('starting');
+    await backend.sync({ project, defs: catalog, entities: {}, devices: new Set(['luz']), down: new Set(['luz']), live: true });
+    expect(backend.status().nodes.luz?.state).toBe('stopped');
+    expect(backend.status().state).not.toBe('error');
+  });
+});
