@@ -167,7 +167,7 @@ describe('filterCatalog', () => {
   });
 
   it('busca sin distinguir mayúsculas ni acentos y por varias palabras', () => {
-    expect(filterCatalog(catalog, { query: 'tradfri GU10' }).map((d) => d.id)).toEqual(['ikea-tradfri-gu10']);
+    expect(filterCatalog(catalog, { query: 'tradfri GU10 color' }).map((d) => d.id)).toEqual(['ikea-tradfri-gu10-cws']);
     expect(filterCatalog(catalog, { query: 'ESTACION netatmo' }).map((d) => d.id)).toEqual(['netatmo-weather-station']);
     expect(filterCatalog(catalog, { query: 'nada-que-exista' })).toEqual([]);
   });

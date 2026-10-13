@@ -6486,5 +6486,424 @@
     "entities": [],
     "icon": "internet",
     "priceEur": 0
+  },
+  {
+    "id": "ikea-tradfri-e27-cws",
+    "brand": "IKEA",
+    "model": "LED1924G9",
+    "name": "IKEA TRÅDFRI E27 806 lm color y blanco",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "IKEA",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 9
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 13
+  },
+  {
+    "id": "ikea-tradfri-e27-ws-1055",
+    "brand": "IKEA",
+    "model": "LED2003G10",
+    "name": "IKEA TRÅDFRI E27 1055 lm blanco regulable",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "IKEA",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 11
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 12
+  },
+  {
+    "id": "ikea-tradfri-e14-ws",
+    "brand": "IKEA",
+    "model": "LED1835C6",
+    "name": "IKEA TRÅDFRI E14 470 lm blanco regulable",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "IKEA",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 5
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 9
+  },
+  {
+    "id": "ikea-tradfri-e14-cws",
+    "brand": "IKEA",
+    "model": "LED1925G6",
+    "name": "IKEA TRÅDFRI E14 470 lm color y blanco",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "IKEA",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 5
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 11
+  },
+  {
+    "id": "ikea-tradfri-gu10-ws",
+    "brand": "IKEA",
+    "model": "LED2005R5",
+    "name": "IKEA TRÅDFRI GU10 345 lm blanco regulable",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "IKEA",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 5
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 8
+  },
+  {
+    "id": "ikea-tradfri-gu10-cws",
+    "brand": "IKEA",
+    "model": "LED1923R5",
+    "name": "IKEA TRÅDFRI GU10 345 lm color y blanco",
+    "category": "light",
+    "protocols": [
+      "zigbee"
+    ],
+    "integrations": [
+      "matter",
+      "zha",
+      "zigbee2mqtt"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "requiresHub": "IKEA",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 5
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 11
+  },
+  {
+    "id": "ikea-kajplats-e27-ws",
+    "brand": "IKEA",
+    "model": "KAJPLATS E27 WS 1055 lm",
+    "name": "IKEA KAJPLATS E27 1055 lm blanco regulable (Matter sobre Thread)",
+    "category": "light",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 10
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 9
+  },
+  {
+    "id": "ikea-kajplats-e14-ws",
+    "brand": "IKEA",
+    "model": "KAJPLATS E14 WS 470 lm",
+    "name": "IKEA KAJPLATS E14 470 lm blanco regulable (Matter sobre Thread)",
+    "category": "light",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 5
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 7
+  },
+  {
+    "id": "ikea-kajplats-e14-cws",
+    "brand": "IKEA",
+    "model": "KAJPLATS E14 CWS 806 lm",
+    "name": "IKEA KAJPLATS E14 806 lm color y blanco (Matter sobre Thread)",
+    "category": "light",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 1800,
+          "maxKelvin": 6500,
+          "powerWatts": 7
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 10
+  },
+  {
+    "id": "ikea-kajplats-gu10-ws",
+    "brand": "IKEA",
+    "model": "KAJPLATS GU10 WS 575 lm",
+    "name": "IKEA KAJPLATS GU10 575 lm blanco regulable (Matter sobre Thread)",
+    "category": "light",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp"
+          ],
+          "minKelvin": 2200,
+          "maxKelvin": 4000,
+          "powerWatts": 5
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 7
+  },
+  {
+    "id": "ikea-kajplats-gu10-cws",
+    "brand": "IKEA",
+    "model": "KAJPLATS GU10 CWS",
+    "name": "IKEA KAJPLATS GU10 color y blanco (Matter sobre Thread)",
+    "category": "light",
+    "protocols": [
+      "thread"
+    ],
+    "integrations": [
+      "matter"
+    ],
+    "iotClass": "local_push",
+    "role": "router",
+    "power": "mains",
+    "rangeMeters": 20,
+    "entities": [
+      {
+        "key": "light",
+        "domain": "light",
+        "name": "Luz",
+        "initialState": "off",
+        "capabilities": {
+          "colorModes": [
+            "brightness",
+            "color_temp",
+            "rgb"
+          ],
+          "minKelvin": 1800,
+          "maxKelvin": 6500,
+          "powerWatts": 5
+        }
+      }
+    ],
+    "icon": "bulb",
+    "priceEur": 10
   }
 ]
