@@ -128,6 +128,8 @@ beforeAll(async () => {
     mqttUrl: url,
     settleMs: 150,
     haStatusJitterMs: 1,
+    // La republicación de estados tras un discovery nuevo se prueba aparte (describe propio).
+    stateRepublishMs: [],
     trafficFlushMs: 20,
     snapshots: new SnapshotStore(haConfig, snapshotsDir),
     containers: fakeDocker,
@@ -591,6 +593,42 @@ describe('snapshots', () => {
     expect(excludedFromSnapshot('deps/x')).toBe(true);
     expect(excludedFromSnapshot('.storage/core.entity_registry')).toBe(false);
     expect(excludedFromSnapshot('configuration.yaml')).toBe(false);
+  });
+});
+
+describe('HA ya en marcha al arrancar el orquestador', () => {
+  it('los estados se vuelven a mandar después del discovery, sin esperar a homeassistant/status', async () => {
+    const b = await Aedes.createBroker();
+    const srv = createServer(b.handle);
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const addr = srv.address();
+    const url = `mqtt://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
+    const l = new Lab({ mqttUrl: url, settleMs: 20, clientIdPrefix: 'yaenmarcha', stateRepublishMs: [300] });
+    await l.start();
+    const p = { ...createDemoProject(), id: 'ya-en-marcha' };
+    const luz = buildBridgeModel(p, catalog, settings).devices.find((d) => d.device.id === 'demo-luz-salon')!;
+    const stateTopic = luz.entities[0]!.stateTopic;
+    // «HA» como el real: se suscribe al estado de la entidad un rato después de recibir su
+    // discovery (lo que tarda en cargar la plataforma y crear la entidad).
+    const ha = await mqtt.connectAsync(url, { clientId: 'ha-falso' });
+    const states: string[] = [];
+    ha.on('message', (topic, payload) => {
+      if (topic === `homeassistant/device/${luz.nodeId}/config` && payload.length > 0) setTimeout(() => void ha.subscribeAsync(stateTopic), 80);
+      else if (topic === stateTopic) states.push(payload.toString());
+    });
+    await ha.subscribeAsync('homeassistant/device/+/config');
+    const conn: AppConnection = { traffic: false, send: () => undefined };
+    l.attach(conn);
+    const pdefs = catalog.filter((d) => p.devices.some((x) => x.definitionId === d.id));
+    const s0 = createSimulationState(p, catalog, Date.UTC(2026, 9, 12, 10));
+    await l.handle(conn, { v: 1, type: 'project', mode: 'full', project: p, definitions: pdefs, settings } as unknown as Parameters<Lab['handle']>[1]);
+    await l.handle(conn, { v: 1, type: 'state', full: true, entities: s0.entities, availability: { live: true, unavailable: [] } } as unknown as Parameters<Lab['handle']>[1]);
+    const got = await waitFor(() => states[0]);
+    expect(JSON.parse(got).state).toBe('OFF');
+    await ha.endAsync();
+    await l.close();
+    await new Promise<void>((r) => srv.close(() => r()));
+    await b.close();
   });
 });
 

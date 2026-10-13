@@ -53,6 +53,11 @@ export interface LabOptions {
   haStatusJitterMs?: number;
   /** Espera tras suscribirse para recoger los retenidos de ejecuciones anteriores. */
   settleMs?: number;
+  /**
+   * Esperas tras publicar un discovery nuevo antes de volver a mandar los estados (no retenidos):
+   * HA se suscribe a los topics de estado al crear la entidad, después de recibir el discovery.
+   */
+  stateRepublishMs?: readonly number[];
   /** Los nodos nuevos arrancan solos (por defecto sí). */
   autostart?: boolean;
   /** Tamaño del búfer circular del inspector de tráfico. */
@@ -147,6 +152,7 @@ export class Lab {
   private seq = 0;
   private trafficTimer: ReturnType<typeof setInterval> | undefined;
   private haTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly stateTimers = new Set<ReturnType<typeof setTimeout>>();
   private syncTimer: ReturnType<typeof setTimeout> | undefined;
   private syncKey = '';
   private commandSeq = 0;
@@ -270,6 +276,8 @@ export class Lab {
     if (this.statusTimer) clearTimeout(this.statusTimer);
     for (const b of this.opts.native ?? []) await b.close();
     if (this.haTimer) clearTimeout(this.haTimer);
+    for (const t of this.stateTimers) clearTimeout(t);
+    this.stateTimers.clear();
     if (this.syncTimer) clearTimeout(this.syncTimer);
     await this.queue.catch(() => undefined);
     await this.main?.end();
@@ -407,6 +415,24 @@ export class Lab {
       else this.retained.add(msg.topic);
     }
     this.record('out', msg.topic, msg.payload, msg.retain);
+    if (msg.payload !== '' && msg.topic.startsWith(`${this.settings.discoveryPrefix}/`) && msg.topic.endsWith('/config')) this.scheduleStateRepublish();
+  }
+
+  /**
+   * Tras un discovery nuevo, los estados se vuelven a mandar al rato: no son retenidos y HA no los
+   * recibe hasta que crea la entidad y se suscribe. Antes solo se republicaba con el
+   * homeassistant/status online de HA, que no llega si HA ya estaba en marcha al arrancar el orquestador.
+   */
+  private scheduleStateRepublish(): void {
+    if (this.stateTimers.size > 0) return;
+    for (const ms of this.opts.stateRepublishMs ?? [2000, 10_000]) {
+      const timer = setTimeout(() => {
+        this.stateTimers.delete(timer);
+        void this.enqueue(() => this.publishStates(true));
+      }, ms);
+      timer.unref?.();
+      this.stateTimers.add(timer);
+    }
   }
 
   private running(deviceId: Id): boolean {
