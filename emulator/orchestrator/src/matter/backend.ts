@@ -111,6 +111,11 @@ export class MatterBackend implements NativeBackend {
     return plan ? this.bridge?.endpointNumber(plan.endpointId) : undefined;
   }
 
+  /** Ids de los endpoints que tiene ahora el bridge (diagnóstico y tests). */
+  bridgeEndpointIds(): string[] {
+    return this.bridge?.ids() ?? [];
+  }
+
   async sync(ctx: NativeContext): Promise<void> {
     // Las sincronizaciones van en fila: matter.js no admite añadir el mismo endpoint dos veces.
     const run = this.syncing.then(() => this.doSync(ctx));
@@ -122,7 +127,7 @@ export class MatterBackend implements NativeBackend {
     if (this.closed) return;
     const secrets = this.secrets ?? (this.secrets = await this.store.load());
     const plans = buildMatterPlan(ctx.project, ctx.defs).filter((p) => ctx.devices.has(p.deviceId));
-    const wanted = new Set(plans.map((p) => p.deviceId));
+    const wanted = new Map(plans.map((p) => [p.deviceId, p.endpointId]));
     let bridge = this.bridge;
     if (!bridge) {
       bridge = new MatterBridge({
@@ -137,7 +142,9 @@ export class MatterBackend implements NativeBackend {
       await bridge.create();
     }
     for (const [id, plan] of [...this.plans]) {
-      if (wanted.has(id)) continue;
+      // Otro proyecto con los mismos ids de dispositivo (dos copias de la demo): el endpoint es otro
+      // (otro id y UniqueID), así que el del proyecto anterior se quita (HA borra su dispositivo).
+      if (wanted.get(id) === plan.endpointId) continue;
       await bridge.remove(plan.endpointId);
       this.plans.delete(id);
       this.reachable.delete(id);

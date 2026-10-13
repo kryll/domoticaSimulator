@@ -204,6 +204,27 @@ describe('Matter: bridge de matter.js con un controlador real (red simulada)', (
   });
 });
 
+describe('Matter: cambiar de proyecto', () => {
+  it('los endpoints del proyecto anterior se quitan del bridge aunque los dispositivos compartan id', { timeout: 60_000 }, async () => {
+    const sim = new NetworkSimulator();
+    const dir = await mkdtemp(join(tmpdir(), 'hasim-matter-'));
+    const backend = new MatterBackend({ environment: mockEnv(sim, 'bridge', 1), secretsFile: join(dir, 'matter.json'), matterLogLevel: 'error' });
+    cleanups.push(() => backend.close());
+    await backend.start(recorder().events);
+    const viejo = { ...createDemoProject(), id: 'viejo' };
+    const nuevo = { ...viejo, id: 'nuevo' };
+    const entities = createSimulationState(viejo, catalog, Date.now()).entities;
+    await backend.sync(context(viejo, entities));
+    const antes = backend.bridgeEndpointIds();
+    expect(antes).toHaveLength(MATTER_IDS.length);
+    await backend.sync(context(nuevo, entities));
+    const despues = backend.bridgeEndpointIds();
+    expect(despues).toHaveLength(MATTER_IDS.length);
+    expect(despues.filter((id) => antes.includes(id))).toEqual([]);
+    expect(backend.endpointOf('demo-luz-matter')).toBeDefined();
+  });
+});
+
 /**
  * matterjs-server falso: su API WebSocket (server_info, get_nodes, commission_with_code) y, por
  * debajo, un controlador de matter.js de verdad que comisiona el bridge.
