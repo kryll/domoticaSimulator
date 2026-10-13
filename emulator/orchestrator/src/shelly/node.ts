@@ -33,6 +33,18 @@ interface Peer {
   src?: string;
 }
 
+/**
+ * Peticiones hechas por una web abierta en el navegador: llevan Origin (también al abrir un
+ * WebSocket, que no tiene CORS) o Sec-Fetch-Site distinto de «none» (un <img> a /rpc/Switch.Set no
+ * lleva Origin). Sin este filtro, cualquier web podría mandar comandos al Shelly emulado. HA
+ * (aioshelly con aiohttp) y curl no mandan ninguna de las dos; escribir la URL a mano en el
+ * navegador manda «none» y sigue funcionando.
+ */
+function fromBrowser(req: IncomingMessage): boolean {
+  const site = req.headers['sec-fetch-site'];
+  return req.headers.origin !== undefined || (site !== undefined && site !== 'none');
+}
+
 /** Métodos de solo lectura que HA pide a menudo (no se anotan uno a uno en el inspector). */
 const QUIET = new Set(['Shelly.GetStatus', 'Shelly.GetComponents', 'Cover.GetStatus']);
 
@@ -103,6 +115,10 @@ export class ShellyNodeServer {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(body));
     };
+    if (fromBrowser(req)) {
+      json(403, { code: 403, message: 'Forbidden' });
+      return;
+    }
     if (req.method === 'GET' && url.pathname === '/shelly') {
       json(200, shellyDeviceInfo(this.plan));
       return;
@@ -164,7 +180,7 @@ export class ShellyNodeServer {
     });
     server.on('upgrade', (req, socket, head) => {
       const path = new URL(req.url ?? '/', 'http://shelly').pathname;
-      if (path !== '/rpc') {
+      if (path !== '/rpc' || fromBrowser(req)) {
         socket.destroy();
         return;
       }

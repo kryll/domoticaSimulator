@@ -325,4 +325,26 @@ describe('Shelly: cambiar de proyecto y errores', () => {
     expect(backend.status().nodes.luz?.state).toBe('stopped');
     expect(backend.status().state).not.toBe('error');
   });
+
+  it('rechaza las peticiones de una web del navegador (Origin o Sec-Fetch-Site), también al abrir el WebSocket', async () => {
+    const plan = shellyNodePlan('p', device, def);
+    const port = await freePort();
+    const commands: BridgeCommand[] = [];
+    const node = new ShellyNodeServer({ plan, port, entities: () => ({}), onCommand: (c) => commands.push(...c) });
+    await node.start();
+    cleanups.push(() => node.stop());
+    const post = await fetch(`http://127.0.0.1:${port}/rpc`, { method: 'POST', headers: { origin: 'https://malicioso.example', 'content-type': 'text/plain' }, body: JSON.stringify({ id: 1, method: 'Switch.Set', params: { id: 0, on: true } }) });
+    expect(post.status).toBe(403);
+    const img = await fetch(`http://127.0.0.1:${port}/rpc/Switch.Set?id=0&on=true`, { headers: { 'sec-fetch-site': 'cross-site' } });
+    expect(img.status).toBe(403);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/rpc`, { origin: 'https://malicioso.example' });
+    await new Promise<void>((resolve) => {
+      ws.once('error', () => resolve());
+      ws.once('close', () => resolve());
+    });
+    expect(node.clients).toBe(0);
+    expect(commands).toEqual([]);
+    // Escribir la URL a mano en el navegador (Sec-Fetch-Site: none) sigue funcionando.
+    expect((await fetch(`http://127.0.0.1:${port}/shelly`, { headers: { 'sec-fetch-site': 'none' } })).status).toBe(200);
+  });
 });
