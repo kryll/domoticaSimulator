@@ -111,6 +111,12 @@ export class MatterBackend implements NativeBackend {
     return plan ? this.bridge?.endpointNumber(plan.endpointId) : undefined;
   }
 
+  /** Reachable que publica ahora el endpoint del dispositivo (diagnóstico y tests). */
+  reachableOf(deviceId: Id): boolean | undefined {
+    const plan = this.plans.get(deviceId);
+    return plan ? this.bridge?.reachableOf(plan.endpointId) : undefined;
+  }
+
   /** Ids de los endpoints que tiene ahora el bridge (diagnóstico y tests). */
   bridgeEndpointIds(): string[] {
     return this.bridge?.ids() ?? [];

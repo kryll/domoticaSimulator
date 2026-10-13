@@ -349,6 +349,11 @@ export class MatterBridge {
     return [...this.bridged.keys()];
   }
 
+  /** Valor de Reachable que el endpoint publica en la red (diagnóstico y tests). */
+  reachableOf(endpointId: string): boolean | undefined {
+    return this.bridged.get(endpointId)?.endpoint.stateOf('bridgedDeviceBasicInformation').reachable;
+  }
+
   /**
    * Restablece el bridge de fábrica (borra sus fabrics): para volver a comisionarlo cuando el
    * servidor Matter ya no lo conoce (p. ej. se borraron sus datos).

@@ -296,6 +296,9 @@ describe('Matter: comisionado automático en matterjs-server', () => {
     expect(target?.match(`00000000000004D2-0000000000000001-${ep}-${ep}-MatterLight-6-0`)).toBe(true);
     expect(backend.alignTargets().map((t) => t.entityId)).toEqual(expect.arrayContaining(['switch.enchufe_matter_switch', 'sensor.enchufe_matter_power', 'lock.cerradura_entrada_lock']));
 
+    // Al irse la app todo queda no alcanzable (y matter.js guarda Reachable=false en su almacenamiento).
+    await backend.sync(context(project, entities, { live: false }));
+    expect(backend.reachableOf('demo-luz-matter')).toBe(false);
     // Reinicio del orquestador: mismo almacenamiento → mismo bridge comisionado, sin commission_with_code.
     await backend.close();
     const again = new MatterBackend({ environment: env, secretsFile, matterLogLevel: 'error', serverUrl: server.url });
@@ -306,6 +309,8 @@ describe('Matter: comisionado automático en matterjs-server', () => {
     expect(server.calls.filter((c) => c === 'commission_with_code')).toHaveLength(1);
     expect(server.nodes.size).toBe(1);
     expect(again.endpointOf('demo-luz-matter')).toBe(ep);
+    // La app vuelve en vivo: los dispositivos vuelven a ser alcanzables (no se queda el false guardado).
+    for (const id of MATTER_IDS) expect(again.reachableOf(id)).toBe(true);
   });
 
   it('sin matterjs-server: espera y lo dice en el estado', { timeout: 30_000 }, async () => {
