@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Borra el laboratorio para empezar de cero: contenedores, volúmenes, la configuración de HA
 # creada al usarlo (salvo configuration.yaml), el token, los datos de Z-Wave JS UI y del mock
-# (emulator/zwave/) y los puertos y claves de los nodos ESPHome. Conserva .env y los snapshots
+# (emulator/zwave/), los puertos y claves de los nodos ESPHome y el bridge Matter (emulator/matter/,
+# .secrets/matter.json y el volumen de matterjs-server). Conserva .env y los snapshots
 # salvo con --all.   emulator/scripts/reset.sh [--yes] [--all]
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -26,7 +27,11 @@ docker run --rm --entrypoint sh -v "$PWD/ha-config:/c" eclipse-mosquitto:2 -c \
 if [ -d zwave ]; then
   docker run --rm --entrypoint sh -v "$PWD/zwave:/z" eclipse-mosquitto:2 -c 'rm -rf /z/ui /z/mock'
 fi
-rm -f .secrets/ha-token .secrets/esphome-nodes.json
+# El bridge Matter (matter.js, escrito como root por el orquestador): fabrics y endpoints.
+if [ -d matter ]; then
+  docker run --rm --entrypoint sh -v "$PWD/matter:/m" eclipse-mosquitto:2 -c 'rm -rf /m/bridge'
+fi
+rm -f .secrets/ha-token .secrets/esphome-nodes.json .secrets/matter.json
 if [ "$ALL" = 1 ]; then
   docker run --rm --entrypoint sh -v "$PWD:/lab" eclipse-mosquitto:2 -c 'rm -rf /lab/snapshots/* /lab/.secrets'
   rm -f .env

@@ -3,12 +3,14 @@ name: Laboratorio e2e (HA real)
 # Solo manual: levanta Home Assistant, Mosquitto, Caddy y el orquestador en Docker y prueba el
 # viaje completo. Con los perfiles de E2 (por defecto zwave y esphome) prueba también las vías
 # reales: Z-Wave JS (mock de zwave-js + Z-Wave JS UI → integración zwave_js) y la API nativa de
-# ESPHome (→ integración esphome). No se programa para no gastar minutos de Actions.
+# ESPHome (→ integración esphome). Con «matter» (E3): bridge de matter.js comisionado en
+# matterjs-server (→ integración matter), y después reinicia el orquestador y repite la prueba para
+# comprobar que no se vuelve a comisionar. No se programa para no gastar minutos de Actions.
 on:
   workflow_dispatch:
     inputs:
       perfiles:
-        description: 'Perfiles del laboratorio separados por comas (zwave, esphome; vacío = solo MQTT)'
+        description: 'Perfiles del laboratorio separados por comas (zwave, esphome, matter; vacío = solo MQTT)'
         required: false
         default: 'zwave,esphome'
 
@@ -38,7 +40,7 @@ jobs:
       - name: Dependencias del laboratorio
         working-directory: emulator
         run: npm ci
-      - name: Typecheck y tests del orquestador (aedes, mock de Z-Wave con el driver real, API de ESPHome)
+      - name: Typecheck y tests del orquestador (aedes, mock de Z-Wave con el driver real, API de ESPHome, bridge Matter)
         working-directory: emulator
         run: |
           npm run typecheck
@@ -72,10 +74,26 @@ jobs:
           E2E_PROFILES="$(grep '^COMPOSE_PROFILES=' .env | cut -d= -f2- || true)"
           export E2E_PROFILES
           npm run e2e
+      - name: Matter tras reiniciar el orquestador (se reutiliza el comisionado, sin duplicados)
+        if: contains(inputs.perfiles, 'matter')
+        working-directory: emulator
+        run: |
+          LAB_TOKEN="$(grep '^LAB_TOKEN=' .env | cut -d= -f2-)"
+          echo "::add-mask::$LAB_TOKEN"
+          export LAB_TOKEN
+          E2E_PROFILES="$(grep '^COMPOSE_PROFILES=' .env | cut -d= -f2- || true)"
+          export E2E_PROFILES
+          SINCE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          docker restart hasim-orchestrator
+          for _ in $(seq 1 60); do curl -sf http://127.0.0.1:8081/health >/dev/null && break; sleep 2; done
+          npm run e2e
+          # Solo los logs desde el reinicio: el bridge se reutiliza y no se vuelve a comisionar.
+          docker logs --since "$SINCE" hasim-orchestrator 2>&1 | grep 'se reutiliza'
+          if docker logs --since "$SINCE" hasim-orchestrator 2>&1 | grep -q 'comisionando el bridge'; then echo 'Se ha vuelto a comisionar el bridge' >&2; exit 1; fi
       - name: Logs si falla
         if: failure()
         working-directory: emulator
-        run: docker compose --profile zwave logs --no-color --tail=400
+        run: docker compose --profile zwave --profile matter logs --no-color --tail=400
       - name: Parar
         if: always()
         working-directory: emulator

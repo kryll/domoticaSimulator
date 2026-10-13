@@ -5,12 +5,13 @@
 //   3. crea un token de larga duración y lo guarda en SECRETS_DIR/ha-token (emulator/.secrets/),
 //   4. ajusta idioma, país, moneda y zona horaria,
 //   5. crea la entrada MQTT (POST /api/config/config_entries/flow) contra el Mosquitto del lab,
-//   6. con el perfil zwave, la entrada Z-Wave JS (ws://127.0.0.1:3000, el servidor de Z-Wave JS UI).
+//   6. con el perfil zwave, la entrada Z-Wave JS (ws://127.0.0.1:3000, el servidor de Z-Wave JS UI),
+//   7. con el perfil matter, la entrada Matter (ws://127.0.0.1:5580/ws, matterjs-server).
 // Los nodos ESPHome los da de alta el orquestador (cada uno con su puerto y su clave) cuando la app
-// manda el proyecto.
+// manda el proyecto; el bridge Matter también lo comisiona el orquestador en matterjs-server.
 // Variables: HA_URL, HA_USERNAME, HA_PASSWORD, MQTT_HA_PASSWORD, MQTT_HOST, MQTT_PORT, SECRETS_DIR, TZ,
 // HOST_UID y HOST_GID (setup.sh: los secretos quedan a nombre del usuario del PC, modo 0600),
-// HASIM_PROFILES (perfiles activos) y ZWAVE_JS_URL.
+// HASIM_PROFILES (perfiles activos), ZWAVE_JS_URL y MATTER_SERVER_URL.
 // Credenciales por defecto (cámbialas en emulator/.env): hasim / hasim-cambiame.
 import { chmod, chown, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -30,6 +31,7 @@ const MQTT_PORT = Number(env.MQTT_PORT ?? 1883);
 const MQTT_PASSWORD = env.MQTT_HA_PASSWORD;
 const PROFILES = new Set((env.HASIM_PROFILES ?? env.COMPOSE_PROFILES ?? '').split(',').map((p) => p.trim()).filter(Boolean));
 const ZWAVE_JS_URL = env.ZWAVE_JS_URL ?? 'ws://127.0.0.1:3000';
+const MATTER_SERVER_URL = env.MATTER_SERVER_URL ?? 'ws://127.0.0.1:5580/ws';
 
 // Formularios robustos de los flujos de HA (compartidos con el orquestador y probados con vitest).
 const { runConfigFlow, flowOk } = await tsImport('../orchestrator/src/haNative.ts', import.meta.url);
@@ -184,6 +186,61 @@ function zwaveServerUp(timeoutMs = 5000) {
   });
 }
 
+/** ¿Responde matterjs-server con su server_info? */
+function matterServerUp(timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try {
+        ws.close();
+      } catch {
+        // ya cerrado
+      }
+      resolve(ok);
+    };
+    const ws = new WebSocket(MATTER_SERVER_URL);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(String(ev.data));
+        finish('fabric_id' in msg || 'sdk_version' in msg);
+      } catch {
+        finish(false);
+      }
+    };
+    ws.onerror = () => finish(false);
+  });
+}
+
+/** Perfil matter: entrada Matter en HA contra matterjs-server (espera a que arranque). */
+async function ensureMatter(token, timeoutMs = 300_000) {
+  const entries = await http('GET', '/api/config/config_entries/entry?domain=matter', { token });
+  if (Array.isArray(entries.data) && entries.data.length > 0) {
+    log('La integración Matter ya existe');
+    return;
+  }
+  log(`Esperando a matterjs-server en ${MATTER_SERVER_URL}`);
+  const start = Date.now();
+  while (!(await matterServerUp())) {
+    if (Date.now() - start > timeoutMs) throw new Error(`matterjs-server no responde en ${MATTER_SERVER_URL} (mira: docker compose logs matter-server)`);
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  let last;
+  for (let i = 0; i < 10; i++) {
+    // Sin supervisor, el flujo va directo al paso «manual» con la URL del servidor.
+    last = await runConfigFlow(haApiFor(token), 'matter', { url: MATTER_SERVER_URL }, (options) => options.find((o) => o.includes('manual')) ?? options[0]);
+    if (flowOk(last)) {
+      log(last.result === 'created' ? `Integración Matter creada (${MATTER_SERVER_URL})` : 'La integración Matter ya existe');
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  throw new Error(`No se pudo añadir Matter a HA: ${last?.result === 'error' ? last.message : last?.reason}`);
+}
+
 /** Perfil zwave: entrada Z-Wave JS en HA contra el servidor de Z-Wave JS UI (espera a que arranque). */
 async function ensureZwave(token, timeoutMs = 300_000) {
   const entries = await http('GET', '/api/config/config_entries/entry?domain=zwave_js', { token });
@@ -270,6 +327,10 @@ async function main() {
   await ensureMqtt(token);
   if (PROFILES.has('zwave')) await ensureZwave(token);
   if (PROFILES.has('esphome')) log('Perfil esphome: el orquestador añadirá cada nodo ESPHome a HA cuando la app mande el proyecto');
+  if (PROFILES.has('matter')) {
+    await ensureMatter(token);
+    log('Perfil matter: el orquestador comisionará su bridge Matter en matterjs-server cuando la app mande el proyecto');
+  }
   log('Listo');
 }
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Prepara y arranca el laboratorio de HA Simulator en un PC Linux con Docker (todo gratuito).
-#   emulator/scripts/setup.sh [--no-build] [--zwave] [--esphome] [--all] [--matter] [--docker|--no-docker]
+#   emulator/scripts/setup.sh [--no-build] [--zwave] [--esphome] [--matter] [--all] [--docker|--no-docker]
 #   --no-build    no vuelve a compilar la app (usa dist/ tal cual)
 #   --zwave       Z-Wave real: controlador mock (zwave-js) + Z-Wave JS UI → integración zwave_js
 #   --esphome     ESPHome real: API nativa emulada por nodo (127.0.0.1:16053+n) → integración esphome
-#   --all         --zwave y --esphome
+#   --matter      Matter real: bridge de matter.js en el orquestador + matterjs-server (127.0.0.1:5580) → integración matter
+#   --all         --zwave, --esphome y --matter
 #   --no-zwave / --no-esphome / --no-matter   quita ese perfil
-#   --matter      arranca también matterjs-server (experimental, E3)
 #   --docker      da al orquestador el socket de Docker (necesario para restaurar snapshots)
 #   --no-docker   se lo quita (por defecto no lo tiene)
 # Los perfiles se recuerdan en emulator/.env (COMPOSE_PROFILES): después basta con --no-build.
@@ -23,7 +23,7 @@ for arg in "$@"; do
     --no-build) BUILD=0 ;;
     --zwave) PROFILE_ADD+=(zwave) ;;
     --esphome) PROFILE_ADD+=(esphome) ;;
-    --all) PROFILE_ADD+=(zwave esphome) ;;
+    --all) PROFILE_ADD+=(zwave esphome matter) ;;
     --matter) PROFILE_ADD+=(matter) ;;
     --no-zwave) PROFILE_DEL+=(zwave) ;;
     --no-esphome) PROFILE_DEL+=(esphome) ;;
@@ -87,7 +87,7 @@ fi
 export COMPOSE_PROFILES
 has_profile() { case ",$COMPOSE_PROFILES," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
-mkdir -p .secrets snapshots ha-config/packages/hasim zwave/ui zwave/mock
+mkdir -p .secrets snapshots ha-config/packages/hasim zwave/ui zwave/mock matter/bridge
 chmod 700 .secrets snapshots
 
 # Z-Wave JS UI: ajustes iniciales (antena = el mock por TCP, servidor de Z-Wave JS en el 3000, sin
@@ -155,7 +155,7 @@ for _ in $(seq 1 180); do
 done
 ha_up || fail "Home Assistant no responde en http://localhost:8123 (mira: docker compose logs homeassistant)"
 
-# 4. Onboarding automático (usuario, token de larga duración, MQTT y, con el perfil zwave, Z-Wave JS).
+# 4. Onboarding automático (usuario, token de larga duración, MQTT y, con sus perfiles, Z-Wave JS y Matter).
 say "Configurando Home Assistant"
 # El onboarding corre como root dentro del contenedor: los secretos (ha-token) se dejan a nombre
 # del usuario del PC (HOST_UID/HOST_GID) con modo 0600, para que los lean los scripts del host.
@@ -170,13 +170,16 @@ cat <<MSG
                           (pégalo una vez en Ajustes → Laboratorio; está en emulator/.env)
   Home Assistant:         http://localhost:8123   usuario: ${HA_USERNAME}   contraseña: ${HA_PASSWORD}
                           (están en emulator/.env; cámbialas en HA si quieres)
-  Perfiles (vías reales): ${COMPOSE_PROFILES:-ninguno (Z-Wave y ESPHome van por MQTT; actívalos con --all)}
+  Perfiles (vías reales): ${COMPOSE_PROFILES:-ninguno (Z-Wave, ESPHome y Matter van por MQTT; actívalos con --all)}
 MSG
 if has_profile zwave; then
   echo "  Z-Wave JS UI:           http://localhost:8091   (antena = mock de zwave-js; HA usa ws://127.0.0.1:3000)"
 fi
 if has_profile esphome; then
   echo "  ESPHome:                cada nodo escucha en 127.0.0.1:16054, 16055… (claves en emulator/.secrets/esphome-nodes.json)"
+fi
+if has_profile matter; then
+  echo "  Matter:                 bridge de matter.js (UDP 5541) comisionado solo en matterjs-server; panel en http://localhost:5580 (passcode en emulator/.secrets/matter.json)"
 fi
 cat <<MSG
   Snapshots:              restaurar necesita setup.sh --docker (control de Docker para parar HA)

@@ -7,7 +7,12 @@
 // las vías reales: el enchufe Z-Wave de la demo con la integración zwave_js y el sensor ESPHome con
 // la integración esphome (registro de dispositivos de HA), un comando de HA al enchufe Z-Wave, un
 // cambio del sensor ESPHome desde la app, y que al parar un nodo queda no disponible.
-// Variables: ORCHESTRATOR_WS, HA_URL, SECRETS_DIR, E2E_TIMEOUT_S, LAB_TOKEN (si no, se lee de emulator/.env), E2E_PROFILES.
+// Con el perfil matter (E3): la «Luz Matter» de la demo llega con la integración matter (bridge de
+// matter.js comisionado en matterjs-server), un light.turn_on de HA llega a la app, un cambio del
+// enchufe Matter en la app se ve en HA, parar la luz la deja no disponible y arrancarla la recupera;
+// y en matterjs-server hay un solo nodo del bridge y en HA una sola «Luz Matter» (también después de
+// reiniciar el orquestador: el workflow ejecuta la prueba dos veces).
+// Variables: ORCHESTRATOR_WS, HA_URL, SECRETS_DIR, E2E_TIMEOUT_S, LAB_TOKEN (si no, se lee de emulator/.env), E2E_PROFILES, MATTER_SERVER_URL.
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +23,7 @@ import { labProfiles, labToken } from './labEnv.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
 const ORCH = env.ORCHESTRATOR_WS ?? 'ws://127.0.0.1:8081/orchestrator';
+const MATTER_SERVER = env.MATTER_SERVER_URL ?? 'ws://127.0.0.1:5580/ws';
 const HA = (env.HA_URL ?? 'http://127.0.0.1:8123').replace(/\/$/, '');
 const TIMEOUT = Number(env.E2E_TIMEOUT_S ?? 180) * 1000;
 const TOKEN_FILE = join(env.SECRETS_DIR ?? join(here, '..', '.secrets'), 'ha-token');
@@ -74,6 +80,31 @@ function haWs(command) {
       }
     });
     ws.on('error', reject);
+  });
+}
+
+/** Un comando de la API WebSocket de matterjs-server (get_nodes...). */
+function matterServerCall(command, args) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(MATTER_SERVER);
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error(`matterjs-server no responde en ${MATTER_SERVER}`));
+    }, 30_000);
+    ws.on('message', (raw) => {
+      const msg = JSON.parse(String(raw));
+      if (msg.message_id === undefined) ws.send(JSON.stringify({ message_id: 'e2e', command, args }));
+      else if (msg.message_id === 'e2e') {
+        clearTimeout(timer);
+        ws.close();
+        if ('error_code' in msg) reject(new Error(msg.details));
+        else resolve(msg.result);
+      }
+    });
+    ws.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
   });
 }
 
@@ -189,10 +220,11 @@ try {
     sim = { ...sim, entities: { ...sim.entities, [id]: { ...sim.entities[id], state } } };
     send({ type: 'state', entities: { [id]: sim.entities[id] } });
   };
-  if (PROFILES.has('zwave') || PROFILES.has('esphome')) {
+  if (PROFILES.has('zwave') || PROFILES.has('esphome') || PROFILES.has('matter')) {
     const caps = await until('capacidades de las vías reales en status', async () => statuses.at(-1)?.capabilities, 30_000);
     if (PROFILES.has('zwave') && caps.zwave !== true) throw new Error('El orquestador no anuncia el perfil zwave');
     if (PROFILES.has('esphome') && caps.esphome !== true) throw new Error('El orquestador no anuncia el perfil esphome');
+    if (PROFILES.has('matter') && caps.matter !== true) throw new Error('El orquestador no anuncia el perfil matter');
     log(`Perfiles activos: ${[...PROFILES].join(', ')}`);
   }
   if (PROFILES.has('zwave')) {
@@ -243,6 +275,47 @@ try {
     send({ type: 'node', action: 'start', deviceIds: ['demo-esp32'] });
     await until(`${temp} disponible de nuevo`, async () => near(await haState(temp), 23.4), 180_000);
     log('OK nodo ESPHome arrancado (HA se vuelve a conectar)');
+  }
+  if (PROFILES.has('matter')) {
+    const light = 'light.luz_matter';
+    const plug = 'switch.enchufe_matter_switch';
+    const dev = await until('«Luz Matter» con la integración matter en el registro de dispositivos', () => haDeviceOf('matter', 'Luz Matter'), Math.max(TIMEOUT, 300_000));
+    log(`OK Matter: dispositivo ${dev.id} (${dev.manufacturer ?? '?'} ${dev.model ?? ''}) en matter`);
+    // Un solo bridge en matterjs-server y una sola «Luz Matter» en HA (sin comisionados repetidos).
+    const bridges = (await matterServerCall('get_nodes', { only_available: false })).filter((n) => String(n.attributes?.['0/40/18'] ?? '').startsWith('hasim-bridge-'));
+    if (bridges.length !== 1) throw new Error(`matterjs-server tiene ${bridges.length} nodos del bridge (se esperaba 1)`);
+    log(`OK un solo bridge en matterjs-server (nodo ${bridges[0].node_id}, disponible: ${bridges[0].available})`);
+    const all = await haWs({ type: 'config/device_registry/list' });
+    const twins = all.filter((d) => (d.name_by_user ?? d.name) === 'Luz Matter');
+    if (twins.length !== 1) throw new Error(`HA tiene ${twins.length} dispositivos «Luz Matter» (se esperaba 1)`);
+    if (all.some((d) => d.identifiers.some(([dom, id]) => dom === 'mqtt' && String(id).includes('demo-luz-matter')))) throw new Error('La luz Matter sigue también por MQTT');
+    await until(`${light} (alineado) en /api/states`, async () => {
+      const st = await haState(light);
+      return st && st.state !== 'unavailable' && st.state !== 'unknown' ? st : undefined;
+    }, 180_000);
+    log(`OK ${light}`);
+    // HA → app: light.turn_on con brillo (MoveToLevelWithOnOff) y vuelta del estado por Matter.
+    const before = commands.length;
+    await haCall('light', 'turn_on', { entity_id: light, brightness: 128 });
+    await until('comando light.turn_on de la luz Matter en la app', async () => commands.slice(before).find((c) => c.entityId === light && c.service === 'light.turn_on'), 60_000);
+    log('OK comando de HA por Matter recibido por la app');
+    await until(`${light} encendida en HA (informe por la suscripción Matter)`, async () => {
+      const st = await haState(light);
+      return st?.state === 'on' && Math.abs(Number(st.attributes.brightness) - 128) <= 2 ? st : undefined;
+    }, 60_000);
+    log('OK estado de vuelta por Matter');
+    // App → HA: el enchufe Matter se enciende en el simulador.
+    await until(`${plug} en /api/states`, async () => (await haState(plug))?.state === 'off', 180_000);
+    setEntity(plug, 'on');
+    await until(`${plug} = on en HA`, async () => (await haState(plug))?.state === 'on', 60_000);
+    log('OK cambio del enchufe Matter desde la app visto en HA');
+    // Parar el dispositivo: el endpoint pasa a Reachable=false y HA lo pone no disponible.
+    send({ type: 'node', action: 'stop', deviceIds: ['demo-luz-matter'] });
+    await until(`${light} no disponible (Reachable=false)`, async () => (await haState(light))?.state === 'unavailable', 90_000);
+    log('OK dispositivo Matter parado → no disponible');
+    send({ type: 'node', action: 'start', deviceIds: ['demo-luz-matter'] });
+    await until(`${light} disponible de nuevo`, async () => (await haState(light))?.state === 'on', 90_000);
+    log('OK dispositivo Matter arrancado → disponible');
   }
   log('Todo correcto');
   ws.close();
